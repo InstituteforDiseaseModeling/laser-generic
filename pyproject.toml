@@ -1,0 +1,169 @@
+[build-system]
+requires = ["setuptools>=30.3.0",]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "laser-generic"
+version = "0.0.0"
+
+dependencies = [
+  "click",
+  "laser-core>=0.1.1",
+  "numpy>=1.26.4,<2.0.0",
+  "numba~=0.59.1",
+  "tqdm",
+  "geopandas",
+  "pandas",
+]
+
+requires-python = ">= 3.9"
+
+authors = [
+  {name = "Christopher Lorton", email = "christopher.lorton@gatesfoundation.org"},
+  {name = "Jonathan Bloedow", email = "jonathan.bloedow@gatesfoundation.org"},
+  {name = "Katherine Rosenfeld", email = "katherine.rosenfeld@gatesfoundation.org"},
+  {name = "Kevin McCarthy", email = "kevin.mccarthy@gatesfoundation.org"},
+]
+maintainers = [
+  {name = "Christopher Lorton", email = "christopher.lorton@gatesfoundation.org"}
+]
+description = "Generic, SI/SIR/SEIR/etc., disease models implemented with the LASER toolkit."
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["sir", "seir", "spatial", "modeling", "laser"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Unix",
+    "Operating System :: POSIX",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    # "Programming Language :: Python :: 3.13", # once Numba supports it
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://example.com"
+Documentation = "https://laser-generic.readthedocs.io/en/latest/"
+Repository = "https://github.com/InstituteforDiseaseModeling/laser-generic.git"
+Issues = "https://github.com/InstituteforDiseaseModeling/laser-generic/issues"
+Changelog = "https://github.com/InstituteforDiseaseModeling/laser-generic/blob/master/CHANGELOG.md"
+
+[project.scripts]
+generic = "laser_generic.cli:run"
+
+[tool.ruff]
+extend-exclude = ["static", "ci/templates"]
+line-length = 140
+src = ["src", "tests"]
+target-version = "py39"
+
+[tool.ruff.lint.per-file-ignores]
+"ci/*" = ["S"]
+
+[tool.ruff.lint]
+ignore = [
+    "RUF001", # ruff-specific rules ambiguous-unicode-character-string
+    "S101", # flake8-bandit assert
+    "S308", # flake8-bandit suspicious-mark-safe-usage
+    "S603", # flake8-bandit subprocess-without-shell-equals-true
+    "S607", # flake8-bandit start-process-with-partial-path
+    "E501", # pycodestyle line-too-long
+]
+select = [
+    "B", # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "DTZ", # flake8-datetimez
+    "E", # pycodestyle errors
+    "EXE", # flake8-executable
+    "F", # pyflakes
+    "I", # isort
+    "INT", # flake8-gettext
+    "PIE", # flake8-pie
+    "PLC", # pylint convention
+    "PLE", # pylint errors
+    "PT", # flake8-pytest-style
+    "PTH", # flake8-use-pathlib
+    "RSE", # flake8-raise
+    "RUF", # ruff-specific rules
+    "S", # flake8-bandit
+    "UP", # pyupgrade
+    "W", # pycodestyle warnings
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.lint.isort]
+forced-separate = ["conftest"]
+force-single-line = true
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.bumpversion]
+current_version = "0.0.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = false
+tag = true
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+
+[[tool.bumpversion.files]]
+filename = "setup.py"
+search = 'version="{current_version}"'
+replace = 'version="{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "README.md"
+search = "v{current_version}"
+replace = "v{new_version}"
+
+[[tool.bumpversion.files]]
+ filename = "README.rst"
+search = "/v{current_version}.svg"
+replace = "/v{new_version}.svg"
+
+[[tool.bumpversion.files]]
+filename = "README.rst"
+search = "/v{current_version}...main"
+replace = "/v{new_version}...main"
+
+[[tool.bumpversion.files]]
+filename = "docs/conf.py"
+search = 'version = release = "{current_version}"'
+replace = 'version = release = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "src/laser_generic/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = ".cookiecutterrc"
+search = 'version: "{current_version}"'
+replace = 'version: "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'version = "{current_version}"'
+replace = 'version = "{new_version}"'
