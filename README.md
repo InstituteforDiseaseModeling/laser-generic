@@ -19,3 +19,12 @@ Once we have published on PyPI:
 ```bash
 pip install laser-generic
 ```
+
+
+## Running in Codespace
+pip3 install uv
+uv venv
+source .venv/bin/activate
+uv pip install llvmlite
+uv pip install numba
+uv pip install -e .
