@@ -22,9 +22,16 @@ pip install laser-generic
 
 
 ## Running in Codespace
-pip3 install uv
-uv venv
-source .venv/bin/activate
-uv pip install llvmlite
-uv pip install numba
-uv pip install -e .
+
+Check the installed version(s) of NumPy
+```bash
+pip list | grep numpy
+```
+Note if there is a 2.x version of NumPy installed. If so, uninstall it (sub your 2.x version for `2.1.1` below).
+```bash
+pip uninstall numpy==2.1.1
+```
+Install `laser-generic` in development mode:
+```bash
+pip install -e .
+```
