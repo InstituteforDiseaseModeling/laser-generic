@@ -55,7 +55,7 @@ class Susceptibility:
         self.model = model
 
         model.population.add_scalar_property("susceptibility", dtype=np.uint8, default=1)
-        self.nb_initialize_susceptibility(model.population.count, model.population.dob, model.population.susceptibility)
+        #self.nb_initialize_susceptibility(model.population.count, model.population.dob, model.population.susceptibility)
 
         return
 
@@ -114,9 +114,9 @@ class Susceptibility:
             None
         """
 
-        # newborns are _not_ susceptible
+        # newborns are susceptible
         # nb_set_susceptibility(istart, iend, model.population.susceptibility, 0)
-        model.population.susceptibility[istart:iend] = 0
+        model.population.susceptibility[istart:iend] = 1
 
         return
 
@@ -133,78 +133,14 @@ class Susceptibility:
             None: This function uses a generator to yield control back to the caller.
         """
 
-        fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
-        fig.suptitle("Susceptibility Distribution By Age")
-        age_bins = (self.model.params.nticks - self.model.population.dob[0 : self.model.population.count]) // 365
-        sus_counts = np.bincount(age_bins, weights=self.model.population.susceptibility[0 : self.model.population.count].astype(np.uint32))
-        age_counts = np.bincount(age_bins)
-        # TODO - convert this to %age of susceptible individuals by age group
-        plt.bar(range(len(age_counts)), age_counts)
-        plt.bar(range(len(sus_counts)), sus_counts, alpha=0.5)
-
-        yield
-        return
-
-
-
-class Susceptibility_SI:
-    """
-    A component to represent the susceptibility of a population in a simple SI model.
-    """
-    def __init__(self, model):
-        """
-        Initialize the susceptibility component of the model.
-
-        Parameters:
-
-            model : object
-
-                The model object that contains the population data.
-
-        Attributes:
-
-            model : object
-
-                The model object passed to the initializer.
-
-        The method adds a scalar property "susceptibility" to the model's population
-        with a default value of 1.
-        """
-        self.model = model
-
-        model.population.add_scalar_property("susceptibility", dtype=np.uint8, default=1)
-        #Everybody starts susceptible
-        return
-
-    def on_birth(self, model, _tick, istart, iend):
-        """
-        Handle the birth event in the model by setting the susceptibility of newborns.
-
-        This method is called when a birth event occurs in the model. It sets the
-        susceptibility of the newborns to 1, indicating that they are born susceptible.
-
-        Parameters:
-            model (object): The model object containing the population data.
-            tick (int): The current tick or time step in the simulation.
-            istart (int): The starting index of the newborns in the population array.
-            iend (int): The ending index of the newborns in the population array.
-
-        Returns:
-            None
-        """
-        # newborns aresusceptible
-        model.population.susceptibility[istart:iend] = 1
-
-        return
-
-    def plot(self, fig: Figure = None):
-        """
-        Check that everyone is susceptible at initialization.
-        """
-
-        fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
-        fig.suptitle("Check that everyone is susceptible at initialization")
-        plt.hist(self.model.population.susceptibility[0 : self.model.population.count], bins=[-0.5, 0.5, 1.5], align='mid', rwidth=0.5)
+        # fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
+        # fig.suptitle("Susceptibility Distribution By Age")
+        # age_bins = (self.model.params.nticks - self.model.population.dob[0 : self.model.population.count]) // 365
+        # sus_counts = np.bincount(age_bins, weights=self.model.population.susceptibility[0 : self.model.population.count].astype(np.uint32))
+        # age_counts = np.bincount(age_bins)
+        # # TODO - convert this to %age of susceptible individuals by age group
+        # plt.bar(range(len(age_counts)), age_counts)
+        # plt.bar(range(len(sus_counts)), sus_counts, alpha=0.5)
 
         yield
         return

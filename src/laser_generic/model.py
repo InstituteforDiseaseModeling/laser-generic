@@ -210,10 +210,10 @@ class Model:
             if "__call__" in dir(instance):
                 self.phases.append(instance)
 
-        births = next(filter(lambda object: isinstance(object, Births), self.instances))
+        births = next(filter(lambda object: isinstance(object, Births), self.instances), None)
         # TODO: raise an exception if there are components with an on_birth function but no Births component
         for instance in self.instances:
-            if "on_birth" in dir(instance):
+            if births is not None and "on_birth" in dir(instance):
                 births.initializers.append(instance)
         return
 

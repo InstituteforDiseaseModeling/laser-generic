@@ -4,7 +4,6 @@ This module defines the Transmission class, which models the transmission of mea
 Classes:
 
     Transmission: A class to model the transmission dynamics of measles within a population.
-    Transmission_SI: A class to model the transmission dynamics of measles within a population for the SI model.
 
 Functions:
 
@@ -29,6 +28,8 @@ import numba as nb
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
+import time
+
 
 
 class Transmission:
@@ -84,39 +85,75 @@ class Transmission:
             None
 
         """
-
         patches = model.patches
         population = model.population
 
-        contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
-        nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
-        itimers = population.itimer[0 : population.count]  # just look at the active agent indices
-        np.add.at(contagion, nodeids[itimers > 0], 1)  # increment by the number of active agents with non-zero itimer
+        contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array        
+        if hasattr(population, 'itimer'):
+            condition = population.itimer[0 : population.count]>0  # just look at the active agent indices
+        else:
+            condition = population.susceptibility[0 : population.count]==0  # just look at the active agent indices
+        
+        if len(patches)==1:
+            np.add(contagion, np.sum(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
+        else:
+            nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
+            np.add.at(contagion, nodeids[condition], 1)  # increment by the number of active agents with non-zero itimer
 
-        network = patches.network
-        transfer = (contagion * network).round().astype(np.uint32)
-        contagion += transfer.sum(axis=1)  # increment by incoming "migration"
-        contagion -= transfer.sum(axis=0)  # decrement by outgoing "migration"
+        if hasattr(patches, 'network'):
+            network = patches.network
+            transfer = (contagion * network).round().astype(np.uint32)
+            contagion += transfer.sum(axis=1)  # increment by incoming "migration"
+            contagion -= transfer.sum(axis=0)  # decrement by outgoing "migration"
 
         forces = patches.forces
-        beta_effective = model.params.beta + model.params.seasonality_factor * np.sin(
-            2 * np.pi * (tick - model.params.seasonality_phase) / 365
-        )
+        beta_effective = model.params.beta 
+#        if 'seasonality_factor' in model.params:
+#            beta_effective *= (1+ model.params.seasonality_factor * np.sin(
+#                2 * np.pi * (tick - model.params.seasonality_phase) / 365
+#                ))
+        
         np.multiply(contagion, beta_effective, out=forces)
         np.divide(forces, model.patches.populations[tick, :], out=forces)  # per agent force of infection
-        np.exp(-forces, out=forces)
-        np.subtract(1, forces, out=forces)
+        np.expm1(-forces, out=forces)
+        np.negative(forces, out=forces)
 
-        Transmission.nb_transmission_update(
-            population.susceptibility,
-            population.nodeid,
-            forces,
-            population.etimer,
-            population.count,
-            model.params.exp_shape,
-            model.params.exp_scale,
-            model.patches.incidence[tick, :],
-        )
+        # TODO: This is a hack to handle the different transmission dynamics for all of these SIS, SI, SIR, SEIR, ... models.
+        #       We should refactor this to be more general and flexible.  
+        #       First, find a way to allow user to parametrize the timer distributions rather than hard-coding here.
+        #       For example, the "_exposed" & "_noexposed" functions have the same signature but a different timer distribution.
+        #       Second, maybe there's a way to overload the update function so we don't have to switch on the population attributes.
+
+        if hasattr(population, 'etimer'):
+            Transmission.nb_transmission_update_exposed(
+                population.susceptibility,
+                population.nodeid,
+                forces,
+                population.etimer,
+                population.count,
+                model.params.exp_shape,
+                model.params.exp_scale,
+                model.patches.incidence[tick, :],
+            )
+        elif hasattr(population, 'itimer'):
+            Transmission.nb_transmission_update_noexposed(
+                population.susceptibility,
+                population.nodeid,
+                forces,
+                population.itimer,
+                population.count,
+                model.params.inf_mean,
+                model.params.inf_std,
+                model.patches.incidence[tick, :],
+            )
+        else:
+            Transmission.nb_transmission_update_SI(
+                population.susceptibility,
+                population.nodeid,
+                forces,
+                population.count,
+                model.patches.incidence[tick, :],
+            )
 
         return
 
@@ -127,7 +164,7 @@ class Transmission:
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update(susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence):  # pragma: no cover
+    def nb_transmission_update_exposed(susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
@@ -135,10 +172,54 @@ class Transmission:
                 nodeid = nodeids[i]
                 force = susceptibility * forces[nodeid]  # force of infection attenuated by personal susceptibility
                 if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
-                    susceptibilities[i] = 0.0  # no longer susceptible
+                    susceptibilities[i] = 0  # no longer susceptible
                     # set exposure timer for newly infected individuals to a draw from a gamma distribution, must be at least 1 day
                     etimers[i] = np.maximum(np.uint8(1), np.uint8(np.round(np.random.gamma(exp_shape, exp_scale))))
 
+                    incidence[nodeid] += 1
+
+        return
+
+    @staticmethod
+    @nb.njit(
+        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:]),
+        parallel=True,
+        nogil=True,
+        cache=True,
+    )
+    def nb_transmission_update_noexposed(susceptibilities, nodeids, forces, itimers, count, inf_mean, inf_std, incidence):  # pragma: no cover
+        """Numba compiled function to stochastically transmit infection to agents in parallel."""
+        for i in nb.prange(count):
+            susceptibility = susceptibilities[i]
+            if susceptibility > 0:
+                nodeid = nodeids[i]
+                force = susceptibility * forces[nodeid]  # force of infection attenuated by personal susceptibility
+                if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
+                    susceptibilities[i] = 0  # no longer susceptible
+                    # set exposure timer for newly infected individuals to a draw from a gamma distribution, must be at least 1 day
+                    itimers[i] = np.maximum(np.uint8(1), np.uint8(np.round(np.random.normal(inf_mean, inf_std))))
+
+                    incidence[nodeid] += 1
+
+        return
+
+    @staticmethod
+    @nb.njit(
+        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint32, nb.uint32[:]),
+        parallel=True,
+        nogil=True,
+        cache=True,
+    )
+    def nb_transmission_update_SI(susceptibilities, nodeids, forces, count, incidence):  # pragma: no cover
+        """Numba compiled function to stochastically transmit infection to agents in parallel."""
+        for i in nb.prange(count):
+            susceptibility = susceptibilities[i]
+            if susceptibility > 0:
+                nodeid = nodeids[i]
+                force = susceptibility * forces[nodeid]  # force of infection attenuated by personal susceptibility
+                if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
+                    #All we do is become no longer susceptible, which means infected in an SI model.  No timers.
+                    susceptibilities[i] = 0  # no longer susceptible
                     incidence[nodeid] += 1
 
         return
@@ -186,151 +267,5 @@ class Transmission:
         plt.title(f"Incidence - Node {itwo}")  # ({self.names[itwo]})")
         plt.plot(self.model.patches.incidence[:, itwo])
 
-        yield
-        return
-    
-
-class Transmission_SI:
-    """
-    A component to model the transmission of disease in a population for the SI model.
-    """
-
-    def __init__(self, model, verbose: bool = False) -> None:
-        """
-        Initializes the transmission_SI object.
-
-        Args:
-
-            model: The model object that contains the patches and parameters.
-            verbose (bool, optional): If True, enables verbose output. Defaults to False.
-
-        Attributes:
-
-            model: The model object passed during initialization.
-
-        The model's patches are extended with the following properties:
-
-            - 'cases': A vector property with length equal to the number of ticks, dtype is uint32.
-            - 'forces': A scalar property with dtype float32.
-            - 'incidence': A vector property with length equal to the number of ticks, dtype is uint32.
-        """
-
-        self.model = model
-
-        model.patches.add_vector_property("cases", length=model.params.nticks, dtype=np.uint32)
-        model.patches.add_scalar_property("forces", dtype=np.float32)
-        model.patches.add_vector_property("incidence", model.params.nticks, dtype=np.uint32)
-
-        return
-
-    def __call__(self, model, tick) -> None:
-        """
-        Simulate the transmission of measles for a given model at a specific tick.
-
-        This method updates the state of the model by simulating the spread of disease
-        through the population and patches. It calculates the contagion, handles the
-        migration of infections between patches, and updates the forces of infection
-        based on the effective transmission rate and seasonality factors. Finally, it
-        updates the infected state of the population.
-
-        We will start with a single-node implementation of the SI model, with room to add multi-node support later
-
-        Parameters:
-
-            model (object): The model object containing the population, patches, and parameters.
-            tick (int): The current time step in the simulation.
-
-        Returns:
-
-            None
-
-        """
-
-        patches = model.patches
-        population = model.population
-        contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
-        susceptibility = population.susceptibility[0 : population.count]
-        if hasattr(patches, 'network'):
-            nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
-            np.add.at(contagion, nodeids[susceptibility == 0], 1)  # increment by the number of active agents with non-zero itimer
-            network = patches.network
-            transfer = (contagion * network).round().astype(np.uint32)
-            contagion += transfer.sum(axis=1)  # increment by incoming "migration"
-            contagion -= transfer.sum(axis=0)  # decrement by outgoing "migration"
-            #do stuff
-        else:
-            np.add(contagion, np.sum(susceptibility==0), out=contagion)  # increment by the number of non-susceptible agents
-
-        forces = patches.forces
-        np.multiply(contagion, model.params.beta, out=forces)
-        np.divide(forces, model.patches.populations[tick, :], out=forces)  # per agent force of infection
-        np.exp(-forces, out=forces)
-        np.subtract(1, forces, out=forces)
-
-        Transmission_SI.nb_transmission_update(
-            population.susceptibility,
-            population.nodeid,
-            forces,
-            population.count,
-            model.patches.incidence[tick, :],
-        )
-
-        return
-
-    @staticmethod
-    @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:]),
-        parallel=True,
-        nogil=True,
-        cache=True,
-    )
-    def nb_transmission_update(susceptibilities, nodeids, forces, count, incidence):  # pragma: no cover
-        """Numba compiled function to stochastically transmit infection to agents in parallel."""
-        for i in nb.prange(count):
-            susceptibility = susceptibilities[i]
-            if susceptibility > 0:
-                nodeid = nodeids[i]
-                force = susceptibility * forces[nodeid]  # force of infection attenuated by personal susceptibility
-                if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
-                    #All we do is become no longer susceptible, which means infected in an SI model.  No timers.
-                    susceptibilities[i] = 0.0  # no longer susceptible
-                    incidence[nodeid] += 1
-
-        return
-
-    def plot(self, fig: Figure = None):
-        """
-        Plots the cases and incidence for the two largest patches in the model.
-
-        This function creates a figure with four subplots:
-
-            - Cases for the largest patch
-            - Incidence for the largest patch
-            - Cases for the second largest patch
-            - Incidence for the second largest patch
-
-        If no figure is provided, a new figure is created with a size of 12x9 inches and a DPI of 128.
-
-        Parameters:
-
-            fig (Figure, optional): A Matplotlib Figure object to plot on. If None, a new figure is created.
-
-        Yields:
-
-            None
-        """
-
-        fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
-        fig.suptitle("Cases and Incidence for Largest Patch")
-
-        itwo, ione = np.argsort(self.model.patches.populations[-1, :])[-2:]
-
-        fig.add_subplot(2, 2, 1)
-        plt.title(f"Cases - Node {ione}")  # ({self.names[ione]})")
-        plt.plot(self.model.patches.cases[:, ione])
-
-        fig.add_subplot(2, 2, 2)
-        plt.title(f"Incidence - Node {ione}")  # ({self.names[ione]})")
-        plt.plot(self.model.patches.incidence[:, ione])
         yield
         return
