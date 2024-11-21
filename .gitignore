@@ -61,7 +61,7 @@ nosetests.xml
 .idea
 .project
 .pydevproject
-.vscode
+# .vscode # include this for consistency across VSCode projects
 
 # Complexity
 output/*.html
