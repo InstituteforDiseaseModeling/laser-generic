@@ -9,6 +9,14 @@ laser\_generic package
 Submodules
 ----------
 
+laser\_generic.births module
+----------------------------
+
+.. automodule:: laser_generic.births
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 laser\_generic.cli module
 -------------------------
 
@@ -21,6 +29,38 @@ laser\_generic.core module
 --------------------------
 
 .. automodule:: laser_generic.core
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+laser\_generic.model module
+---------------------------
+
+.. automodule:: laser_generic.model
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+laser\_generic.susceptibility module
+------------------------------------
+
+.. automodule:: laser_generic.susceptibility
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+laser\_generic.transmission module
+----------------------------------
+
+.. automodule:: laser_generic.transmission
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+laser\_generic.utils module
+---------------------------
+
+.. automodule:: laser_generic.utils
    :members:
    :undoc-members:
    :show-inheritance:

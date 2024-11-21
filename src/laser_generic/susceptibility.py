@@ -19,9 +19,9 @@ Functions:
 
 import numba as nb
 import numpy as np
-from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
-    
+
+
 class Susceptibility:
     """
     A component to represent the susceptibility of a population in a model.
@@ -55,7 +55,7 @@ class Susceptibility:
         self.model = model
 
         model.population.add_scalar_property("susceptibility", dtype=np.uint8, default=1)
-        #self.nb_initialize_susceptibility(model.population.count, model.population.dob, model.population.susceptibility)
+        # self.nb_initialize_susceptibility(model.population.count, model.population.dob, model.population.susceptibility)
 
         return
 

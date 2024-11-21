@@ -49,11 +49,7 @@ from datetime import datetime
 import click
 import numpy as np
 import pandas as pd
-from laser_core.demographics import AliasedDistribution
-from laser_core.demographics import load_pyramid_csv
 from laser_core.laserframe import LaserFrame
-from laser_core.migration import gravity
-from laser_core.migration import row_normalizer
 from laser_core.propertyset import PropertySet
 from laser_core.random import seed as seed_prng
 from matplotlib import pyplot as plt
@@ -63,7 +59,6 @@ from tqdm import tqdm
 
 from laser_generic import Births
 from laser_generic.utils import calc_capacity
-from laser_generic.utils import calc_distances
 
 
 class Model:
@@ -98,7 +93,7 @@ class Model:
 
         self.initialize_patches(scenario, parameters)
         self.initialize_population(scenario, parameters)
-        #self.initialize_network(scenario, parameters)
+        # self.initialize_network(scenario, parameters)
 
         return
 
@@ -114,14 +109,14 @@ class Model:
         self.patches.populations[0, :] = scenario.population
 
         return
-    
+
     def initialize_population(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
         # Initialize the model population
-        # Is there a better pattern than checking for cbr in parameters?  Many modelers might use "mu", for example.  
+        # Is there a better pattern than checking for cbr in parameters?  Many modelers might use "mu", for example.
         # Would rather check E.g., if there is a birth component, but that might come later.
         if "cbr" in parameters:
             capacity = calc_capacity(self.patches.populations[0, :].sum(), parameters.nticks, parameters.cbr, parameters.verbose)
-        else: 
+        else:
             capacity = np.sum(self.patches.populations[0, :])
         self.population = LaserFrame(capacity)
 
@@ -151,13 +146,12 @@ class Model:
         #     # ...and assign a random age, in days, within the bin
         #     dobs[mask] = self.prng.integers(bin_min_age_days[i], bin_max_age_days[i], mask.sum())
 
-        # dobs *= -1  # convert ages to date of birth prior to _now_ (t = 0) ∴ negative 
+        # dobs *= -1  # convert ages to date of birth prior to _now_ (t = 0) ∴ negative
 
         return
-    
 
     def initialize_network(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
-           #Come back to network setup.  Shouldn't need for N=1 networks, and shouldn't default to gravity
+        # Come back to network setup.  Shouldn't need for N=1 networks, and shouldn't default to gravity
         # distances = calc_distances(scenario.latitude.values, scenario.longitude.values, parameters.verbose)
         # network = gravity(
         #     scenario.population.values,
@@ -171,7 +165,7 @@ class Model:
         # self.patches.add_vector_property("network", length=npatches, dtype=np.float32)
         # self.patches.network[:, :] = network
         return
-    
+
     @property
     def components(self) -> list:
         """

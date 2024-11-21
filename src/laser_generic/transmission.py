@@ -28,8 +28,6 @@ import numba as nb
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
-import time
-
 
 
 class Transmission:
@@ -88,43 +86,43 @@ class Transmission:
         patches = model.patches
         population = model.population
 
-        contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array        
-        if hasattr(population, 'itimer'):
-            condition = population.itimer[0 : population.count]>0  # just look at the active agent indices
+        contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
+        if hasattr(population, "itimer"):
+            condition = population.itimer[0 : population.count] > 0  # just look at the active agent indices
         else:
-            condition = population.susceptibility[0 : population.count]==0  # just look at the active agent indices
-        
-        if len(patches)==1:
+            condition = population.susceptibility[0 : population.count] == 0  # just look at the active agent indices
+
+        if len(patches) == 1:
             np.add(contagion, np.sum(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
         else:
             nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
             np.add.at(contagion, nodeids[condition], 1)  # increment by the number of active agents with non-zero itimer
 
-        if hasattr(patches, 'network'):
+        if hasattr(patches, "network"):
             network = patches.network
             transfer = (contagion * network).round().astype(np.uint32)
             contagion += transfer.sum(axis=1)  # increment by incoming "migration"
             contagion -= transfer.sum(axis=0)  # decrement by outgoing "migration"
 
         forces = patches.forces
-        beta_effective = model.params.beta 
-#        if 'seasonality_factor' in model.params:
-#            beta_effective *= (1+ model.params.seasonality_factor * np.sin(
-#                2 * np.pi * (tick - model.params.seasonality_phase) / 365
-#                ))
-        
+        beta_effective = model.params.beta
+        #        if 'seasonality_factor' in model.params:
+        #            beta_effective *= (1+ model.params.seasonality_factor * np.sin(
+        #                2 * np.pi * (tick - model.params.seasonality_phase) / 365
+        #                ))
+
         np.multiply(contagion, beta_effective, out=forces)
         np.divide(forces, model.patches.populations[tick, :], out=forces)  # per agent force of infection
         np.expm1(-forces, out=forces)
         np.negative(forces, out=forces)
 
         # TODO: This is a hack to handle the different transmission dynamics for all of these SIS, SI, SIR, SEIR, ... models.
-        #       We should refactor this to be more general and flexible.  
+        #       We should refactor this to be more general and flexible.
         #       First, find a way to allow user to parametrize the timer distributions rather than hard-coding here.
         #       For example, the "_exposed" & "_noexposed" functions have the same signature but a different timer distribution.
         #       Second, maybe there's a way to overload the update function so we don't have to switch on the population attributes.
 
-        if hasattr(population, 'etimer'):
+        if hasattr(population, "etimer"):
             Transmission.nb_transmission_update_exposed(
                 population.susceptibility,
                 population.nodeid,
@@ -135,7 +133,7 @@ class Transmission:
                 model.params.exp_scale,
                 model.patches.incidence[tick, :],
             )
-        elif hasattr(population, 'itimer'):
+        elif hasattr(population, "itimer"):
             Transmission.nb_transmission_update_noexposed(
                 population.susceptibility,
                 population.nodeid,
@@ -164,7 +162,9 @@ class Transmission:
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_exposed(susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence):  # pragma: no cover
+    def nb_transmission_update_exposed(
+        susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence
+    ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
@@ -187,7 +187,9 @@ class Transmission:
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_noexposed(susceptibilities, nodeids, forces, itimers, count, inf_mean, inf_std, incidence):  # pragma: no cover
+    def nb_transmission_update_noexposed(
+        susceptibilities, nodeids, forces, itimers, count, inf_mean, inf_std, incidence
+    ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
@@ -218,7 +220,7 @@ class Transmission:
                 nodeid = nodeids[i]
                 force = susceptibility * forces[nodeid]  # force of infection attenuated by personal susceptibility
                 if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
-                    #All we do is become no longer susceptible, which means infected in an SI model.  No timers.
+                    # All we do is become no longer susceptible, which means infected in an SI model.  No timers.
                     susceptibilities[i] = 0  # no longer susceptible
                     incidence[nodeid] += 1
 

@@ -7,18 +7,18 @@ Functions:
 
         Initializes and returns a `PropertySet` object with default parameters,
         optionally overridden by command line arguments.
-    
+
     get_scenario(params, verbose:boolean=False) -> pd.DataFrame:
 
         Initializes and returns a single node scenario DataFrame
 
 """
+
 import re
+
 import click
 import numpy as np
-import geopandas as gpd
 import pandas as pd
-
 from laser_core.propertyset import PropertySet
 
 
@@ -26,7 +26,7 @@ def get_parameters(kwargs) -> PropertySet:
     """
     Generate a set of parameters for the generic SI simulation.
 
-    Args: 
+    Args:
         kwargs (dict): A dictionary containing the command line arguments.
 
     Returns:
@@ -73,19 +73,18 @@ def get_parameters(kwargs) -> PropertySet:
     return params
 
 
-
 def get_scenario(params) -> pd.DataFrame:
     """
     get_scenario(params, verbose: bool = False) -> pd.DataFrame:
 
         Set up scenario from input parameters
-        
+
         Parameters:
             "initial_population": int: The initial population size for the simulation.
-        
+
         Returns:
             pd.DataFrame: A GeoDataFrame containing the merged population and geographical data.
     """
 
-    #Almost completely unnecessary here but following the design pattern.
+    # Almost completely unnecessary here but following the design pattern.
     return pd.DataFrame.from_dict({"population": params.initial_population})

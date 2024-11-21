@@ -48,7 +48,6 @@ from laser_generic.utils import seed_infections_randomly_SI
 @click.option("--pdf", is_flag=True, help="Output visualization results as a PDF")
 @click.option("--output", default=None, help="Output file for results")
 @click.option("--param", "-p", multiple=True, help="Additional parameter overrides (param:value or param=value)")
-
 def run(**kwargs):
     """
     Run the SI simulation with the given parameters.
@@ -78,10 +77,7 @@ def run(**kwargs):
 
     # infection dynamics come _before_ incubation dynamics so newly set itimers
     # don't immediately expire
-    model.components = [
-        Susceptibility_SI,
-        Transmission_SI
-    ]
+    model.components = [Susceptibility_SI, Transmission_SI]
 
     seed_infections_randomly_SI(model, ninfections=10)
     # seed_infections_in_patch(model, ipatch=0, ninfections=100)

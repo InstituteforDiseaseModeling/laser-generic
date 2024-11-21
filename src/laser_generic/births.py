@@ -126,10 +126,10 @@ class Births:
             6. Calls any additional initializers for the newborns and records the timing of these initializations.
             7. Updates the population counts for the next tick with the new births.
         """
-        #KM: I like this setup for now; I think there are ways we could improve it but not a priority for now.
-        #Potential improvements - if population is growing/shrinking, there should be more/fewer births later in the year
-        #If we are doing annually, could generate a 1-year random series of births all at once, rather than a number for the year and then interpolate every day
-        #Could consider increments other than 1 year.
+        # KM: I like this setup for now; I think there are ways we could improve it but not a priority for now.
+        # Potential improvements - if population is growing/shrinking, there should be more/fewer births later in the year
+        # If we are doing annually, could generate a 1-year random series of births all at once, rather than a number for the year and then interpolate every day
+        # Could consider increments other than 1 year.
         doy = tick % 365 + 1  # day of year 1…365
         year = tick // 365
 
@@ -137,7 +137,9 @@ class Births:
             model.patches.births[year, :] = model.prng.poisson(model.patches.populations[tick, :] * model.params.cbr / 1000)
 
         annual_births = model.patches.births[year, :]
-        todays_births = (annual_births * doy // 365) - (annual_births * (doy - 1) // 365) #Is this not always basically annual_births / 365?
+        todays_births = (annual_births * doy // 365) - (
+            annual_births * (doy - 1) // 365
+        )  # Is this not always basically annual_births / 365?
         count_births = todays_births.sum()
         istart, iend = model.population.add(count_births)
 

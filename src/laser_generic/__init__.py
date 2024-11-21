@@ -1,7 +1,7 @@
 __version__ = "0.0.0"
 
-from .core import compute
 from .births import Births
+from .core import compute
 from .model import Model
 
 __all__ = [

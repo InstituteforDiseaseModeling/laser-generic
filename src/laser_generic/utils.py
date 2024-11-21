@@ -75,19 +75,20 @@ def calc_capacity(population: np.uint32, nticks: np.uint32, cbr: np.float32, ver
     # We will use the maximum population growth to estimate the capacity
     # We will use the maximum population growth to estimate the capacity
 
-    #KM we should think about unitization of births, people might want to define it otherwise.  Should we consider using a 
-    #package that actually handles unitization, like pint?  Probably not, but just wanted to put that here.
-    daily_rate = (cbr / 1000) / 365.0  # CBR is per 1000 people per year 
+    # KM we should think about unitization of births, people might want to define it otherwise.  Should we consider using a
+    # package that actually handles unitization, like pint?  Probably not, but just wanted to put that here.
+    daily_rate = (cbr / 1000) / 365.0  # CBR is per 1000 people per year
     capacity = np.uint32(population * (1 + daily_rate) ** nticks)
 
     if verbose:
         click.echo(f"Population growth: {population:,} … {capacity:,}")
-        alternate = np.uint32(population * (1 + cbr / 1000) ** (nticks / 365)) #KM What is the purpose of this line?
+        alternate = np.uint32(population * (1 + cbr / 1000) ** (nticks / 365))  # KM What is the purpose of this line?
         click.echo(f"Alternate growth:  {population:,} … {alternate:,}")
 
     return capacity
 
-#Want to think about the ways to seed infections.  Not all infections have a timer!
+
+# Want to think about the ways to seed infections.  Not all infections have a timer!
 def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
     """
     Seed initial infections in random locations at the start of the simulation.
