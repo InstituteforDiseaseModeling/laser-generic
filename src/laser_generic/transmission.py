@@ -113,7 +113,8 @@ class Transmission:
 
         np.multiply(contagion, beta_effective, out=forces)
         np.divide(forces, model.patches.populations[tick, :], out=forces)  # per agent force of infection
-        np.expm1(-forces, out=forces)
+        np.negative(forces, out=forces)
+        np.expm1(forces, out=forces)
         np.negative(forces, out=forces)
 
         # TODO: This is a hack to handle the different transmission dynamics for all of these SIS, SI, SIR, SEIR, ... models.
