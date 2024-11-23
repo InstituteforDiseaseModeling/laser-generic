@@ -116,7 +116,10 @@ class Susceptibility:
 
         # newborns are susceptible
         # nb_set_susceptibility(istart, iend, model.population.susceptibility, 0)
-        model.population.susceptibility[istart:iend] = 1
+        if iend is not None:
+            model.population.susceptibility[istart:iend] = 1
+        else:
+            model.population.susceptibility[istart] = 1
 
         return
 

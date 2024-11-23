@@ -57,7 +57,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
 
-from laser_generic import Births
+from laser_generic import Births, Births_ConstantPop
 from laser_generic.utils import calc_capacity
 
 
@@ -204,7 +204,7 @@ class Model:
             if "__call__" in dir(instance):
                 self.phases.append(instance)
 
-        births = next(filter(lambda object: isinstance(object, Births), self.instances), None)
+        births = next(filter(lambda object: isinstance(object, (Births, Births_ConstantPop)), self.instances), None)
         # TODO: raise an exception if there are components with an on_birth function but no Births component
         for instance in self.instances:
             if births is not None and "on_birth" in dir(instance):
