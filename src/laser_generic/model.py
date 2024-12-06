@@ -57,7 +57,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
 
-from laser_generic import Births, Births_ConstantPop
+from laser_generic import Births
+from laser_generic import Births_ConstantPop
 from laser_generic.utils import calc_capacity
 
 

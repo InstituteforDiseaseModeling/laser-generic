@@ -126,10 +126,10 @@ class Births:
             6. Calls any additional initializers for the newborns and records the timing of these initializations.
             7. Updates the population counts for the next tick with the new births.
         """
-        #KM: I like this setup for now; I think there are ways we could improve it but not a priority for now.
-        #Potential improvements - if population is growing/shrinking, there should be more/fewer births later in the year
-        #If we are doing annually, could generate a 1-year random series of births all at once, rather than a number for the year and then interpolate every day
-        #Could consider increments other than 1 year.
+        # KM: I like this setup for now; I think there are ways we could improve it but not a priority for now.
+        # Potential improvements - if population is growing/shrinking, there should be more/fewer births later in the year
+        # If we are doing annually, could generate a 1-year random series of births all at once, rather than a number for the year and then interpolate every day
+        # Could consider increments other than 1 year.
         doy = tick % 365 + 1  # day of year 1…365
         year = tick // 365
 
@@ -137,7 +137,9 @@ class Births:
             model.patches.births[year, :] = model.prng.poisson(model.patches.populations[tick, :] * model.params.cbr / 1000)
 
         annual_births = model.patches.births[year, :]
-        todays_births = (annual_births * doy // 365) - (annual_births * (doy - 1) // 365) #Is this not always basically annual_births / 365?
+        todays_births = (annual_births * doy // 365) - (
+            annual_births * (doy - 1) // 365
+        )  # Is this not always basically annual_births / 365?
         count_births = todays_births.sum()
         istart, iend = model.population.add(count_births)
 
@@ -205,7 +207,7 @@ class Births:
         yield
 
         return
-    
+
 
 class Births_ConstantPop:
     """
@@ -238,10 +240,12 @@ class Births_ConstantPop:
 
         self.model = model
 
-        #nyears = (model.params.nticks + 364) // 365
+        # nyears = (model.params.nticks + 364) // 365
         model.patches.add_vector_property("births", length=model.params.nticks, dtype=np.uint32)
-        model.patches.births = model.prng.poisson(lam=model.patches.populations[0, :] * model.params.cbr / 1000 / 365, size=model.patches.births.shape)
-        #model.patches.births[year, :] = model.prng.poisson(model.patches.populations[tick, :] * model.params.cbr / 1000)
+        model.patches.births = model.prng.poisson(
+            lam=model.patches.populations[0, :] * model.params.cbr / 1000 / 365, size=model.patches.births.shape
+        )
+        # model.patches.births[year, :] = model.prng.poisson(model.patches.populations[tick, :] * model.params.cbr / 1000)
         self._initializers = []
         self._metrics = []
 
@@ -291,12 +295,12 @@ class Births_ConstantPop:
 
         This method performs the following steps:
 
-            1. Draw a random set of indices, or size size "number of births"  from the population, 
+            1. Draw a random set of indices, or size size "number of births"  from the population,
         """
-         
-        #When we get to having birth rate per node, will need to be more clever here, but with constant birth rate across nodes, 
+
+        # When we get to having birth rate per node, will need to be more clever here, but with constant birth rate across nodes,
         # random selection will be population proportional.  If node id is not contiguous, could be tricky?
-        indices = model.prng.choice(model.patches.populations[tick,:].sum(), size=model.patches.births[tick,:].sum(), replace=False)
+        indices = model.prng.choice(model.patches.populations[tick, :].sum(), size=model.patches.births[tick, :].sum(), replace=False)
 
         if hasattr(model.population, "dob"):
             model.population.dob[indices] = tick  # set to current tick
@@ -309,7 +313,6 @@ class Births_ConstantPop:
             delta = tfinish - tstart
             timing.append(int(delta.total_seconds() * 1_000_000))
         self._metrics.append(timing)
-
 
         return
 

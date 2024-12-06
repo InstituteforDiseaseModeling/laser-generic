@@ -151,6 +151,7 @@ class Infection:
         yield
         return
 
+
 class Infection_SIS:
     """
     A component to update the infection timers of a population in a model.
@@ -208,8 +209,8 @@ class Infection_SIS:
             if itimer > 0:
                 itimer -= 1
                 itimers[i] = itimer
-                if itimer==0:
-                    susceptibility[i]=1
+                if itimer == 0:
+                    susceptibility[i] = 1
 
         return
 

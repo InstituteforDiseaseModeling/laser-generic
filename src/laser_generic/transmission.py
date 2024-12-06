@@ -123,7 +123,14 @@ class Transmission:
         #       For example, the "_exposed" & "_noexposed" functions have the same signature but a different timer distribution.
         #       Second, maybe there's a way to overload the update function so we don't have to switch on the population attributes.
 
-        if hasattr(population, "etimer"):
+        # KM: Prototyping a fast transmission feature, for use when exposure heterogeneity is not needed.
+        if "fast_transmission" in model.params and model.params.fast_transmission:
+            # interestingly, not actually faster than the nb_transmission_update_SI function
+            susc_inds = np.where(condition == False)[0]
+            ninf = np.random.binomial(len(susc_inds), forces)
+            population.susceptibility[np.random.choice(susc_inds, ninf, replace=False)] = 0
+
+        elif hasattr(population, "etimer"):
             Transmission.nb_transmission_update_exposed(
                 population.susceptibility,
                 population.nodeid,
@@ -142,7 +149,6 @@ class Transmission:
                 population.itimer,
                 population.count,
                 model.params.inf_mean,
-                model.params.inf_std,
                 model.patches.incidence[tick, :],
             )
         else:
@@ -183,14 +189,12 @@ class Transmission:
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:]),
+        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.uint32[:]),
         parallel=True,
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_noexposed(
-        susceptibilities, nodeids, forces, itimers, count, inf_mean, inf_std, incidence
-    ):  # pragma: no cover
+    def nb_transmission_update_noexposed(susceptibilities, nodeids, forces, itimers, count, inf_mean, incidence):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
@@ -200,7 +204,7 @@ class Transmission:
                 if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
                     susceptibilities[i] = 0  # no longer susceptible
                     # set exposure timer for newly infected individuals to a draw from a gamma distribution, must be at least 1 day
-                    itimers[i] = np.maximum(np.uint8(1), np.uint8(np.round(np.random.normal(inf_mean, inf_std))))
+                    itimers[i] = np.maximum(np.uint8(1), np.uint8(np.round(np.random.exponential(inf_mean))))
 
                     incidence[nodeid] += 1
 

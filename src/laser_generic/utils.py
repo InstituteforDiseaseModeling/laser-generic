@@ -117,6 +117,35 @@ def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
     return
 
 
+def seed_infections_randomly(model, ninfections: int = 100) -> None:
+    """
+    Seed initial infections in random locations at the start of the simulation.
+    This function randomly selects individuals from the population and seeds
+    them with an infection, based on the specified number of initial infections.
+
+    Args:
+
+        model: The simulation model containing the population and parameters.
+        ninfections (int, optional): The number of initial infections to seed.
+                                     Defaults to 100.
+
+    Returns:
+
+        None
+    """
+
+    # Seed initial infections in random locations at the start of the simulation
+    cinfections = 0
+    while cinfections < ninfections:
+        index = model.prng.integers(0, model.population.count)
+        if model.population.susceptibility[index] > 0:
+            model.population.susceptibility[index] = 0
+            model.population.itimer[index] = np.random.exponential(model.params.inf_mean)
+            cinfections += 1
+
+    return
+
+
 # def seed_infections_in_patch(model, ipatch: int, ninfections: int = 100) -> None:
 #     """
 #     Seed initial infections in a specific patch of the population at the start of the simulation.

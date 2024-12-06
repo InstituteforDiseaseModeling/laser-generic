@@ -6,6 +6,7 @@ Classes:
 
     Susceptibility: Manages the susceptibility property of a population and provides methods for
                     updating and plotting susceptibility data.
+
     Susceptibility_SI: Manages the susceptibility property of a population for the SI model.
 
 Functions:
