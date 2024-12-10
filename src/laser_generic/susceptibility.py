@@ -56,6 +56,7 @@ class Susceptibility:
         self.model = model
 
         model.population.add_scalar_property("susceptibility", dtype=np.uint8, default=1)
+        model.patches.add_vector_property("susceptibility", model.params.nticks, dtype=np.uint32)
         # self.nb_initialize_susceptibility(model.population.count, model.population.dob, model.population.susceptibility)
 
         return
@@ -79,7 +80,7 @@ class Susceptibility:
 
         return
 
-    # def __call__(self, model, tick):
+    def __call__(self, model, tick):
     #     """
     #     This method allows the instance to be called as a function.
 
@@ -92,6 +93,18 @@ class Susceptibility:
 
     #         None
     #     """
+
+        patches = model.patches
+        population = model.population
+
+        susceptible_count = patches.susceptibility[tick, :]  # we will accumulate current susceptibles into this view into the susceptibility array
+        condition = population.susceptibility[0 : population.count] >0.0
+        if len(model.patches) == 1:
+            np.add(susceptible_count, np.sum(condition), out=susceptible_count)
+        else:
+            nodeids = population.nodeid[0 : population.count]
+            np.add.at(susceptible_count, nodeids[condition], 1)
+
 
     #     return
 

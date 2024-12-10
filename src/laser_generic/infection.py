@@ -207,6 +207,9 @@ class Infection_SIS:
         for i in nb.prange(count):
             itimer = itimers[i]
             if itimer > 0:
+                #if np.random.random_sample()<1/itimer:
+                #    susceptibility[i] = 1
+                #    itimers[i] = 0
                 itimer -= 1
                 itimers[i] = itimer
                 if itimer == 0:

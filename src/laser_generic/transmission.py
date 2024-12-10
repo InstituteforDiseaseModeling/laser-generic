@@ -128,7 +128,9 @@ class Transmission:
             # interestingly, not actually faster than the nb_transmission_update_SI function
             susc_inds = np.where(condition == False)[0]
             ninf = np.random.binomial(len(susc_inds), forces)
-            population.susceptibility[np.random.choice(susc_inds, ninf, replace=False)] = 0
+            myinds = np.random.choice(susc_inds, ninf, replace=False)
+            population.susceptibility[myinds] = 0
+            population.itimer[myinds] = np.maximum(np.uint8(1), np.uint8(np.ceil(np.random.exponential(model.params.inf_mean))))
 
         elif hasattr(population, "etimer"):
             Transmission.nb_transmission_update_exposed(
@@ -203,9 +205,8 @@ class Transmission:
                 force = susceptibility * forces[nodeid]  # force of infection attenuated by personal susceptibility
                 if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
                     susceptibilities[i] = 0  # no longer susceptible
-                    # set exposure timer for newly infected individuals to a draw from a gamma distribution, must be at least 1 day
-                    itimers[i] = np.maximum(np.uint8(1), np.uint8(np.round(np.random.exponential(inf_mean))))
-
+                    # set infectious timer for the individual to an exponential draw
+                    itimers[i] = np.maximum(np.uint8(1), np.uint8(np.ceil(np.random.exponential(inf_mean))))
                     incidence[nodeid] += 1
 
         return
