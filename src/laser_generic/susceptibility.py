@@ -81,30 +81,31 @@ class Susceptibility:
         return
 
     def __call__(self, model, tick):
-    #     """
-    #     This method allows the instance to be called as a function.
+        #     """
+        #     This method allows the instance to be called as a function.
 
-    #     Parameters:
+        #     Parameters:
 
-    #         model (object): The model object that contains the state and behavior of the simulation.
-    #         tick (int): The current tick or time step in the simulation.
+        #         model (object): The model object that contains the state and behavior of the simulation.
+        #         tick (int): The current tick or time step in the simulation.
 
-    #     Returns:
+        #     Returns:
 
-    #         None
-    #     """
+        #         None
+        #     """
 
         patches = model.patches
         population = model.population
 
-        susceptible_count = patches.susceptibility[tick, :]  # we will accumulate current susceptibles into this view into the susceptibility array
-        condition = population.susceptibility[0 : population.count] >0.0
+        susceptible_count = patches.susceptibility[
+            tick, :
+        ]  # we will accumulate current susceptibles into this view into the susceptibility array
+        condition = population.susceptibility[0 : population.count] > 0.0
         if len(model.patches) == 1:
             np.add(susceptible_count, np.sum(condition), out=susceptible_count)
         else:
             nodeids = population.nodeid[0 : population.count]
             np.add.at(susceptible_count, nodeids[condition], 1)
-
 
     #     return
 

@@ -60,6 +60,7 @@ class Transmission:
         model.patches.add_vector_property("cases", length=model.params.nticks, dtype=np.uint32)
         model.patches.add_scalar_property("forces", dtype=np.float32)
         model.patches.add_vector_property("incidence", model.params.nticks, dtype=np.uint32)
+        model.population.add_scalar_property("doi", dtype=np.uint32, default=0)
 
         return
 
@@ -142,6 +143,8 @@ class Transmission:
                 model.params.exp_shape,
                 model.params.exp_scale,
                 model.patches.incidence[tick, :],
+                population.doi, 
+                tick,
             )
         elif hasattr(population, "itimer"):
             Transmission.nb_transmission_update_noexposed(
@@ -152,6 +155,8 @@ class Transmission:
                 population.count,
                 model.params.inf_mean,
                 model.patches.incidence[tick, :],
+                population.doi,
+                tick,
             )
         else:
             Transmission.nb_transmission_update_SI(
@@ -160,19 +165,21 @@ class Transmission:
                 forces,
                 population.count,
                 model.patches.incidence[tick, :],
+                population.doi,
+                tick,
             )
 
         return
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:]),
+        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
         parallel=True,
         nogil=True,
         cache=True,
     )
     def nb_transmission_update_exposed(
-        susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence
+        susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence, doi, tick
     ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         for i in nb.prange(count):
@@ -184,19 +191,19 @@ class Transmission:
                     susceptibilities[i] = 0  # no longer susceptible
                     # set exposure timer for newly infected individuals to a draw from a gamma distribution, must be at least 1 day
                     etimers[i] = np.maximum(np.uint8(1), np.uint8(np.round(np.random.gamma(exp_shape, exp_scale))))
-
+                    doi[i] = tick
                     incidence[nodeid] += 1
 
         return
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.uint32[:]),
-        parallel=True,
+        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
+        parallel=False,
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_noexposed(susceptibilities, nodeids, forces, itimers, count, inf_mean, incidence):  # pragma: no cover
+    def nb_transmission_update_noexposed(susceptibilities, nodeids, forces, itimers, count, inf_mean, incidence, doi, tick):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
@@ -207,18 +214,19 @@ class Transmission:
                     susceptibilities[i] = 0  # no longer susceptible
                     # set infectious timer for the individual to an exponential draw
                     itimers[i] = np.maximum(np.uint8(1), np.uint8(np.ceil(np.random.exponential(inf_mean))))
+                    doi[i] = tick
                     incidence[nodeid] += 1
 
         return
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint32, nb.uint32[:]),
-        parallel=True,
+        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint32, nb.uint32[:], nb.uint32[:], nb.int_),
+        parallel=False,
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_SI(susceptibilities, nodeids, forces, count, incidence):  # pragma: no cover
+    def nb_transmission_update_SI(susceptibilities, nodeids, forces, count, incidence, doi, tick):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
@@ -228,8 +236,34 @@ class Transmission:
                 if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
                     # All we do is become no longer susceptible, which means infected in an SI model.  No timers.
                     susceptibilities[i] = 0  # no longer susceptible
+                    doi[i] = tick
                     incidence[nodeid] += 1
 
+        return
+
+    def on_birth(self, model, _tick, istart, iend) -> None:
+        """
+        This function sets the date of infection for newborns to zero.
+        Appears here because transmission is where I have decided to add the "doi" property,
+        and I think it thus makes sense to also have the on-birth initializer here.  Could
+        just as easily choose to do this over in Infection class instead.  
+
+        Args:
+
+            model: The simulation model containing the population data.
+            tick: The current tick or time step in the simulation (unused in this function).
+            istart: The starting index of the newborns in the population array.
+            iend: The ending index of the newborns in the population array.
+
+        Returns:
+
+            None
+        """
+
+        if iend is not None:
+            model.population.doi[istart:iend] = 0
+        else:
+            model.population.doi[istart] = 0
         return
 
     def plot(self, fig: Figure = None):

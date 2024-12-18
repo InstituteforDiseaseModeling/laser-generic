@@ -67,7 +67,8 @@ class Births:
         self.model = model
 
         nyears = (model.params.nticks + 364) // 365
-        model.patches.add_vector_property("births", length=nyears, dtype=np.uint32)
+        model.patches.add_vector_property("births", length=nyears, dtype=np.int32)
+        model.population.add_scalar_property("dob", dtype=np.int32)
 
         self._initializers = []
         self._metrics = []
@@ -239,6 +240,11 @@ class Births_ConstantPop:
         assert getattr(model, "population", None) is not None, "Births requires the model to have a `population` attribute"
 
         self.model = model
+
+        model.population.add_scalar_property("dob", dtype=np.int32)
+        # Simple initializer for ages where birth rate = mortality rate:
+        daily_mortality_rate = (1+model.params.cbr/1000)**(1/365)-1
+        model.population.dob[0 : model.population.count] = -1*model.prng.exponential(1 / daily_mortality_rate, model.population.count).astype(np.int32)
 
         # nyears = (model.params.nticks + 364) // 365
         model.patches.add_vector_property("births", length=model.params.nticks, dtype=np.uint32)

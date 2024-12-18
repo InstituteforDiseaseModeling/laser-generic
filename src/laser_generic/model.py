@@ -115,10 +115,10 @@ class Model:
         # Initialize the model population
         # Is there a better pattern than checking for cbr in parameters?  Many modelers might use "mu", for example.
         # Would rather check E.g., if there is a birth component, but that might come later.
-        if "cbr" in parameters:
-            capacity = calc_capacity(self.patches.populations[0, :].sum(), parameters.nticks, parameters.cbr, parameters.verbose)
-        else:
-            capacity = np.sum(self.patches.populations[0, :])
+        #if "cbr" in parameters:
+        #    capacity = calc_capacity(self.patches.populations[0, :].sum(), parameters.nticks, parameters.cbr, parameters.verbose)
+        #else:
+        capacity = np.sum(self.patches.populations[0, :])
         self.population = LaserFrame(capacity)
 
         self.population.add_scalar_property("nodeid", dtype=np.uint16)

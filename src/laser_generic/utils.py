@@ -145,6 +145,7 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
 
     return
 
+
 # def seed_infections_in_patch(model, ipatch: int, ninfections: int = 100) -> None:
 #     """
 #     Seed initial infections in a specific patch of the population at the start of the simulation.
@@ -173,6 +174,7 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
 
 #     return
 
+
 def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     """
     Set the population susceptibility level at the start of the simulation.
@@ -182,7 +184,7 @@ def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     Args:
 
         model: The simulation model containing the population and parameters.
-        susc_frac (float, optional): The fraction of individuals to keep susceptible. 
+        susc_frac (float, optional): The fraction of individuals to keep susceptible.
 
     Returns:
 
@@ -190,7 +192,7 @@ def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     """
 
     # Seed initial infections in random locations at the start of the simulation
-    indices = model.prng.choice(model.population.count, int(model.population.count * (1-susc_frac)), replace=False)
+    indices = model.prng.choice(model.population.count, int(model.population.count * (1 - susc_frac)), replace=False)
     model.population.susceptibility[indices] = 0
 
     return

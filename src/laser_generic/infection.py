@@ -109,7 +109,10 @@ class Infection:
 
         # newborns are not infectious
         # Infection.nb_set_itimers(istart, iend, model.population.itimer, 0)
-        model.population.itimer[istart:iend] = 0
+        if iend is not None:
+            model.population.itimer[istart:iend] = 0
+        else:
+            model.population.itimer[istart] = 0
         return
 
     @staticmethod
@@ -207,7 +210,7 @@ class Infection_SIS:
         for i in nb.prange(count):
             itimer = itimers[i]
             if itimer > 0:
-                #if np.random.random_sample()<1/itimer:
+                # if np.random.random_sample()<1/itimer:
                 #    susceptibility[i] = 1
                 #    itimers[i] = 0
                 itimer -= 1

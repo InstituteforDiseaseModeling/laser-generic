@@ -6,6 +6,8 @@ from .core import compute
 from .model import Model
 from .susceptibility import Susceptibility
 from .transmission import Transmission
+from .infection import Infection
+from .importation import Infect_Random_Agents
 
 __all__ = [
     "compute",
@@ -13,5 +15,7 @@ __all__ = [
     "Births_ConstantPop",
     "Susceptibility",
     "Transmission",
+    "Infection",
+    "Infect_Random_Agents",
     "Model",
 ]
