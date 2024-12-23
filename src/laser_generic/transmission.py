@@ -28,7 +28,7 @@ import numba as nb
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
-
+from laser_generic.utils import add_at
 
 class Transmission:
     """
@@ -94,10 +94,11 @@ class Transmission:
             condition = population.susceptibility[0 : population.count] == 0  # just look at the active agent indices
 
         if len(patches) == 1:
-            np.add(contagion, np.sum(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
+            np.add(contagion, np.count_nonzero(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
         else:
             nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
-            np.add.at(contagion, nodeids[condition], 1)  # increment by the number of active agents with non-zero itimer
+            #add_at(contagion, nodeids, np.ones_like(nodeids, dtype=np.uint32))  # increment by the number of active agents with non-zero itimer
+            np.add.at(contagion, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
 
         if hasattr(patches, "network"):
             network = patches.network
@@ -125,13 +126,17 @@ class Transmission:
         #       Second, maybe there's a way to overload the update function so we don't have to switch on the population attributes.
 
         # KM: Prototyping a fast transmission feature, for use when exposure heterogeneity is not needed.
+        #I think rather than all of this if-statement stuff below, I may be better off 
+        #having a Transmission_SI, SIR, SEIR class.  
         if "fast_transmission" in model.params and model.params.fast_transmission:
             # interestingly, not actually faster than the nb_transmission_update_SI function
-            susc_inds = np.where(condition == False)[0]
-            ninf = np.random.binomial(len(susc_inds), forces)
-            myinds = np.random.choice(susc_inds, ninf, replace=False)
-            population.susceptibility[myinds] = 0
-            population.itimer[myinds] = np.maximum(np.uint8(1), np.uint8(np.ceil(np.random.exponential(model.params.inf_mean))))
+            for i in np.arange(len(patches)):
+                susc_inds = np.asarray(condition == False & (population.nodeid == i)).nonzero()[0]
+                ninf = np.random.binomial(len(susc_inds), forces[i])
+                myinds = np.random.choice(susc_inds, ninf, replace=False)
+                population.susceptibility[myinds] = 0
+                population.itimer[myinds] = np.maximum(np.uint8(1), np.uint8(np.ceil(np.random.exponential(model.params.inf_mean))))
+                patches.incidence[tick, i] = ninf
 
         elif hasattr(population, "etimer"):
             Transmission.nb_transmission_update_exposed(
@@ -182,6 +187,9 @@ class Transmission:
         susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence, doi, tick
     ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
+        max_node_id = np.max(nodeids)
+        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
+ 
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
             if susceptibility > 0:
@@ -192,19 +200,26 @@ class Transmission:
                     # set exposure timer for newly infected individuals to a draw from a gamma distribution, must be at least 1 day
                     etimers[i] = np.maximum(np.uint8(1), np.uint8(np.round(np.random.gamma(exp_shape, exp_scale))))
                     doi[i] = tick
-                    incidence[nodeid] += 1
+                    thread_incidences[nb.get_thread_id(), nodeid] += 1
 
+        for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
+            for j in range(max_node_id+1):
+                incidence[j] += thread_incidences[t, j]
+                
         return
 
     @staticmethod
     @nb.njit(
         (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
-        parallel=False,
+        parallel=True,
         nogil=True,
         cache=True,
     )
     def nb_transmission_update_noexposed(susceptibilities, nodeids, forces, itimers, count, inf_mean, incidence, doi, tick):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
+        max_node_id = np.max(nodeids)
+        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
+ 
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
             if susceptibility > 0:
@@ -215,19 +230,25 @@ class Transmission:
                     # set infectious timer for the individual to an exponential draw
                     itimers[i] = np.maximum(np.uint8(1), np.uint8(np.ceil(np.random.exponential(inf_mean))))
                     doi[i] = tick
-                    incidence[nodeid] += 1
+                    thread_incidences[nb.get_thread_id(), nodeid] += 1
 
+        for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
+            for j in range(max_node_id+1):
+                incidence[j] += thread_incidences[t, j]
+                
         return
 
     @staticmethod
     @nb.njit(
         (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint32, nb.uint32[:], nb.uint32[:], nb.int_),
-        parallel=False,
+        parallel=True,
         nogil=True,
         cache=True,
     )
     def nb_transmission_update_SI(susceptibilities, nodeids, forces, count, incidence, doi, tick):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
+        max_node_id = np.max(nodeids)
+        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
             if susceptibility > 0:
@@ -237,7 +258,10 @@ class Transmission:
                     # All we do is become no longer susceptible, which means infected in an SI model.  No timers.
                     susceptibilities[i] = 0  # no longer susceptible
                     doi[i] = tick
-                    incidence[nodeid] += 1
+                    thread_incidences[nb.get_thread_id(), nodeid] += 1
+        for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
+            for j in range(max_node_id+1):
+                incidence[j] += thread_incidences[t, j]
 
         return
 
@@ -310,4 +334,70 @@ class Transmission:
         plt.plot(self.model.patches.incidence[:, itwo])
 
         yield
+        return
+
+
+class TransmissionSIR(Transmission):
+    """
+    A component to model the transmission of disease in a population using the SIR model.
+    """
+
+    def __call__(self, model, tick) -> None:
+        """
+        Simulate the transmission of measles for a given model at a specific tick using the SIR model.
+
+        This method updates the state of the model by simulating the spread of disease
+        through the population and patches. It calculates the contagion, handles the
+        migration of infections between patches, and updates the forces of infection
+        based on the effective transmission rate and seasonality factors. Finally, it
+        updates the infected state of the population.
+
+        Parameters:
+
+            model (object): The model object containing the population, patches, and parameters.
+            tick (int): The current time step in the simulation.
+
+        Returns:
+
+            None
+        """
+        patches = model.patches
+        population = model.population
+
+        contagion = patches.cases[tick, :]
+        condition = population.susceptibility[0 : population.count] == 0
+
+        if len(patches) == 1:
+            np.add(contagion, np.sum(condition), out=contagion)
+        else:
+            nodeids = population.nodeid[0 : population.count]
+            np.add.at(contagion, nodeids[condition], 1)
+
+        if hasattr(patches, "network"):
+            network = patches.network
+            transfer = (contagion * network).round().astype(np.uint32)
+            contagion += transfer.sum(axis=1)
+            contagion -= transfer.sum(axis=0)
+
+        forces = patches.forces
+        beta_effective = model.params.beta
+
+        np.multiply(contagion, beta_effective, out=forces)
+        np.divide(forces, model.patches.populations[tick, :], out=forces)
+        np.negative(forces, out=forces)
+        np.expm1(forces, out=forces)
+        np.negative(forces, out=forces)
+
+        Transmission.nb_transmission_update_noexposed(
+            population.susceptibility,
+            population.nodeid,
+            forces,
+            population.itimer,
+            population.count,
+            model.params.inf_mean,
+            model.patches.incidence[tick, :],
+            population.doi,
+            tick,
+        )
+
         return

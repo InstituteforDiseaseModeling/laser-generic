@@ -5,7 +5,7 @@ Classes:
     Infect_Random_Agents: A class to periodically infect a random subset of agents in the population
 
 Functions:
-    Infect_Random_Agents.__init__(self, model, period, count, verbose: bool = False) -> None:
+    Infect_Random_Agents.__init__(self, model, period, count, start, verbose: bool = False) -> None:
         Initializes the Infect_Random_Agents class with a given model, period, count, and verbosity option.
 
     Infect_Random_Agents.__call__(self, model, tick) -> None:
@@ -36,6 +36,7 @@ class Infect_Random_Agents:
             model: The model object that contains the population.
             period: The number of ticks between each infection event.
             count: The number of agents to infect at each event.
+            start (int, optional): The tick at which to start the infection events.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
@@ -49,6 +50,10 @@ class Infect_Random_Agents:
         self.model = model
         self.period = model.params.importation_period
         self.count = model.params.importation_count
+        self.start = 0
+        if hasattr(model.params, 'importation_start'):
+            self.start = model.params.importation_start
+            
 
         return
 
@@ -65,7 +70,7 @@ class Infect_Random_Agents:
 
             None
         """
-        if tick % self.period == 0:
+        if (tick >= self.start) and ((tick-self.start) % self.period == 0):
             seed_infections_randomly(model, self.count)
 
         return

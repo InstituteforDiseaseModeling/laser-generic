@@ -58,7 +58,7 @@ class Infection:
         self.model = model
 
         model.population.add_scalar_property("itimer", dtype=np.uint8, default=0)
-        Infection.nb_set_itimers(0, model.population.count, model.population.itimer, 0)
+        Infection.nb_set_itimers_slice(0, model.population.count, model.population.itimer, 0)
 
         return
 
@@ -110,16 +110,25 @@ class Infection:
         # newborns are not infectious
         # Infection.nb_set_itimers(istart, iend, model.population.itimer, 0)
         if iend is not None:
-            model.population.itimer[istart:iend] = 0
+            Infection.nb_set_itimers_slice(istart, iend, model.population.itimer, np.uint8(0))
         else:
-            model.population.itimer[istart] = 0
+            Infection.nb_set_itimers_randomaccess(istart, model.population.itimer, np.uint8(0))
         return
 
     @staticmethod
     @nb.njit((nb.uint32, nb.uint32, nb.uint8[:], nb.uint8), parallel=True, cache=True)
-    def nb_set_itimers(istart, iend, itimers, value) -> None:  # pragma: no cover
+    def nb_set_itimers_slice(istart, iend, itimers, value) -> None:  # pragma: no cover
         """Numba compiled function to set infection timers for a range of individuals in parallel."""
         for i in nb.prange(istart, iend):
+            itimers[i] = value
+
+        return
+    
+    @staticmethod
+    @nb.njit((nb.int64[:], nb.uint8[:], nb.uint8), parallel=True, cache=True)
+    def nb_set_itimers_randomaccess(indices, itimers, value) -> None:  # pragma: no cover
+        """Numba compiled function to set infection timers for a range of individuals in parallel."""
+        for i in nb.prange(len(indices)):
             itimers[i] = value
 
         return

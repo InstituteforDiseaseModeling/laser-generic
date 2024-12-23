@@ -13,6 +13,12 @@ Functions:
 
     seed_infections_in_patch(model, ipatch: int, ninfections: int = 100) -> None:
         Seed initial infections in a specific location at the start of the simulation.
+    
+    set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
+        Set the population susceptibility level at the start of the simulation.
+    
+    set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
+        Set the population susceptibility level at the start of the simulation in a specific patch.
 """
 
 import click
@@ -146,33 +152,58 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
     return
 
 
-# def seed_infections_in_patch(model, ipatch: int, ninfections: int = 100) -> None:
-#     """
-#     Seed initial infections in a specific patch of the population at the start of the simulation.
-#     This function randomly selects individuals from the specified patch and sets their infection timer
-#     to the mean infection duration, effectively marking them as infected. The process continues until
-#     the desired number of initial infections is reached.
+def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
+     """
+     Seed initial infections in a specific patch of the population at the start of the simulation.
+     This function randomly selects individuals from the specified patch and sets their infection timer
+     to the mean infection duration, effectively marking them as infected. The process continues until
+     the desired number of initial infections is reached.
 
-#     Args:
+     Args:
 
-#         model: The simulation model containing the population and parameters.
-#         ipatch (int): The identifier of the patch where infections should be seeded.
-#         ninfections (int, optional): The number of initial infections to seed. Defaults to 100.
+         model: The simulation model containing the population and parameters.
+         ipatch (int): The identifier of the patch where infections should be seeded.
+         ninfections (int, optional): The number of initial infections to seed. Defaults to 100.
 
-#     Returns:
+     Returns:
 
-#         None
-#     """
+         None
+     """
 
-#     # Seed initial infections in a specific location at the start of the simulation
-#     cinfections = 0
-#     while cinfections < ninfections:
-#         index = model.prng.integers(0, model.population.count)
-#         if model.population.susceptibility[index] > 0 and model.population.nodeid[index] == ipatch:
-#             model.population.itimer[index] = model.params.inf_mean
-#             cinfections += 1
+     # Seed initial infections in a specific location at the start of the simulation
+     cinfections = 0
+     while cinfections < ninfections:
+         index = model.prng.integers(0, model.population.count)
+         if model.population.susceptibility[index] > 0 and model.population.nodeid[index] == ipatch:
+             #Should this call some infection initialization function instead?
+             model.population.itimer[index] = model.params.inf_mean
+             cinfections += 1
 
-#     return
+     return
+
+def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
+    """
+    Set the population susceptibility level at the start of the simulation, in a specific patch.
+    This function randomly selects individuals from the patch and changes
+    their susceptibility to zero, according to the parameter susc_frac.
+
+    Args:
+
+        model: The simulation model containing the population and parameters.
+        ipatch: The patch to set susceptibility in
+        susc_frac (float, optional): The fraction of individuals to keep susceptible.
+
+    Returns:
+
+        None
+    """
+
+    # Seed initial infections in random locations at the start of the simulation
+    indices = np.squeeze(np.where(model.population.nodeid == ipatch))
+    patch_indices = model.prng.choice(indices, int(len(indices) * (1 - susc_frac)), replace=False)
+    model.population.susceptibility[patch_indices] = 0
+
+    return
 
 
 def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
@@ -196,3 +227,11 @@ def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     model.population.susceptibility[indices] = 0
 
     return
+
+def add_at(A, indices, B):
+    sorted_indices = np.argsort(indices)
+    uniques, run_lengths = np.unique(indices[sorted_indices], return_counts=True)
+    for i, length, end in zip(uniques, run_lengths, run_lengths.cumsum()):
+        A[i] += B[sorted_indices[end-length:end]].sum(axis=0)  
+
+

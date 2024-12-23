@@ -21,6 +21,7 @@ Functions:
 import numba as nb
 import numpy as np
 from matplotlib.figure import Figure
+from laser_generic.utils import add_at
 
 
 class Susceptibility:
@@ -73,10 +74,36 @@ class Susceptibility:
 
     @staticmethod
     @nb.njit((nb.uint32, nb.uint32, nb.uint8[:], nb.uint8), parallel=True, cache=True)
-    def nb_set_susceptibility(istart, iend, susceptibility, value) -> None:  # pragma: no cover
+    def nb_set_susceptibility_slice(istart, iend, susceptibility, value) -> None:  # pragma: no cover
         """Numba compiled function to set the susceptibility of a range of individuals."""
         for i in nb.prange(istart, iend):
             susceptibility[i] = value
+
+        return
+    
+    @staticmethod
+    @nb.njit((nb.int64[:], nb.uint8[:], nb.uint8), parallel=True, cache=True)
+    def nb_set_susceptibility_randomaccess(indices, susceptibility, value) -> None:  # pragma: no cover
+        """Numba compiled function to set the susceptibility of a range of individuals."""
+        for i in nb.prange(len(indices)):
+            susceptibility[indices[i]] = value
+
+        return
+    
+    @staticmethod
+    @nb.njit((nb.uint32[:], nb.uint8[:], nb.uint16[:], nb.uint32), parallel=True, cache=True)
+    def accumulate_susceptibility(node_susc, agent_susc, nodeids, count) -> None:  # pragma: no cover
+        """Numba compiled function to accumulate susceptibility of individuals."""
+        max_node_id = np.max(nodeids)
+        thread_susceptibilities = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
+
+        for i in nb.prange(count):
+            nodeid = nodeids[i]
+            susceptibility = agent_susc[i]
+            thread_susceptibilities[nb.get_thread_id(), nodeid] += susceptibility
+        for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
+            for j in range(max_node_id+1):
+                node_susc[j] += thread_susceptibilities[t, j]
 
         return
 
@@ -97,15 +124,18 @@ class Susceptibility:
         patches = model.patches
         population = model.population
 
-        susceptible_count = patches.susceptibility[
-            tick, :
-        ]  # we will accumulate current susceptibles into this view into the susceptibility array
-        condition = population.susceptibility[0 : population.count] > 0.0
+        susceptible_count = patches.susceptibility[tick, :]  # we will accumulate current susceptibles into this view into the susceptibility array
         if len(model.patches) == 1:
-            np.add(susceptible_count, np.sum(condition), out=susceptible_count)
+            np.add(susceptible_count, 
+                   np.count_nonzero(population.susceptibility[0:population.count]), 
+                   out=susceptible_count)
         else:
             nodeids = population.nodeid[0 : population.count]
-            np.add.at(susceptible_count, nodeids[condition], 1)
+            susceptibility = population.susceptibility[0 : population.count]
+            #condition = susceptibility > 0
+            self.accumulate_susceptibility(susceptible_count, susceptibility, nodeids, population.count)            
+            #add_at(susceptible_count, nodeids[condition], np.ones_like(nodeids, dtype=np.uint32))
+            #susceptible_count += np.bincount(nodeids[condition], minlength=np.max(nodeids)+1).astype(np.uint32)
 
     #     return
 
@@ -132,9 +162,9 @@ class Susceptibility:
         # newborns are susceptible
         # nb_set_susceptibility(istart, iend, model.population.susceptibility, 0)
         if iend is not None:
-            model.population.susceptibility[istart:iend] = 1
+            Susceptibility.nb_set_susceptibility_slice(istart, iend, model.population.susceptibility, np.uint8(1))
         else:
-            model.population.susceptibility[istart] = 1
+            Susceptibility.nb_set_susceptibility_randomaccess(istart, model.population.susceptibility, np.uint8(1))
 
         return
 
