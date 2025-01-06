@@ -51,13 +51,13 @@ class Infection:
 
         Side Effects:
 
-            Adds a scalar property "itimer" to the model's population with dtype np.uint8 and default value 0.
+            Adds a scalar property "itimer" to the model's population with dtype np.uint16 and default value 0.
             Calls the nb_set_itimers method to initialize the itimer values for the population.
         """
 
         self.model = model
 
-        model.population.add_scalar_property("itimer", dtype=np.uint8, default=0)
+        model.population.add_scalar_property("itimer", dtype=np.uint16, default=0)
         Infection.nb_set_itimers_slice(0, model.population.count, model.population.itimer, 0)
 
         return
@@ -80,7 +80,7 @@ class Infection:
         return
 
     @staticmethod
-    @nb.njit((nb.uint32, nb.uint8[:]), parallel=True, cache=True)
+    @nb.njit((nb.uint32, nb.uint16[:]), parallel=True, cache=True)
     def nb_infection_update(count, itimers):  # pragma: no cover
         """Numba compiled function to check and update infection timers for the population in parallel."""
         for i in nb.prange(count):
@@ -110,13 +110,13 @@ class Infection:
         # newborns are not infectious
         # Infection.nb_set_itimers(istart, iend, model.population.itimer, 0)
         if iend is not None:
-            Infection.nb_set_itimers_slice(istart, iend, model.population.itimer, np.uint8(0))
+            Infection.nb_set_itimers_slice(istart, iend, model.population.itimer, np.uint16(0))
         else:
-            Infection.nb_set_itimers_randomaccess(istart, model.population.itimer, np.uint8(0))
+            Infection.nb_set_itimers_randomaccess(istart, model.population.itimer, np.uint16(0))
         return
 
     @staticmethod
-    @nb.njit((nb.uint32, nb.uint32, nb.uint8[:], nb.uint8), parallel=True, cache=True)
+    @nb.njit((nb.uint32, nb.uint32, nb.uint16[:], nb.uint16), parallel=True, cache=True)
     def nb_set_itimers_slice(istart, iend, itimers, value) -> None:  # pragma: no cover
         """Numba compiled function to set infection timers for a range of individuals in parallel."""
         for i in nb.prange(istart, iend):
@@ -125,7 +125,7 @@ class Infection:
         return
     
     @staticmethod
-    @nb.njit((nb.int64[:], nb.uint8[:], nb.uint8), parallel=True, cache=True)
+    @nb.njit((nb.int64[:], nb.uint16[:], nb.uint16), parallel=True, cache=True)
     def nb_set_itimers_randomaccess(indices, itimers, value) -> None:  # pragma: no cover
         """Numba compiled function to set infection timers for a range of individuals in parallel."""
         for i in nb.prange(len(indices)):
@@ -184,13 +184,13 @@ class Infection_SIS:
 
         Side Effects:
 
-            Adds a scalar property "itimer" to the model's population with dtype np.uint8 and default value 0.
+            Adds a scalar property "itimer" to the model's population with dtype np.uint16 and default value 0.
             Calls the nb_set_itimers method to initialize the itimer values for the population.
         """
 
         self.model = model
 
-        model.population.add_scalar_property("itimer", dtype=np.uint8, default=0)
+        model.population.add_scalar_property("itimer", dtype=np.uint16, default=0)
         Infection_SIS.nb_set_itimers(0, model.population.count, model.population.itimer, 0)
 
         return
@@ -213,15 +213,12 @@ class Infection_SIS:
         return
 
     @staticmethod
-    @nb.njit((nb.uint32, nb.uint8[:], nb.uint8[:]), parallel=True, cache=True)
+    @nb.njit((nb.uint32, nb.uint16[:], nb.uint8[:]), parallel=True, cache=True)
     def nb_infection_update(count, itimers, susceptibility):  # pragma: no cover
         """Numba compiled function to check and update infection timers for the population in parallel."""
         for i in nb.prange(count):
             itimer = itimers[i]
             if itimer > 0:
-                # if np.random.random_sample()<1/itimer:
-                #    susceptibility[i] = 1
-                #    itimers[i] = 0
                 itimer -= 1
                 itimers[i] = itimer
                 if itimer == 0:
@@ -251,7 +248,7 @@ class Infection_SIS:
         return
 
     @staticmethod
-    @nb.njit((nb.uint32, nb.uint32, nb.uint8[:], nb.uint8), parallel=True, cache=True)
+    @nb.njit((nb.uint32, nb.uint32, nb.uint16[:], nb.uint16), parallel=True, cache=True)
     def nb_set_itimers(istart, iend, itimers, value) -> None:  # pragma: no cover
         """Numba compiled function to set infection timers for a range of individuals in parallel."""
         for i in nb.prange(istart, iend):

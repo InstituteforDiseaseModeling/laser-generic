@@ -153,33 +153,32 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
 
 
 def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
-     """
-     Seed initial infections in a specific patch of the population at the start of the simulation.
-     This function randomly selects individuals from the specified patch and sets their infection timer
-     to the mean infection duration, effectively marking them as infected. The process continues until
-     the desired number of initial infections is reached.
+    """
+    Seed initial infections in a specific patch of the population at the start of the simulation.
+    This function randomly selects individuals from the specified patch and sets their infection timer
+    to the mean infection duration, effectively marking them as infected. The process continues until
+    the desired number of initial infections is reached.
 
-     Args:
+    Args:
 
-         model: The simulation model containing the population and parameters.
-         ipatch (int): The identifier of the patch where infections should be seeded.
-         ninfections (int, optional): The number of initial infections to seed. Defaults to 100.
+        model: The simulation model containing the population and parameters.
+        ipatch (int): The identifier of the patch where infections should be seeded.
+        ninfections (int, optional): The number of initial infections to seed. Defaults to 100.
 
-     Returns:
+    Returns:
 
-         None
-     """
+        None
+    """
 
-     # Seed initial infections in a specific location at the start of the simulation
-     cinfections = 0
-     while cinfections < ninfections:
-         index = model.prng.integers(0, model.population.count)
-         if model.population.susceptibility[index] > 0 and model.population.nodeid[index] == ipatch:
-             #Should this call some infection initialization function instead?
-             model.population.itimer[index] = model.params.inf_mean
-             cinfections += 1
+    # Seed initial infections in a specific location at the start of the simulation
+    myinds = np.where((model.population.susceptibility > 0) & (model.population.nodeid == ipatch))[0]
+    if len(myinds) > ninfections:
+       myinds = np.random.choice(myinds, ninfections, replace=False)
+    model.population.itimer[myinds] = model.params.inf_mean
+    model.population.susceptibility[myinds] = 0
 
-     return
+
+    return
 
 def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
     """

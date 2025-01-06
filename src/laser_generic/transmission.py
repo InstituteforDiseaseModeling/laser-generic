@@ -135,7 +135,7 @@ class Transmission:
                 ninf = np.random.binomial(len(susc_inds), forces[i])
                 myinds = np.random.choice(susc_inds, ninf, replace=False)
                 population.susceptibility[myinds] = 0
-                population.itimer[myinds] = np.maximum(np.uint8(1), np.uint8(np.ceil(np.random.exponential(model.params.inf_mean))))
+                population.itimer[myinds] = np.maximum(np.uint16(1), np.uint16(np.ceil(np.random.exponential(model.params.inf_mean))))
                 patches.incidence[tick, i] = ninf
 
         elif hasattr(population, "etimer"):
@@ -210,7 +210,7 @@ class Transmission:
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
+        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint16[:], nb.uint32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
         parallel=True,
         nogil=True,
         cache=True,
@@ -228,7 +228,7 @@ class Transmission:
                 if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
                     susceptibilities[i] = 0  # no longer susceptible
                     # set infectious timer for the individual to an exponential draw
-                    itimers[i] = np.maximum(np.uint8(1), np.uint8(np.ceil(np.random.exponential(inf_mean))))
+                    itimers[i] = np.maximum(np.uint16(1), np.uint16(np.ceil(np.random.exponential(inf_mean))))
                     doi[i] = tick
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
 
