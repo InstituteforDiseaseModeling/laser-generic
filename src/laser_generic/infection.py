@@ -58,6 +58,7 @@ class Infection:
         self.model = model
 
         model.population.add_scalar_property("itimer", dtype=np.uint16, default=0)
+        model.patches.add_vector_property("recovered", length=model.params.nticks, dtype=np.uint32)
         Infection.nb_set_itimers_slice(0, model.population.count, model.population.itimer, 0)
 
         return
@@ -76,8 +77,24 @@ class Infection:
             None
         """
 
+        population = model.population
+        patches = model.patches
+        recovered_count = patches.recovered[tick, :] 
+        susc = model.population.susceptibility[0:population.count].astype(np.uint32)
+        inf = model.population.itimer[0:population.count].astype(np.uint32)
+        if len(model.patches) == 1:
+            np.add(recovered_count, 
+                   population.count - np.count_nonzero(susc+inf), #if you are susceptible or infected, you're not recovered
+                   out=recovered_count)
+        else:
+            nodeids = population.nodeid[0 : population.count]
+            condition = (susc == 0) & (inf == 0)
+            self.accumulate_recovered(recovered_count, condition, nodeids, population.count)            
+
         Infection.nb_infection_update(model.population.count, model.population.itimer)
+
         return
+ 
 
     @staticmethod
     @nb.njit((nb.uint32, nb.uint16[:]), parallel=True, cache=True)
@@ -88,6 +105,23 @@ class Infection:
             if itimer > 0:
                 itimer -= 1
                 itimers[i] = itimer
+
+        return
+
+    @staticmethod
+    @nb.njit((nb.uint32[:], nb.uint32[:], nb.uint16[:], nb.uint32), parallel=True, cache=True)
+    def accumulate_recovered(node_rec, agent_recovered, nodeids, count) -> None:  # pragma: no cover
+        """Numba compiled function to accumulate recovered individuals."""
+        max_node_id = np.max(nodeids)
+        thread_recovereds = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
+
+        for i in nb.prange(count):
+            nodeid = nodeids[i]
+            recovered = agent_recovered[i]
+            thread_recovereds[nb.get_thread_id(), nodeid] += recovered
+        for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
+            for j in range(max_node_id+1):
+                node_rec[j] += thread_recovereds[t, j]
 
         return
 
