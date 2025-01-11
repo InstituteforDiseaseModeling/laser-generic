@@ -56,6 +56,7 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
+from itertools import chain
 
 from laser_generic import Births
 from laser_generic import Births_ConstantPop
@@ -199,11 +200,14 @@ class Model:
         self._components = components
         self.instances = [self]  # instantiated instances of components
         self.phases = [self]  # callable phases of the model
+        self.censuses = []  # callable censuses of the model - to be called at the beginning of a tick to record state
         for component in components:
             instance = component(self, self.params.verbose)
             self.instances.append(instance)
             if "__call__" in dir(instance):
                 self.phases.append(instance)
+            if "census" in dir(instance):
+                self.censuses.append(instance)
 
         births = next(filter(lambda object: isinstance(object, (Births, Births_ConstantPop)), self.instances), None)
         # TODO: raise an exception if there are components with an on_birth function but no Births component
@@ -258,6 +262,14 @@ class Model:
         self.metrics = []
         for tick in tqdm(range(self.params.nticks)):
             timing = [tick]
+            for census in self.censuses:
+                tstart = datetime.now(tz=None)  # noqa: DTZ005
+                census.census(self, tick)
+                tfinish = datetime.now(tz=None)  # noqa: DTZ005
+                delta = tfinish - tstart
+                timing.append(delta.seconds * 1_000_000 + delta.microseconds)
+            self.metrics.append(timing)
+
             for phase in self.phases:
                 tstart = datetime.now(tz=None)  # noqa: DTZ005
                 phase(self, tick)
@@ -270,7 +282,8 @@ class Model:
         print(f"Completed the {self.name} model at {self.tfinish}…")
 
         if self.params.verbose:
-            metrics = pd.DataFrame(self.metrics, columns=["tick"] + [type(phase).__name__ for phase in self.phases])
+            names = [type(census).__name__+"_census" for census in self.censuses] + [type(phase).__name__ for phase in self.phases]
+            metrics = pd.DataFrame(self.metrics, columns=["tick"] + [name for name in names])
             plot_columns = metrics.columns[1:]
             sum_columns = metrics[plot_columns].sum()
             width = max(map(len, sum_columns.index))

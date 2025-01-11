@@ -64,6 +64,23 @@ class Transmission:
 
         return
 
+    def census(self, model, tick) -> None:
+        patches = model.patches
+        population = model.population
+
+        contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
+        if hasattr(population, "itimer"):
+            condition = population.itimer[0 : population.count] > 0  # just look at the active agent indices
+        else:
+            condition = population.susceptibility[0 : population.count] == 0  # just look at the active agent indices
+
+        if len(patches) == 1:
+            np.add(contagion, np.count_nonzero(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
+        else:
+            nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
+            np.add.at(contagion, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
+        return
+
     def __call__(self, model, tick) -> None:
         """
         Simulate the transmission of measles for a given model at a specific tick.
@@ -88,18 +105,7 @@ class Transmission:
         population = model.population
 
         contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
-        if hasattr(population, "itimer"):
-            condition = population.itimer[0 : population.count] > 0  # just look at the active agent indices
-        else:
-            condition = population.susceptibility[0 : population.count] == 0  # just look at the active agent indices
-
-        if len(patches) == 1:
-            np.add(contagion, np.count_nonzero(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
-        else:
-            nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
-            #add_at(contagion, nodeids, np.ones_like(nodeids, dtype=np.uint32))  # increment by the number of active agents with non-zero itimer
-            np.add.at(contagion, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
-
+ 
         if hasattr(patches, "network"):
             network = patches.network
             transfer = (contagion * network).round().astype(np.uint32)
@@ -125,20 +131,7 @@ class Transmission:
         #       For example, the "_exposed" & "_noexposed" functions have the same signature but a different timer distribution.
         #       Second, maybe there's a way to overload the update function so we don't have to switch on the population attributes.
 
-        # KM: Prototyping a fast transmission feature, for use when exposure heterogeneity is not needed.
-        #I think rather than all of this if-statement stuff below, I may be better off 
-        #having a Transmission_SI, SIR, SEIR class.  
-        if "fast_transmission" in model.params and model.params.fast_transmission:
-            # interestingly, not actually faster than the nb_transmission_update_SI function
-            for i in np.arange(len(patches)):
-                susc_inds = np.asarray(condition == False & (population.nodeid == i)).nonzero()[0]
-                ninf = np.random.binomial(len(susc_inds), forces[i])
-                myinds = np.random.choice(susc_inds, ninf, replace=False)
-                population.susceptibility[myinds] = 0
-                population.itimer[myinds] = np.maximum(np.uint16(1), np.uint16(np.ceil(np.random.exponential(model.params.inf_mean))))
-                patches.incidence[tick, i] = ninf
-
-        elif hasattr(population, "etimer"):
+        if hasattr(population, "etimer"):
             Transmission.nb_transmission_update_exposed(
                 population.susceptibility,
                 population.nodeid,

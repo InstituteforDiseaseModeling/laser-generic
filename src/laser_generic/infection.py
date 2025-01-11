@@ -63,6 +63,22 @@ class Infection:
 
         return
 
+    def census(self, model, tick) -> None:
+        population = model.population
+        patches = model.patches
+        recovered_count = patches.recovered[tick, :] 
+        rec = np.logical_and(population.susceptibility[0:population.count]==0,
+                             population.itimer[0:population.count]==0)
+
+        if len(model.patches) == 1:
+            np.add(recovered_count, 
+                np.count_nonzero(rec), #if you are susceptible or infected, you're not recovered
+                out=recovered_count)
+        else:
+            nodeids = population.nodeid[0 : population.count]
+            self.accumulate_recovered(recovered_count, rec, nodeids, population.count)   
+        return
+
     def __call__(self, model, tick) -> None:
         """
         Updates the infection timers for the population in the model.
@@ -76,21 +92,7 @@ class Infection:
 
             None
         """
-
-        population = model.population
-        patches = model.patches
-        recovered_count = patches.recovered[tick, :] 
-        susc = model.population.susceptibility[0:population.count].astype(np.uint32)
-        inf = model.population.itimer[0:population.count].astype(np.uint32)
-        if len(model.patches) == 1:
-            np.add(recovered_count, 
-                   population.count - np.count_nonzero(susc+inf), #if you are susceptible or infected, you're not recovered
-                   out=recovered_count)
-        else:
-            nodeids = population.nodeid[0 : population.count]
-            condition = (susc == 0) & (inf == 0)
-            self.accumulate_recovered(recovered_count, condition, nodeids, population.count)            
-
+         
         Infection.nb_infection_update(model.population.count, model.population.itimer)
 
         return
@@ -163,7 +165,7 @@ class Infection:
     def nb_set_itimers_randomaccess(indices, itimers, value) -> None:  # pragma: no cover
         """Numba compiled function to set infection timers for a range of individuals in parallel."""
         for i in nb.prange(len(indices)):
-            itimers[i] = value
+            itimers[indices[i]] = value
 
         return
 

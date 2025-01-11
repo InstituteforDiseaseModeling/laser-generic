@@ -248,8 +248,9 @@ class Births_ConstantPop:
 
         # nyears = (model.params.nticks + 364) // 365
         model.patches.add_vector_property("births", length=model.params.nticks, dtype=np.uint32)
+        mu = (1+model.params.cbr / 1000) **(1 / 365) - 1
         model.patches.births = model.prng.poisson(
-            lam=model.patches.populations[0, :] * model.params.cbr / 1000 / 365, size=model.patches.births.shape
+            lam=model.patches.populations[0, :] * mu, size=model.patches.births.shape
         )
         # model.patches.births[year, :] = model.prng.poisson(model.patches.populations[tick, :] * model.params.cbr / 1000)
         self._initializers = []

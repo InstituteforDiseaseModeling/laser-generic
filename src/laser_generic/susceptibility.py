@@ -121,6 +121,11 @@ class Susceptibility:
         #         None
         #     """
 
+        # Don't actually need to do anything here for generic models, but this method is required for the class to be callable.
+
+        return
+
+    def census(self, model, tick):
         patches = model.patches
         population = model.population
 
@@ -132,12 +137,8 @@ class Susceptibility:
         else:
             nodeids = population.nodeid[0 : population.count]
             susceptibility = population.susceptibility[0 : population.count]
-            #condition = susceptibility > 0
             self.accumulate_susceptibility(susceptible_count, susceptibility, nodeids, population.count)            
-            #add_at(susceptible_count, nodeids[condition], np.ones_like(nodeids, dtype=np.uint32))
-            #susceptible_count += np.bincount(nodeids[condition], minlength=np.max(nodeids)+1).astype(np.uint32)
 
-    #     return
 
     def on_birth(self, model, _tick, istart, iend):
         """
