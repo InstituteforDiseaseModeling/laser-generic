@@ -28,7 +28,7 @@ import numba as nb
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
-from laser_generic.utils import add_at
+
 
 class Transmission:
     """
@@ -105,7 +105,7 @@ class Transmission:
         agents = model.agents
 
         contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
- 
+
         if hasattr(patches, "network"):
             network = patches.network
             transfer = (contagion * network).round().astype(np.uint32)
@@ -141,7 +141,7 @@ class Transmission:
                 model.params.exp_shape,
                 model.params.exp_scale,
                 model.patches.incidence[tick, :],
-                agents.doi, 
+                agents.doi,
                 tick,
             )
         elif hasattr(agents, "itimer"):
@@ -181,8 +181,8 @@ class Transmission:
     ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         max_node_id = np.max(nodeids)
-        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
- 
+        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id + 1), dtype=np.uint32)
+
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
             if susceptibility > 0:
@@ -196,9 +196,9 @@ class Transmission:
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
 
         for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
-            for j in range(max_node_id+1):
+            for j in range(max_node_id + 1):
                 incidence[j] += thread_incidences[t, j]
-                
+
         return
 
     @staticmethod
@@ -208,11 +208,13 @@ class Transmission:
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_noexposed(susceptibilities, nodeids, forces, itimers, count, inf_mean, incidence, doi, tick):  # pragma: no cover
+    def nb_transmission_update_noexposed(
+        susceptibilities, nodeids, forces, itimers, count, inf_mean, incidence, doi, tick
+    ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         max_node_id = np.max(nodeids)
-        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
- 
+        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id + 1), dtype=np.uint32)
+
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
             if susceptibility > 0:
@@ -226,9 +228,9 @@ class Transmission:
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
 
         for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
-            for j in range(max_node_id+1):
+            for j in range(max_node_id + 1):
                 incidence[j] += thread_incidences[t, j]
-                
+
         return
 
     @staticmethod
@@ -241,7 +243,7 @@ class Transmission:
     def nb_transmission_update_SI(susceptibilities, nodeids, forces, count, incidence, doi, tick):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         max_node_id = np.max(nodeids)
-        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
+        thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id + 1), dtype=np.uint32)
         for i in nb.prange(count):
             susceptibility = susceptibilities[i]
             if susceptibility > 0:
@@ -253,7 +255,7 @@ class Transmission:
                     doi[i] = tick
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
         for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
-            for j in range(max_node_id+1):
+            for j in range(max_node_id + 1):
                 incidence[j] += thread_incidences[t, j]
 
         return
@@ -263,7 +265,7 @@ class Transmission:
         This function sets the date of infection for newborns to zero.
         Appears here because transmission is where I have decided to add the "doi" property,
         and I think it thus makes sense to also have the on-birth initializer here.  Could
-        just as easily choose to do this over in Infection class instead.  
+        just as easily choose to do this over in Infection class instead.
 
         Args:
 

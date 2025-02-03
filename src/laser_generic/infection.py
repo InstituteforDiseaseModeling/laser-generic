@@ -66,14 +66,15 @@ class Infection:
     def census(self, model, tick) -> None:
         agents = model.agents
         patches = model.patches
-        recovered_count = patches.recovered[tick, :] 
-        rec = np.logical_and(agents.susceptibility[0:agents.count]==0,
-                             agents.itimer[0:agents.count]==0)
+        recovered_count = patches.recovered[tick, :]
+        rec = np.logical_and(agents.susceptibility[0 : agents.count] == 0, agents.itimer[0 : agents.count] == 0)
 
         if len(model.patches) == 1:
-            np.add(recovered_count, 
-                np.count_nonzero(rec), #if you are susceptible or infected, you're not recovered
-                out=recovered_count)
+            np.add(
+                recovered_count,
+                np.count_nonzero(rec),  # if you are susceptible or infected, you're not recovered
+                out=recovered_count,
+            )
         else:
             nodeids = agents.nodeid[0 : agents.count]
             self.accumulate_recovered(recovered_count, rec, nodeids, agents.count)
@@ -92,11 +93,10 @@ class Infection:
 
             None
         """
-         
+
         Infection.nb_infection_update(model.agents.count, model.agents.itimer)
 
         return
- 
 
     @staticmethod
     @nb.njit((nb.uint32, nb.uint16[:]), parallel=True, cache=True)
@@ -111,18 +111,25 @@ class Infection:
         return
 
     @staticmethod
-    @nb.njit((nb.uint32[:], nb.uint32[:], nb.uint16[:], nb.uint32), parallel=True, cache=True)
+    @nb.njit(
+        [
+            (nb.uint32[:], nb.uint32[:], nb.uint16[:], nb.uint32),
+            (nb.uint32[:], nb.bool[:], nb.uint16[:], nb.int64),
+        ],
+        parallel=True,
+        cache=True,
+    )
     def accumulate_recovered(node_rec, agent_recovered, nodeids, count) -> None:  # pragma: no cover
         """Numba compiled function to accumulate recovered individuals."""
         max_node_id = np.max(nodeids)
-        thread_recovereds = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
+        thread_recovereds = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id + 1), dtype=np.uint32)
 
         for i in nb.prange(count):
             nodeid = nodeids[i]
             recovered = agent_recovered[i]
             thread_recovereds[nb.get_thread_id(), nodeid] += recovered
         for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
-            for j in range(max_node_id+1):
+            for j in range(max_node_id + 1):
                 node_rec[j] += thread_recovereds[t, j]
 
         return
@@ -159,7 +166,7 @@ class Infection:
             itimers[i] = value
 
         return
-    
+
     @staticmethod
     @nb.njit((nb.int64[:], nb.uint16[:], nb.uint16), parallel=True, cache=True)
     def nb_set_itimers_randomaccess(indices, itimers, value) -> None:  # pragma: no cover

@@ -55,12 +55,10 @@ from laser_core.random import seed as seed_prng
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
-from tqdm.notebook import tqdm #, trange
-from itertools import chain
+from tqdm.notebook import tqdm  # , trange
 
 from laser_generic import Births
 from laser_generic import Births_ConstantPop
-from laser_generic.utils import calc_capacity
 
 
 class Model:
@@ -104,10 +102,8 @@ class Model:
         npatches = len(scenario)
         self.patches = LaserFrame(npatches)
 
-        # "activate" all the patches (count == capacity)
-        self.patches.add(npatches)
-        self.patches.add_vector_property("populations", length=parameters.nticks+1)
-        # set patch populations at t = 0 to initial populations
+        self.patches.add_vector_property("populations", length=parameters.nticks + 1)
+        # set population at t = 0
         self.patches.populations[0, :] = scenario.population
 
         return
@@ -116,11 +112,11 @@ class Model:
         # Initialize the model agents
         # Is there a better pattern than checking for cbr in parameters?  Many modelers might use "mu", for example.
         # Would rather check E.g., if there is a birth component, but that might come later.
-        #if "cbr" in parameters:
+        # if "cbr" in parameters:
         #    capacity = calc_capacity(self.patches.populations[0, :].sum(), parameters.nticks, parameters.cbr, parameters.verbose)
-        #else:
-        capacity = np.sum(self.patches.populations[0, :])
-        self.agents = LaserFrame(capacity)
+        # else:
+        capacity = int(np.sum(self.patches.populations[0, :]))  # laser-core expects a _Python_ integer, for now
+        self.agents = LaserFrame(capacity, initial_count=0)
 
         self.agents.add_scalar_property("nodeid", dtype=np.uint16)
         for nodeid, count in enumerate(self.patches.populations[0, :]):
@@ -235,7 +231,7 @@ class Model:
         model.patches.populations[tick + 1, :] = model.patches.populations[tick, :]
         return
 
-    def run(self) -> None:
+    def run(self, progress=tqdm) -> None:
         """
         Execute the model for a specified number of ticks, recording the time taken for each phase.
 
@@ -260,7 +256,7 @@ class Model:
         click.echo(f"{self.tstart}: Running the {self.name} model for {self.params.nticks} ticks…")
 
         self.metrics = []
-        for tick in tqdm(range(self.params.nticks), leave=False):
+        for tick in progress(range(self.params.nticks), leave=False):
             timing = [tick]
             for census in self.censuses:
                 tstart = datetime.now(tz=None)  # noqa: DTZ005
@@ -282,15 +278,15 @@ class Model:
         print(f"Completed the {self.name} model at {self.tfinish}…")
 
         if self.params.verbose:
-            names = [type(census).__name__+"_census" for census in self.censuses] + [type(phase).__name__ for phase in self.phases]
-            metrics = pd.DataFrame(self.metrics, columns=["tick"] + [name for name in names])
+            names = [type(census).__name__ + "_census" for census in self.censuses] + [type(phase).__name__ for phase in self.phases]
+            metrics = pd.DataFrame(self.metrics, columns=["tick", *list(names)])
             plot_columns = metrics.columns[1:]
             sum_columns = metrics[plot_columns].sum()
             width = max(map(len, sum_columns.index))
             for key in sum_columns.index:
                 print(f"{key:{width}}: {sum_columns[key]:13,} µs")
             print("=" * (width + 2 + 13 + 3))
-            print(f"{'Total:':{width+1}} {sum_columns.sum():13,} microseconds")
+            print(f"{'Total:':{width + 1}} {sum_columns.sum():13,} microseconds")
 
         return
 
