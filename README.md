@@ -23,15 +23,19 @@ pip install laser-generic
 
 ## Running in Codespace
 
-Check the installed version(s) of NumPy
-```bash
-pip list | grep numpy
-```
-Note if there is a 2.x version of NumPy installed. If so, uninstall it (sub your 2.x version for `2.1.1` below).
-```bash
-pip uninstall numpy==2.1.1
-```
 Install `laser-generic` in development mode:
 ```bash
 pip install -e .
 ```
+
+## Notebooks
+
+1. [notebooks/SI_nobirths_logistic_growth.ipynb](notebooks/SI_nobirths_logistic_growth.ipynb)
+2. [notebooks/SI_wbirths_logistic_growth.ipynb](notebooks/SI_wbirths_logistic_growth.ipynb)
+3. [notebooks/SIS_nobirths_logistic_growth.ipynb](notebooks/SIS_nobirths_logistic_growth.ipynb)
+4. [notebooks/SIR_nobirths_outbreak_size.ipynb](notebooks/SIR_nobirths_outbreak_size.ipynb)
+5. [notebooks/SIR_wbirths_age_distribution.ipynb](notebooks/SIR_wbirths_age_distribution.ipynb)
+6. [notebooks/SIR_wbirths_natural_periodicity.ipynb](notebooks/SIR_wbirths_natural_periodicity.ipynb)
+7. [notebooks/2patch_SIR_wbirths_correlation.ipynb](notebooks/2patch_SIR_wbirths_correlation.ipynb)
+8. [notebooks/SIR_CCS.ipynb](notebooks/SIR_CCS.ipynb)
+9. [notebooks/SEIR_wavefrontspeed.ipynb](notebooks/SEIR_wavefrontspeed.ipynb)

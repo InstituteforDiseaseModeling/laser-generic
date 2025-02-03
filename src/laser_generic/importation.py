@@ -24,7 +24,7 @@ from laser_generic.utils import seed_infections_randomly, seed_infections_in_pat
 
 class Infect_Random_Agents:
     """
-    A component to update the infection timers of a population in a model.
+    A component to update the infection timers of agents in a model.
     """
 
     def __init__(self, model, verbose: bool = False) -> None:
@@ -33,7 +33,7 @@ class Infect_Random_Agents:
 
         Args:
 
-            model: The model object that contains the population.
+            model: The model object that contains the agents.
             period: The number of ticks between each infection event.
             count: The number of agents to infect at each event.
             start (int, optional): The tick at which to start the infection events.
@@ -41,7 +41,7 @@ class Infect_Random_Agents:
 
         Attributes:
 
-            model: The model object that contains the population.
+            model: The model object that contains the agents.
 
         Side Effects:
 
@@ -61,11 +61,11 @@ class Infect_Random_Agents:
 
     def __call__(self, model, tick) -> None:
         """
-        Updates the infection timers for the population in the model.
+        Updates the infection timers for the agents in the model.
 
         Args:
 
-            model: The model containing the population data.
+            model: The model containing the agent data.
             tick: The current tick or time step in the simulation.
 
         Returns:
@@ -87,7 +87,7 @@ class Infect_Random_Agents:
 
 class Infect_Agents_In_Patch:
     """
-    A component to update the infection timers of a population in a model.
+    A component to update the infection timers of agents in a model.
     """
 
     def __init__(self, model, verbose: bool = False) -> None:
@@ -96,7 +96,7 @@ class Infect_Agents_In_Patch:
 
         Args:
 
-            model: The model object that contains the population.
+            model: The model object that contains the agents.
             period: The number of ticks between each infection event.
             count: The number of agents to infect at each event.
             start (int, optional): The tick at which to start the infection events.
@@ -104,7 +104,7 @@ class Infect_Agents_In_Patch:
 
         Attributes:
 
-            model: The model object that contains the population.
+            model: The model object that contains the agents.
 
         Side Effects:
 
@@ -122,11 +122,11 @@ class Infect_Agents_In_Patch:
 
     def __call__(self, model, tick) -> None:
         """
-        Updates the infection timers for the population in the model.
+        Updates the infection timers for the agents in the model.
 
         Args:
 
-            model: The model containing the population data.
+            model: The model containing the agents data.
             tick: The current tick or time step in the simulation.
 
         Returns:

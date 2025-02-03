@@ -10,10 +10,10 @@ Functions:
         Initializes the Infection class with a given model and verbosity option.
 
     Infection.__call__(self, model, tick) -> None:
-        Updates the infection status of the population at each tick.
+        Updates the infection status of the agents at each tick.
 
     Infection.nb_infection_update(count, itimers):
-        A static method that updates the infection timers for the population using Numba for performance.
+        A static method that updates the infection timers for the agents using Numba for performance.
 
     Infection.on_birth(self, model, _tick, istart, iend) -> None:
         Resets the infection timer for newborns in the population.
@@ -33,7 +33,7 @@ from matplotlib.figure import Figure
 
 class Infection:
     """
-    A component to update the infection timers of a population in a model.
+    A component to update the infection timers of agents in a model.
     """
 
     def __init__(self, model, verbose: bool = False) -> None:
@@ -42,50 +42,50 @@ class Infection:
 
         Args:
 
-            model: The model object that contains the population.
+            model: The model object that contains the agents.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
 
-            model: The model object that contains the population.
+            model: The model object that contains the agents.
 
         Side Effects:
 
-            Adds a scalar property "itimer" to the model's population with dtype np.uint16 and default value 0.
-            Calls the nb_set_itimers method to initialize the itimer values for the population.
+            Adds a scalar property "itimer" to the model's agents with dtype np.uint16 and default value 0.
+            Calls the nb_set_itimers method to initialize the itimer values for the agents.
         """
 
         self.model = model
 
-        model.population.add_scalar_property("itimer", dtype=np.uint16, default=0)
+        model.agents.add_scalar_property("itimer", dtype=np.uint16, default=0)
         model.patches.add_vector_property("recovered", length=model.params.nticks, dtype=np.uint32)
-        Infection.nb_set_itimers_slice(0, model.population.count, model.population.itimer, 0)
+        Infection.nb_set_itimers_slice(0, model.agents.count, model.agents.itimer, 0)
 
         return
 
     def census(self, model, tick) -> None:
-        population = model.population
+        agents = model.agents
         patches = model.patches
         recovered_count = patches.recovered[tick, :] 
-        rec = np.logical_and(population.susceptibility[0:population.count]==0,
-                             population.itimer[0:population.count]==0)
+        rec = np.logical_and(agents.susceptibility[0:agents.count]==0,
+                             agents.itimer[0:agents.count]==0)
 
         if len(model.patches) == 1:
             np.add(recovered_count, 
                 np.count_nonzero(rec), #if you are susceptible or infected, you're not recovered
                 out=recovered_count)
         else:
-            nodeids = population.nodeid[0 : population.count]
-            self.accumulate_recovered(recovered_count, rec, nodeids, population.count)   
+            nodeids = agents.nodeid[0 : agents.count]
+            self.accumulate_recovered(recovered_count, rec, nodeids, agents.count)
         return
 
     def __call__(self, model, tick) -> None:
         """
-        Updates the infection timers for the population in the model.
+        Updates the infection timers for the agents in the model.
 
         Args:
 
-            model: The model containing the population data.
+            model: The model containing the agent data.
             tick: The current tick or time step in the simulation.
 
         Returns:
@@ -93,7 +93,7 @@ class Infection:
             None
         """
          
-        Infection.nb_infection_update(model.population.count, model.population.itimer)
+        Infection.nb_infection_update(model.agents.count, model.agents.itimer)
 
         return
  
@@ -101,7 +101,7 @@ class Infection:
     @staticmethod
     @nb.njit((nb.uint32, nb.uint16[:]), parallel=True, cache=True)
     def nb_infection_update(count, itimers):  # pragma: no cover
-        """Numba compiled function to check and update infection timers for the population in parallel."""
+        """Numba compiled function to check and update infection timers for the agents in parallel."""
         for i in nb.prange(count):
             itimer = itimers[i]
             if itimer > 0:
@@ -133,10 +133,10 @@ class Infection:
 
         Args:
 
-            model: The simulation model containing the population data.
+            model: The simulation model containing the agents data.
             tick: The current tick or time step in the simulation (unused in this function).
-            istart: The starting index of the newborns in the population array.
-            iend: The ending index of the newborns in the population array.
+            istart: The starting index of the newborns in the agents array.
+            iend: The ending index of the newborns in the agents array.
 
         Returns:
 
@@ -144,11 +144,11 @@ class Infection:
         """
 
         # newborns are not infectious
-        # Infection.nb_set_itimers(istart, iend, model.population.itimer, 0)
+        # Infection.nb_set_itimers(istart, iend, model.agents.itimer, 0)
         if iend is not None:
-            Infection.nb_set_itimers_slice(istart, iend, model.population.itimer, np.uint16(0))
+            Infection.nb_set_itimers_slice(istart, iend, model.agents.itimer, np.uint16(0))
         else:
-            Infection.nb_set_itimers_randomaccess(istart, model.population.itimer, np.uint16(0))
+            Infection.nb_set_itimers_randomaccess(istart, model.agents.itimer, np.uint16(0))
         return
 
     @staticmethod
@@ -188,10 +188,10 @@ class Infection:
         fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
         fig.suptitle("Infections By Age")
 
-        ages_in_years = (self.model.params.nticks - self.model.population.dob[0 : self.model.population.count]) // 365
+        ages_in_years = (self.model.params.nticks - self.model.agents.dob[0 : self.model.agents.count]) // 365
         age_counts = np.bincount(ages_in_years)
         plt.bar(range(len(age_counts)), age_counts)
-        itimers = self.model.population.itimer[0 : self.model.population.count]
+        itimers = self.model.agents.itimer[0 : self.model.agents.count]
         infected = itimers > 0
         infection_counts = np.bincount(ages_in_years[infected])
         plt.bar(range(len(infection_counts)), infection_counts)
@@ -202,7 +202,7 @@ class Infection:
 
 class Infection_SIS:
     """
-    A component to update the infection timers of a population in a model.
+    A component to update the infection timers of agents in a model.
     """
 
     def __init__(self, model, verbose: bool = False) -> None:
@@ -211,33 +211,33 @@ class Infection_SIS:
 
         Args:
 
-            model: The model object that contains the population.
+            model: The model object that contains the agents.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
 
-            model: The model object that contains the population.
+            model: The model object that contains the agents.
 
         Side Effects:
 
-            Adds a scalar property "itimer" to the model's population with dtype np.uint16 and default value 0.
-            Calls the nb_set_itimers method to initialize the itimer values for the population.
+            Adds a scalar property "itimer" to the model's agents with dtype np.uint16 and default value 0.
+            Calls the nb_set_itimers method to initialize the itimer values for the agents.
         """
 
         self.model = model
 
-        model.population.add_scalar_property("itimer", dtype=np.uint16, default=0)
-        Infection_SIS.nb_set_itimers(0, model.population.count, model.population.itimer, 0)
+        model.agents.add_scalar_property("itimer", dtype=np.uint16, default=0)
+        Infection_SIS.nb_set_itimers(0, model.agents.count, model.agents.itimer, 0)
 
         return
 
     def __call__(self, model, tick) -> None:
         """
-        Updates the infection timers for the population in the model.
+        Updates the infection timers for the agents in the model.
 
         Args:
 
-            model: The model containing the population data.
+            model: The model containing the agents data.
             tick: The current tick or time step in the simulation.
 
         Returns:
@@ -245,13 +245,13 @@ class Infection_SIS:
             None
         """
 
-        Infection_SIS.nb_infection_update(model.population.count, model.population.itimer, model.population.susceptibility)
+        Infection_SIS.nb_infection_update(model.agents.count, model.agents.itimer, model.agents.susceptibility)
         return
 
     @staticmethod
     @nb.njit((nb.uint32, nb.uint16[:], nb.uint8[:]), parallel=True, cache=True)
     def nb_infection_update(count, itimers, susceptibility):  # pragma: no cover
-        """Numba compiled function to check and update infection timers for the population in parallel."""
+        """Numba compiled function to check and update infection timers for the agents in parallel."""
         for i in nb.prange(count):
             itimer = itimers[i]
             if itimer > 0:
@@ -268,10 +268,10 @@ class Infection_SIS:
 
         Args:
 
-            model: The simulation model containing the population data.
+            model: The simulation model containing the agents data.
             tick: The current tick or time step in the simulation (unused in this function).
-            istart: The starting index of the newborns in the population array.
-            iend: The ending index of the newborns in the population array.
+            istart: The starting index of the newborns in the agents array.
+            iend: The ending index of the newborns in the agents array.
 
         Returns:
 
@@ -279,8 +279,8 @@ class Infection_SIS:
         """
 
         # newborns are not infectious
-        # Infection.nb_set_itimers(istart, iend, model.population.itimer, 0)
-        model.population.itimer[istart:iend] = 0
+        # Infection.nb_set_itimers(istart, iend, model.agents.itimer, 0)
+        model.agents.itimer[istart:iend] = 0
         return
 
     @staticmethod
@@ -311,10 +311,10 @@ class Infection_SIS:
         fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
         fig.suptitle("Infections By Age")
 
-        ages_in_years = (self.model.params.nticks - self.model.population.dob[0 : self.model.population.count]) // 365
+        ages_in_years = (self.model.params.nticks - self.model.agents.dob[0 : self.model.agents.count]) // 365
         age_counts = np.bincount(ages_in_years)
         plt.bar(range(len(age_counts)), age_counts)
-        itimers = self.model.population.itimer[0 : self.model.population.count]
+        itimers = self.model.agents.itimer[0 : self.model.agents.count]
         infected = itimers > 0
         infection_counts = np.bincount(ages_in_years[infected])
         plt.bar(range(len(infection_counts)), infection_counts)

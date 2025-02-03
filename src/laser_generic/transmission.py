@@ -60,24 +60,24 @@ class Transmission:
         model.patches.add_vector_property("cases", length=model.params.nticks, dtype=np.uint32)
         model.patches.add_scalar_property("forces", dtype=np.float32)
         model.patches.add_vector_property("incidence", model.params.nticks, dtype=np.uint32)
-        model.population.add_scalar_property("doi", dtype=np.uint32, default=0)
+        model.agents.add_scalar_property("doi", dtype=np.uint32, default=0)
 
         return
 
     def census(self, model, tick) -> None:
         patches = model.patches
-        population = model.population
+        agents = model.agents
 
         contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
-        if hasattr(population, "itimer"):
-            condition = population.itimer[0 : population.count] > 0  # just look at the active agent indices
+        if hasattr(agents, "itimer"):
+            condition = agents.itimer[0 : agents.count] > 0  # just look at the active agent indices
         else:
-            condition = population.susceptibility[0 : population.count] == 0  # just look at the active agent indices
+            condition = agents.susceptibility[0 : agents.count] == 0  # just look at the active agent indices
 
         if len(patches) == 1:
             np.add(contagion, np.count_nonzero(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
         else:
-            nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
+            nodeids = agents.nodeid[0 : agents.count]  # just look at the active agent indices
             np.add.at(contagion, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
         return
 
@@ -89,11 +89,11 @@ class Transmission:
         through the population and patches. It calculates the contagion, handles the
         migration of infections between patches, and updates the forces of infection
         based on the effective transmission rate and seasonality factors. Finally, it
-        updates the infected state of the population.
+        updates the infected state of the agents.
 
         Parameters:
 
-            model (object): The model object containing the population, patches, and parameters.
+            model (object): The model object containing the agents, patches, and parameters.
             tick (int): The current time step in the simulation.
 
         Returns:
@@ -102,7 +102,7 @@ class Transmission:
 
         """
         patches = model.patches
-        population = model.population
+        agents = model.agents
 
         contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
  
@@ -129,41 +129,41 @@ class Transmission:
         #       We should refactor this to be more general and flexible.
         #       First, find a way to allow user to parametrize the timer distributions rather than hard-coding here.
         #       For example, the "_exposed" & "_noexposed" functions have the same signature but a different timer distribution.
-        #       Second, maybe there's a way to overload the update function so we don't have to switch on the population attributes.
+        #       Second, maybe there's a way to overload the update function so we don't have to switch on the agents attributes.
 
-        if hasattr(population, "etimer"):
+        if hasattr(agents, "etimer"):
             Transmission.nb_transmission_update_exposed(
-                population.susceptibility,
-                population.nodeid,
+                agents.susceptibility,
+                agents.nodeid,
                 forces,
-                population.etimer,
-                population.count,
+                agents.etimer,
+                agents.count,
                 model.params.exp_shape,
                 model.params.exp_scale,
                 model.patches.incidence[tick, :],
-                population.doi, 
+                agents.doi, 
                 tick,
             )
-        elif hasattr(population, "itimer"):
+        elif hasattr(agents, "itimer"):
             Transmission.nb_transmission_update_noexposed(
-                population.susceptibility,
-                population.nodeid,
+                agents.susceptibility,
+                agents.nodeid,
                 forces,
-                population.itimer,
-                population.count,
+                agents.itimer,
+                agents.count,
                 model.params.inf_mean,
                 model.patches.incidence[tick, :],
-                population.doi,
+                agents.doi,
                 tick,
             )
         else:
             Transmission.nb_transmission_update_SI(
-                population.susceptibility,
-                population.nodeid,
+                agents.susceptibility,
+                agents.nodeid,
                 forces,
-                population.count,
+                agents.count,
                 model.patches.incidence[tick, :],
-                population.doi,
+                agents.doi,
                 tick,
             )
 
@@ -267,10 +267,10 @@ class Transmission:
 
         Args:
 
-            model: The simulation model containing the population data.
+            model: The simulation model containing the agent data.
             tick: The current tick or time step in the simulation (unused in this function).
-            istart: The starting index of the newborns in the population array.
-            iend: The ending index of the newborns in the population array.
+            istart: The starting index of the newborns in the agents array.
+            iend: The ending index of the newborns in the agents array.
 
         Returns:
 
@@ -278,9 +278,9 @@ class Transmission:
         """
 
         if iend is not None:
-            model.population.doi[istart:iend] = 0
+            model.agents.doi[istart:iend] = 0
         else:
-            model.population.doi[istart] = 0
+            model.agents.doi[istart] = 0
         return
 
     def plot(self, fig: Figure = None):
@@ -343,11 +343,11 @@ class TransmissionSIR(Transmission):
         through the population and patches. It calculates the contagion, handles the
         migration of infections between patches, and updates the forces of infection
         based on the effective transmission rate and seasonality factors. Finally, it
-        updates the infected state of the population.
+        updates the infected state of the agents.
 
         Parameters:
 
-            model (object): The model object containing the population, patches, and parameters.
+            model (object): The model object containing the agents, patches, and parameters.
             tick (int): The current time step in the simulation.
 
         Returns:
@@ -355,15 +355,15 @@ class TransmissionSIR(Transmission):
             None
         """
         patches = model.patches
-        population = model.population
+        agents = model.agents
 
         contagion = patches.cases[tick, :]
-        condition = population.susceptibility[0 : population.count] == 0
+        condition = agents.susceptibility[0 : agents.count] == 0
 
         if len(patches) == 1:
             np.add(contagion, np.sum(condition), out=contagion)
         else:
-            nodeids = population.nodeid[0 : population.count]
+            nodeids = agents.nodeid[0 : agents.count]
             np.add.at(contagion, nodeids[condition], 1)
 
         if hasattr(patches, "network"):
@@ -382,14 +382,14 @@ class TransmissionSIR(Transmission):
         np.negative(forces, out=forces)
 
         Transmission.nb_transmission_update_noexposed(
-            population.susceptibility,
-            population.nodeid,
+            agents.susceptibility,
+            agents.nodeid,
             forces,
-            population.itimer,
-            population.count,
+            agents.itimer,
+            agents.count,
             model.params.inf_mean,
             model.patches.incidence[tick, :],
-            population.doi,
+            agents.doi,
             tick,
         )
 

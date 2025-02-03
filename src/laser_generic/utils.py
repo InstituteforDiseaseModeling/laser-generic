@@ -115,9 +115,9 @@ def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
     # Seed initial infections in random locations at the start of the simulation
     cinfections = 0
     while cinfections < ninfections:
-        index = model.prng.integers(0, model.population.count)
-        if model.population.susceptibility[index] > 0:
-            model.population.susceptibility[index] = 0
+        index = model.prng.integers(0, model.agents.count)
+        if model.agents.susceptibility[index] > 0:
+            model.agents.susceptibility[index] = 0
             cinfections += 1
 
     return
@@ -143,10 +143,10 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
     # Seed initial infections in random locations at the start of the simulation
     cinfections = 0
     while cinfections < ninfections:
-        index = model.prng.integers(0, model.population.count)
-        if model.population.susceptibility[index] > 0:
-            model.population.susceptibility[index] = 0
-            model.population.itimer[index] = np.random.exponential(model.params.inf_mean)
+        index = model.prng.integers(0, model.agents.count)
+        if model.agents.susceptibility[index] > 0:
+            model.agents.susceptibility[index] = 0
+            model.agents.itimer[index] = np.random.exponential(model.params.inf_mean)
             cinfections += 1
 
     return
@@ -171,11 +171,11 @@ def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
     """
 
     # Seed initial infections in a specific location at the start of the simulation
-    myinds = np.where((model.population.susceptibility > 0) & (model.population.nodeid == ipatch))[0]
+    myinds = np.where((model.agents.susceptibility > 0) & (model.agents.nodeid == ipatch))[0]
     if len(myinds) > ninfections:
        myinds = np.random.choice(myinds, ninfections, replace=False)
-    model.population.itimer[myinds] = model.params.inf_mean
-    model.population.susceptibility[myinds] = 0
+    model.agents.itimer[myinds] = model.params.inf_mean
+    model.agents.susceptibility[myinds] = 0
 
 
     return
@@ -198,9 +198,9 @@ def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1
     """
 
     # Seed initial infections in random locations at the start of the simulation
-    indices = np.squeeze(np.where(model.population.nodeid == ipatch))
+    indices = np.squeeze(np.where(model.agents.nodeid == ipatch))
     patch_indices = model.prng.choice(indices, int(len(indices) * (1 - susc_frac)), replace=False)
-    model.population.susceptibility[patch_indices] = 0
+    model.agents.susceptibility[patch_indices] = 0
 
     return
 
@@ -222,8 +222,8 @@ def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     """
 
     # Seed initial infections in random locations at the start of the simulation
-    indices = model.prng.choice(model.population.count, int(model.population.count * (1 - susc_frac)), replace=False)
-    model.population.susceptibility[indices] = 0
+    indices = model.prng.choice(model.agents.count, int(model.agents.count * (1 - susc_frac)), replace=False)
+    model.agents.susceptibility[indices] = 0
 
     return
 

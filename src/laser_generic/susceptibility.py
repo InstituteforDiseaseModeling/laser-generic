@@ -4,10 +4,10 @@ the susceptibility of a population.
 
 Classes:
 
-    Susceptibility: Manages the susceptibility property of a population and provides methods for
+    Susceptibility: Manages the susceptibility property of agents and provides methods for
                     updating and plotting susceptibility data.
 
-    Susceptibility_SI: Manages the susceptibility property of a population for the SI model.
+    Susceptibility_SI: Manages the susceptibility property of agents for the SI model.
 
 Functions:
 
@@ -37,7 +37,7 @@ class Susceptibility:
 
             model : object
 
-                The model object that contains the population data.
+                The model object that contains the agent data.
 
             verbose : bool, optional
 
@@ -49,16 +49,16 @@ class Susceptibility:
 
                 The model object passed to the initializer.
 
-        The method also adds a scalar property "susceptibility" to the model's population
+        The method also adds a scalar property "susceptibility" to the model's agents
         with a default value of 1 and initializes the susceptibility values based on the
-        population count, date of birth (dob), and susceptibility attributes.
+        agent count, date of birth (dob), and susceptibility attributes.
         """
 
         self.model = model
 
-        model.population.add_scalar_property("susceptibility", dtype=np.uint8, default=1)
+        model.agents.add_scalar_property("susceptibility", dtype=np.uint8, default=1)
         model.patches.add_vector_property("susceptibility", model.params.nticks, dtype=np.uint32)
-        # self.nb_initialize_susceptibility(model.population.count, model.population.dob, model.population.susceptibility)
+        # self.nb_initialize_susceptibility(model.agents.count, model.agents.dob, model.agents.susceptibility)
 
         return
 
@@ -127,17 +127,17 @@ class Susceptibility:
 
     def census(self, model, tick):
         patches = model.patches
-        population = model.population
+        agents = model.agents
 
         susceptible_count = patches.susceptibility[tick, :]  # we will accumulate current susceptibles into this view into the susceptibility array
         if len(model.patches) == 1:
             np.add(susceptible_count, 
-                   np.count_nonzero(population.susceptibility[0:population.count]), 
+                   np.count_nonzero(agents.susceptibility[0:agents.count]), 
                    out=susceptible_count)
         else:
-            nodeids = population.nodeid[0 : population.count]
-            susceptibility = population.susceptibility[0 : population.count]
-            self.accumulate_susceptibility(susceptible_count, susceptibility, nodeids, population.count)            
+            nodeids = agents.nodeid[0 : agents.count]
+            susceptibility = agents.susceptibility[0 : agents.count]
+            self.accumulate_susceptibility(susceptible_count, susceptibility, nodeids, agents.count)
 
 
     def on_birth(self, model, _tick, istart, iend):
@@ -150,10 +150,10 @@ class Susceptibility:
 
         Parameters:
 
-            model (object): The model object containing the population data.
+            model (object): The model object containing the agent data.
             tick (int): The current tick or time step in the simulation.
-            istart (int): The starting index of the newborns in the population array.
-            iend (int): The ending index of the newborns in the population array.
+            istart (int): The starting index of the newborns in the agents array.
+            iend (int): The ending index of the newborns in the agents array.
 
         Returns:
 
@@ -161,11 +161,11 @@ class Susceptibility:
         """
 
         # newborns are susceptible
-        # nb_set_susceptibility(istart, iend, model.population.susceptibility, 0)
+        # nb_set_susceptibility(istart, iend, model.agents.susceptibility, 0)
         if iend is not None:
-            Susceptibility.nb_set_susceptibility_slice(istart, iend, model.population.susceptibility, np.uint8(1))
+            Susceptibility.nb_set_susceptibility_slice(istart, iend, model.agents.susceptibility, np.uint8(1))
         else:
-            Susceptibility.nb_set_susceptibility_randomaccess(istart, model.population.susceptibility, np.uint8(1))
+            Susceptibility.nb_set_susceptibility_randomaccess(istart, model.agents.susceptibility, np.uint8(1))
 
         return
 
@@ -184,8 +184,8 @@ class Susceptibility:
 
         # fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
         # fig.suptitle("Susceptibility Distribution By Age")
-        # age_bins = (self.model.params.nticks - self.model.population.dob[0 : self.model.population.count]) // 365
-        # sus_counts = np.bincount(age_bins, weights=self.model.population.susceptibility[0 : self.model.population.count].astype(np.uint32))
+        # age_bins = (self.model.params.nticks - self.model.agents.dob[0 : self.model.agents.count]) // 365
+        # sus_counts = np.bincount(age_bins, weights=self.model.agents.susceptibility[0 : self.model.agents.count].astype(np.uint32))
         # age_counts = np.bincount(age_bins)
         # # TODO - convert this to %age of susceptible individuals by age group
         # plt.bar(range(len(age_counts)), age_counts)

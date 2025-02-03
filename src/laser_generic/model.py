@@ -55,7 +55,7 @@ from laser_core.random import seed as seed_prng
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
-from tqdm import tqdm
+from tqdm.notebook import tqdm #, trange
 from itertools import chain
 
 from laser_generic import Births
@@ -94,7 +94,7 @@ class Model:
         click.echo(f"Initializing the {name} model with {len(scenario)} patches…")
 
         self.initialize_patches(scenario, parameters)
-        self.initialize_population(scenario, parameters)
+        self.initialize_agents(scenario, parameters)
         # self.initialize_network(scenario, parameters)
 
         return
@@ -112,24 +112,24 @@ class Model:
 
         return
 
-    def initialize_population(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
-        # Initialize the model population
+    def initialize_agents(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
+        # Initialize the model agents
         # Is there a better pattern than checking for cbr in parameters?  Many modelers might use "mu", for example.
         # Would rather check E.g., if there is a birth component, but that might come later.
         #if "cbr" in parameters:
         #    capacity = calc_capacity(self.patches.populations[0, :].sum(), parameters.nticks, parameters.cbr, parameters.verbose)
         #else:
         capacity = np.sum(self.patches.populations[0, :])
-        self.population = LaserFrame(capacity)
+        self.agents = LaserFrame(capacity)
 
-        self.population.add_scalar_property("nodeid", dtype=np.uint16)
+        self.agents.add_scalar_property("nodeid", dtype=np.uint16)
         for nodeid, count in enumerate(self.patches.populations[0, :]):
-            first, last = self.population.add(count)
-            self.population.nodeid[first:last] = nodeid
+            first, last = self.agents.add(count)
+            self.agents.nodeid[first:last] = nodeid
 
-        # Initialize population ages
+        # Initialize agent ages
         # With the simple demographics I'm using, I won't always need ages, and when I do they will just be exponentially distributed.
-        # Note - should we separate population initialization routines from initialization of the model class?
+        # Note - should we separate agent initialization routines from initialization of the model class?
 
         # pyramid_file = parameters.pyramid_file
         # age_distribution = load_pyramid_csv(pyramid_file)
@@ -137,11 +137,11 @@ class Model:
         # sampler = AliasedDistribution(both)
         # bin_min_age_days = age_distribution[:, 0] * 365  # minimum age for bin, in days (include this value)
         # bin_max_age_days = (age_distribution[:, 1] + 1) * 365  # maximum age for bin, in days (exclude this value)
-        # initial_pop = self.population.count
+        # initial_pop = self.agents.count
         # samples = sampler.sample(initial_pop)  # sample for bins from pyramid
-        # self.population.add_scalar_property("dob", dtype=np.int32)
+        # self.agents.add_scalar_property("dob", dtype=np.int32)
         # mask = np.zeros(initial_pop, dtype=bool)
-        # dobs = self.population.dob[0:initial_pop]
+        # dobs = self.agents.dob[0:initial_pop]
         # click.echo("Assigning day of year of birth to agents…")
         # for i in tqdm(range(len(age_distribution))):  # for each possible bin value...
         #     mask[:] = samples == i  # ...find the agents that belong to this bin
@@ -260,7 +260,7 @@ class Model:
         click.echo(f"{self.tstart}: Running the {self.name} model for {self.params.nticks} ticks…")
 
         self.metrics = []
-        for tick in tqdm(range(self.params.nticks)):
+        for tick in tqdm(range(self.params.nticks), leave=False):
             timing = [tick]
             for census in self.censuses:
                 tstart = datetime.now(tz=None)  # noqa: DTZ005
@@ -364,7 +364,7 @@ class Model:
         _fig.suptitle("Distribution of Day of Birth for Initial Population")
 
         count = self.patches.populations[0, :].sum()  # just the initial population
-        dobs = self.population.dob[0:count]
+        dobs = self.agents.dob[0:count]
         plt.hist(dobs, bins=100)
         plt.xlabel("Day of Birth")
 

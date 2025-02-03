@@ -9,7 +9,7 @@ Classes:
 
 Usage:
 
-    The Births component requires a model with a `population` attribute that has a `dob` attribute.
+    The Births component requires a model with an `agents` attribute that has a `dob` attribute.
     It calculates the number of births based on the model's parameters and updates the population
     accordingly. It also provides methods to plot birth statistics.
 
@@ -41,7 +41,7 @@ class Births:
 
     Attributes:
 
-        model: The model instance containing population and parameters.
+        model: The model instance containing agents and parameters.
         verbose (bool): Flag to enable verbose output. Default is False.
         initializers (list): List of initializers to be called on birth events.
         metrics (DataFrame): DataFrame to holding timing metrics for initializers.
@@ -53,22 +53,21 @@ class Births:
 
         Parameters:
 
-            model (object): The model object which must have a `population` attribute.
+            model (object): The model object which must have a `agents` attribute.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Raises:
 
-            AssertionError: If the model does not have a `population` attribute.
-            AssertionError: If the model's population does not have a `dob` attribute.
+            AssertionError: If the model does not have a `agents` attribute.
         """
 
-        assert getattr(model, "population", None) is not None, "Births requires the model to have a `population` attribute"
+        assert getattr(model, "agents", None) is not None, "Births requires the model to have a `agents` attribute"
 
         self.model = model
 
         nyears = (model.params.nticks + 364) // 365
         model.patches.add_vector_property("births", length=nyears, dtype=np.int32)
-        model.population.add_scalar_property("dob", dtype=np.int32)
+        model.agents.add_scalar_property("dob", dtype=np.int32)
 
         self._initializers = []
         self._metrics = []
@@ -142,14 +141,14 @@ class Births:
             annual_births * (doy - 1) // 365
         )  # Is this not always basically annual_births / 365?
         count_births = todays_births.sum()
-        istart, iend = model.population.add(count_births)
+        istart, iend = model.agents.add(count_births)
 
-        if hasattr(model.population, "dob"):
-            model.population.dob[istart:iend] = tick  # set to current tick
+        if hasattr(model.agents, "dob"):
+            model.agents.dob[istart:iend] = tick  # set to current tick
 
         # set the nodeids for the newborns in case subsequent initializers need them (properties varying by patch)
         index = istart
-        nodeids = model.population.nodeid
+        nodeids = model.agents.nodeid
         for nodeid, births in enumerate(todays_births):
             nodeids[index : index + births] = nodeid
             index += births
@@ -228,23 +227,22 @@ class Births_ConstantPop:
 
         Parameters:
 
-            model (object): The model object which must have a `population` attribute.
+            model (object): The model object which must have a `agents` attribute.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Raises:
 
-            AssertionError: If the model does not have a `population` attribute.
-            AssertionError: If the model's population does not have a `dob` attribute.
+            AssertionError: If the model does not have a `agents` attribute.
         """
 
-        assert getattr(model, "population", None) is not None, "Births requires the model to have a `population` attribute"
+        assert getattr(model, "agents", None) is not None, "Births requires the model to have a `agents` attribute"
 
         self.model = model
 
-        model.population.add_scalar_property("dob", dtype=np.int32)
+        model.agents.add_scalar_property("dob", dtype=np.int32)
         # Simple initializer for ages where birth rate = mortality rate:
         daily_mortality_rate = (1+model.params.cbr/1000)**(1/365)-1
-        model.population.dob[0 : model.population.count] = -1*model.prng.exponential(1 / daily_mortality_rate, model.population.count).astype(np.int32)
+        model.agents.dob[0 : model.agents.count] = -1*model.prng.exponential(1 / daily_mortality_rate, model.agents.count).astype(np.int32)
 
         # nyears = (model.params.nticks + 364) // 365
         model.patches.add_vector_property("births", length=model.params.nticks, dtype=np.uint32)
@@ -309,8 +307,8 @@ class Births_ConstantPop:
         # random selection will be population proportional.  If node id is not contiguous, could be tricky?
         indices = model.prng.choice(model.patches.populations[tick, :].sum(), size=model.patches.births[tick, :].sum(), replace=False)
 
-        if hasattr(model.population, "dob"):
-            model.population.dob[indices] = tick  # set to current tick
+        if hasattr(model.agents, "dob"):
+            model.agents.dob[indices] = tick  # set to current tick
 
         timing = [tick]
         for initializer in self._initializers:
