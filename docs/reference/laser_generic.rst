@@ -33,6 +33,14 @@ laser\_generic.core module
    :undoc-members:
    :show-inheritance:
 
+laser\_generic.importation module
+---------------------------------
+
+.. automodule:: laser_generic.importation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 laser\_generic.infection module
 -------------------------------
 

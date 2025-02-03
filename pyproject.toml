@@ -64,6 +64,11 @@ Changelog = "https://github.com/InstituteforDiseaseModeling/laser-generic/blob/m
 [project.scripts]
 generic = "laser_generic.cli:run"
 
+[tool.setuptools]
+ext-modules = [
+  {name = "_core", sources = ["src/laser_generic/_core.c"]}
+]
+
 [tool.ruff]
 extend-exclude = ["static", "ci/templates"]
 line-length = 140
