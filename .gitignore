@@ -73,6 +73,9 @@ docs/_build
 # Mypy Cache
 .mypy_cache/
 
+# Jupyter
+.ipynb_checkpoints
+
 tmp/
 notebooks/parameters.csv
 notebooks/cases0.csv

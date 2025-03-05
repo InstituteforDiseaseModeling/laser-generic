@@ -8,14 +8,12 @@ version = "0.0.0"
 
 dependencies = [
   "click",
-  "laser-core>=0.1.1",
-#  "numpy>=1.26.4,<2.0.0",  # depend on laser_core for NumPy
-#  "numba~=0.59.1", # depend on laser_core for Numba
+  "laser-core",
   "tqdm",
   "geopandas",
   "pandas",
   "scipy",
-  "sklearn"
+  "scikit-learn"
 ]
 
 requires-python = ">= 3.9"

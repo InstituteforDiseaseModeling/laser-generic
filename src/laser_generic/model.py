@@ -102,7 +102,7 @@ class Model:
     def initialize_patches(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
         # We need some patches with population data ...
         npatches = len(scenario)
-        self.patches = LaserFrame(npatches)
+        self.patches = LaserFrame(npatches, initial_count=0)
 
         # "activate" all the patches (count == capacity)
         self.patches.add(npatches)
@@ -120,7 +120,7 @@ class Model:
         #    capacity = calc_capacity(self.patches.populations[0, :].sum(), parameters.nticks, parameters.cbr, parameters.verbose)
         #else:
         capacity = np.sum(self.patches.populations[0, :])
-        self.population = LaserFrame(capacity)
+        self.population = LaserFrame(capacity=int(capacity), initial_count=0)
 
         self.population.add_scalar_property("nodeid", dtype=np.uint16)
         for nodeid, count in enumerate(self.patches.populations[0, :]):
