@@ -15,6 +15,7 @@ dependencies = [
   "geopandas",
   "pandas",
   "scipy",
+  "sklearn"
 ]
 
 requires-python = ">= 3.9"
