@@ -13,10 +13,10 @@ Functions:
 
     seed_infections_in_patch(model, ipatch: int, ninfections: int = 100) -> None:
         Seed initial infections in a specific location at the start of the simulation.
-    
+
     set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
         Set the population susceptibility level at the start of the simulation.
-    
+
     set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
         Set the population susceptibility level at the start of the simulation in a specific patch.
 """
@@ -173,12 +173,12 @@ def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
     # Seed initial infections in a specific location at the start of the simulation
     myinds = np.where((model.population.susceptibility > 0) & (model.population.nodeid == ipatch))[0]
     if len(myinds) > ninfections:
-       myinds = np.random.choice(myinds, ninfections, replace=False)
+        myinds = np.random.choice(myinds, ninfections, replace=False)
     model.population.itimer[myinds] = model.params.inf_mean
     model.population.susceptibility[myinds] = 0
 
-
     return
+
 
 def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
     """
@@ -227,10 +227,9 @@ def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
 
     return
 
+
 def add_at(A, indices, B):
     sorted_indices = np.argsort(indices)
     uniques, run_lengths = np.unique(indices[sorted_indices], return_counts=True)
     for i, length, end in zip(uniques, run_lengths, run_lengths.cumsum()):
-        A[i] += B[sorted_indices[end-length:end]].sum(axis=0)  
-
-
+        A[i] += B[sorted_indices[end - length : end]].sum(axis=0)

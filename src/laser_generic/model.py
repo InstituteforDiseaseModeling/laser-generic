@@ -106,7 +106,7 @@ class Model:
 
         # "activate" all the patches (count == capacity)
         self.patches.add(npatches)
-        self.patches.add_vector_property("populations", length=parameters.nticks+1)
+        self.patches.add_vector_property("populations", length=parameters.nticks + 1)
         # set patch populations at t = 0 to initial populations
         self.patches.populations[0, :] = scenario.population
 
@@ -116,9 +116,9 @@ class Model:
         # Initialize the model population
         # Is there a better pattern than checking for cbr in parameters?  Many modelers might use "mu", for example.
         # Would rather check E.g., if there is a birth component, but that might come later.
-        #if "cbr" in parameters:
+        # if "cbr" in parameters:
         #    capacity = calc_capacity(self.patches.populations[0, :].sum(), parameters.nticks, parameters.cbr, parameters.verbose)
-        #else:
+        # else:
         capacity = np.sum(self.patches.populations[0, :])
         self.population = LaserFrame(capacity=int(capacity), initial_count=0)
 
@@ -282,7 +282,7 @@ class Model:
         print(f"Completed the {self.name} model at {self.tfinish}…")
 
         if self.params.verbose:
-            names = [type(census).__name__+"_census" for census in self.censuses] + [type(phase).__name__ for phase in self.phases]
+            names = [type(census).__name__ + "_census" for census in self.censuses] + [type(phase).__name__ for phase in self.phases]
             metrics = pd.DataFrame(self.metrics, columns=["tick"] + [name for name in names])
             plot_columns = metrics.columns[1:]
             sum_columns = metrics[plot_columns].sum()
@@ -290,7 +290,7 @@ class Model:
             for key in sum_columns.index:
                 print(f"{key:{width}}: {sum_columns[key]:13,} µs")
             print("=" * (width + 2 + 13 + 3))
-            print(f"{'Total:':{width+1}} {sum_columns.sum():13,} microseconds")
+            print(f"{'Total:':{width + 1}} {sum_columns.sum():13,} microseconds")
 
         return
 

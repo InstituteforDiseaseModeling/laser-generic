@@ -80,7 +80,7 @@ class Susceptibility:
             susceptibility[i] = value
 
         return
-    
+
     @staticmethod
     @nb.njit((nb.int64[:], nb.uint8[:], nb.uint8), parallel=True, cache=True)
     def nb_set_susceptibility_randomaccess(indices, susceptibility, value) -> None:  # pragma: no cover
@@ -89,20 +89,20 @@ class Susceptibility:
             susceptibility[indices[i]] = value
 
         return
-    
+
     @staticmethod
     @nb.njit((nb.uint32[:], nb.uint8[:], nb.uint16[:], nb.uint32), parallel=True, cache=True)
     def accumulate_susceptibility(node_susc, agent_susc, nodeids, count) -> None:  # pragma: no cover
         """Numba compiled function to accumulate susceptibility of individuals."""
         max_node_id = np.max(nodeids)
-        thread_susceptibilities = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id+1), dtype=np.uint32)
+        thread_susceptibilities = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id + 1), dtype=np.uint32)
 
         for i in nb.prange(count):
             nodeid = nodeids[i]
             susceptibility = agent_susc[i]
             thread_susceptibilities[nb.get_thread_id(), nodeid] += susceptibility
         for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
-            for j in range(max_node_id+1):
+            for j in range(max_node_id + 1):
                 node_susc[j] += thread_susceptibilities[t, j]
 
         return
@@ -129,16 +129,15 @@ class Susceptibility:
         patches = model.patches
         population = model.population
 
-        susceptible_count = patches.susceptibility[tick, :]  # we will accumulate current susceptibles into this view into the susceptibility array
+        susceptible_count = patches.susceptibility[
+            tick, :
+        ]  # we will accumulate current susceptibles into this view into the susceptibility array
         if len(model.patches) == 1:
-            np.add(susceptible_count, 
-                   np.count_nonzero(population.susceptibility[0:population.count]), 
-                   out=susceptible_count)
+            np.add(susceptible_count, np.count_nonzero(population.susceptibility[0 : population.count]), out=susceptible_count)
         else:
             nodeids = population.nodeid[0 : population.count]
             susceptibility = population.susceptibility[0 : population.count]
-            self.accumulate_susceptibility(susceptible_count, susceptibility, nodeids, population.count)            
-
+            self.accumulate_susceptibility(susceptible_count, susceptibility, nodeids, population.count)
 
     def on_birth(self, model, _tick, istart, iend):
         """

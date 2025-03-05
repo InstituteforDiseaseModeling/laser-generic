@@ -243,15 +243,15 @@ class Births_ConstantPop:
 
         model.population.add_scalar_property("dob", dtype=np.int32)
         # Simple initializer for ages where birth rate = mortality rate:
-        daily_mortality_rate = (1+model.params.cbr/1000)**(1/365)-1
-        model.population.dob[0 : model.population.count] = -1*model.prng.exponential(1 / daily_mortality_rate, model.population.count).astype(np.int32)
+        daily_mortality_rate = (1 + model.params.cbr / 1000) ** (1 / 365) - 1
+        model.population.dob[0 : model.population.count] = -1 * model.prng.exponential(
+            1 / daily_mortality_rate, model.population.count
+        ).astype(np.int32)
 
         # nyears = (model.params.nticks + 364) // 365
         model.patches.add_vector_property("births", length=model.params.nticks, dtype=np.uint32)
-        mu = (1+model.params.cbr / 1000) **(1 / 365) - 1
-        model.patches.births = model.prng.poisson(
-            lam=model.patches.populations[0, :] * mu, size=model.patches.births.shape
-        )
+        mu = (1 + model.params.cbr / 1000) ** (1 / 365) - 1
+        model.patches.births = model.prng.poisson(lam=model.patches.populations[0, :] * mu, size=model.patches.births.shape)
         # model.patches.births[year, :] = model.prng.poisson(model.patches.populations[tick, :] * model.params.cbr / 1000)
         self._initializers = []
         self._metrics = []
