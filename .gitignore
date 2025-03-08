@@ -76,6 +76,9 @@ docs/_build
 # Jupyter
 .ipynb_checkpoints
 
+# UV
+uv.lock
+
 tmp/
 notebooks/parameters.csv
 notebooks/cases0.csv

@@ -1,33 +1,8 @@
-[build-system]
-requires = ["setuptools>=30.3.0",]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "laser-generic"
 version = "0.0.0"
-
-dependencies = [
-  "click",
-  "laser-core",
-  "tqdm",
-  "geopandas",
-  "pandas",
-  "scipy",
-  "scikit-learn"
-]
-
-requires-python = ">= 3.9"
-
-authors = [
-  {name = "Christopher Lorton", email = "christopher.lorton@gatesfoundation.org"},
-  {name = "Jonathan Bloedow", email = "jonathan.bloedow@gatesfoundation.org"},
-  {name = "Katherine Rosenfeld", email = "katherine.rosenfeld@gatesfoundation.org"},
-  {name = "Kevin McCarthy", email = "kevin.mccarthy@gatesfoundation.org"},
-]
-maintainers = [
-  {name = "Christopher Lorton", email = "christopher.lorton@gatesfoundation.org"}
-]
 description = "Generic, SI/SIR/SEIR/etc., disease models implemented with the LASER toolkit."
+requires-python = ">= 3.9"
 readme = "README.md"
 license = {file = "LICENSE"}
 keywords = ["sir", "seir", "spatial", "modeling", "laser"]
@@ -51,8 +26,34 @@ classifiers = [
     "Topic :: Utilities",
 ]
 
+authors = [
+  {name = "Christopher Lorton", email = "christopher.lorton@gatesfoundation.org"},
+  {name = "Jonathan Bloedow", email = "jonathan.bloedow@gatesfoundation.org"},
+  {name = "Katherine Rosenfeld", email = "katherine.rosenfeld@gatesfoundation.org"},
+  {name = "Kevin McCarthy", email = "kevin.mccarthy@gatesfoundation.org"},
+]
+
+maintainers = [
+  {name = "Christopher Lorton", email = "christopher.lorton@gatesfoundation.org"}
+]
+
+dependencies = [
+  "click",
+  "laser-core",
+  "tqdm",
+  "geopandas",
+  "pandas",
+  "scipy",
+  "scikit-learn"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
 [project.urls]
-Homepage = "https://example.com"
+Homepage = "https://github.com/InstituteforDiseaseModeling/laser-generic/"
 Documentation = "https://laser-generic.readthedocs.io/en/latest/"
 Repository = "https://github.com/InstituteforDiseaseModeling/laser-generic.git"
 Issues = "https://github.com/InstituteforDiseaseModeling/laser-generic/issues"
@@ -60,6 +61,14 @@ Changelog = "https://github.com/InstituteforDiseaseModeling/laser-generic/blob/m
 
 [project.scripts]
 generic = "laser_generic.cli:run"
+
+[build-system]
+requires = ["setuptools>=30.3.0",]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+filterwarnings = ["error"]
+markers = ["modeltest"]
 
 [tool.ruff]
 extend-exclude = ["static", "ci/templates"]
