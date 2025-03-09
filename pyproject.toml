@@ -43,6 +43,7 @@ dependencies = [
   "tqdm",
   "geopandas",
   "pandas",
+  "numpy",
   "scipy",
   "scikit-learn"
 ]
