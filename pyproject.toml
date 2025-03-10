@@ -31,10 +31,12 @@ authors = [
   {name = "Jonathan Bloedow", email = "jonathan.bloedow@gatesfoundation.org"},
   {name = "Katherine Rosenfeld", email = "katherine.rosenfeld@gatesfoundation.org"},
   {name = "Kevin McCarthy", email = "kevin.mccarthy@gatesfoundation.org"},
+  {name = "Paul R Saxman", email = "paul.saxman@gatesfoundation.org"},
 ]
 
 maintainers = [
-  {name = "Christopher Lorton", email = "christopher.lorton@gatesfoundation.org"}
+  {name = "Christopher Lorton", email = "christopher.lorton@gatesfoundation.org"},
+  {name = "Paul R Saxman", email = "paul.saxman@gatesfoundation.org"}
 ]
 
 dependencies = [
@@ -79,6 +81,8 @@ target-version = "py39"
 
 [tool.ruff.lint.per-file-ignores]
 "ci/*" = ["S"]
+"notebooks/07_SIR_CCS.ipynb" = ["F", "PTH", "C", "W", "I"] # temporary disable while in development
+"notebooks/08_2patch_SIR_wbirths_correlation.ipynb" = ["F", "PTH", "C", "W", "I"] # temporary disable while in development
 
 [tool.ruff.lint]
 ignore = [
