@@ -15,7 +15,6 @@ Functions:
         Nothing yet.
 """
 
-import numba as nb
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure

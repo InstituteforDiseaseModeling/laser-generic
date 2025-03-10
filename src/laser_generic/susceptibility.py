@@ -21,7 +21,6 @@ Functions:
 import numba as nb
 import numpy as np
 from matplotlib.figure import Figure
-from laser_generic.utils import add_at
 
 
 class Susceptibility:

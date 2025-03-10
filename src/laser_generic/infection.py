@@ -67,9 +67,9 @@ class Infection:
         population = model.population
         patches = model.patches
         recovered_count = patches.recovered[tick, :]
-        rec = np.logical_and(population.susceptibility[0 : population.count] == 0, population.itimer[0 : population.count] == 0)
+        rec = (population.susceptibility[0 : population.count]==0) & (population.itimer[0 : population.count]==0)
 
-        if len(model.patches) == 1:
+        if len(patches) == 1:
             np.add(
                 recovered_count,
                 np.count_nonzero(rec),  # if you are susceptible or infected, you're not recovered
