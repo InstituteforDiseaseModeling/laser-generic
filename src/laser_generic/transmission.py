@@ -227,7 +227,7 @@ class Transmission:
                     doi[i] = tick
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
 
-        #for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
+        # for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
         #    for j in range(max_node_id + 1):
         #        incidence[j] += thread_incidences[t, j]
         incidence[:] = thread_incidences.sum(axis=0)

@@ -67,7 +67,7 @@ class Infection:
         population = model.population
         patches = model.patches
         recovered_count = patches.recovered[tick, :]
-        rec = (population.susceptibility[0 : population.count]==0) & (population.itimer[0 : population.count]==0)
+        rec = (population.susceptibility[0 : population.count] == 0) & (population.itimer[0 : population.count] == 0)
 
         if len(patches) == 1:
             np.add(
