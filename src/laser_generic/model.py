@@ -56,11 +56,9 @@ from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
-from itertools import chain
 
 from laser_generic import Births
 from laser_generic import Births_ConstantPop
-from laser_generic.utils import calc_capacity
 
 
 class Model:
@@ -283,7 +281,7 @@ class Model:
 
         if self.params.verbose:
             names = [type(census).__name__ + "_census" for census in self.censuses] + [type(phase).__name__ for phase in self.phases]
-            metrics = pd.DataFrame(self.metrics, columns=["tick"] + [name for name in names])
+            metrics = pd.DataFrame(self.metrics, columns=["tick", *list(names)])
             plot_columns = metrics.columns[1:]
             sum_columns = metrics[plot_columns].sum()
             width = max(map(len, sum_columns.index))

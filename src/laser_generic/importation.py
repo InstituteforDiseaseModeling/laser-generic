@@ -16,9 +16,10 @@ Functions:
 """
 
 import numpy as np
-from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
-from laser_generic.utils import seed_infections_randomly, seed_infections_in_patch
+
+from laser_generic.utils import seed_infections_in_patch
+from laser_generic.utils import seed_infections_randomly
 
 
 class Infect_Random_Agents:
