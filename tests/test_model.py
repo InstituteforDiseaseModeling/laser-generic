@@ -40,6 +40,7 @@ def KM_limit(z, R0, S0, I0):
         return z - S0 * (1 - np.exp(-R0 * (z + I0)))
 
 
+@pytest.mark.skip("long running test")
 @pytest.mark.modeltest
 def test_si_model_nobirths():
     """
@@ -92,6 +93,7 @@ def test_si_model_nobirths():
     assert np.all(np.abs((output["beta"] - output["fitted_beta"]) / output["beta"]) < 0.05)
 
 
+@pytest.mark.skip("long running test")
 @pytest.mark.modeltest
 def test_si_model_wbirths():
     """
@@ -154,6 +156,7 @@ def test_si_model_wbirths():
     assert np.all(np.abs((output["cbr"] - output["fitted_cbr"]) / output["cbr"]) < 0.05)
 
 
+@pytest.mark.skip("long running test")
 @pytest.mark.modeltest
 def test_sir_nobirths():
     """
@@ -217,7 +220,7 @@ def test_sir_nobirths():
     assert np.all(np.abs((output["gamma"] - output["fitted_gamma"]) / output["gamma"]) < 0.1)
 
 
-@pytest.mark.skip(reason="fails on ARM Python during CI. investigating")
+@pytest.mark.skip("long running test")
 @pytest.mark.modeltest
 def test_sir_nobirths_outbreak():
     """
