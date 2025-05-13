@@ -67,17 +67,18 @@ class Infection:
         population = model.population
         patches = model.patches
         recovered_count = patches.recovered[tick, :]
-        rec = (population.susceptibility[0 : population.count] == 0) & (population.itimer[0 : population.count] == 0)
+        condition = (population.susceptibility[0 : population.count] == 0) & (population.itimer[0 : population.count] == 0)
 
         if len(patches) == 1:
             np.add(
                 recovered_count,
-                np.count_nonzero(rec),  # if you are susceptible or infected, you're not recovered
+                np.count_nonzero(condition),  # if you are susceptible or infected, you're not recovered
                 out=recovered_count,
             )
         else:
             nodeids = population.nodeid[0 : population.count]
-            self.accumulate_recovered(recovered_count, rec, nodeids, population.count)
+            self.accumulate_recovered(recovered_count, condition, nodeids, population.count)
+            #np.add.at(recovered_count, nodeids[condition], np.uint32(1))
         return
 
     def __call__(self, model, tick) -> None:
@@ -111,7 +112,7 @@ class Infection:
         return
 
     @staticmethod
-    @nb.njit((nb.uint32[:], nb.uint32[:], nb.uint16[:], nb.uint32), parallel=True, cache=True)
+    @nb.njit((nb.uint32[:], nb.bool_[:], nb.uint16[:], nb.int64), parallel=True, cache=True)
     def accumulate_recovered(node_rec, agent_recovered, nodeids, count) -> None:  # pragma: no cover
         """Numba compiled function to accumulate recovered individuals."""
         max_node_id = np.max(nodeids)

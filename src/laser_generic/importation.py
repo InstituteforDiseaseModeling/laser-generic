@@ -54,7 +54,7 @@ class Infect_Random_Agents:
         self.end = model.params.nticks
         if hasattr(model.params, "importation_start"):
             self.start = model.params.importation_start
-        if hasattr(model.params, "importation_start"):
+        if hasattr(model.params, "importation_end"):
             self.end = model.params.importation_end
 
         return

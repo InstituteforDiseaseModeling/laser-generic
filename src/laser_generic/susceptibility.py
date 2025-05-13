@@ -90,7 +90,7 @@ class Susceptibility:
         return
 
     @staticmethod
-    @nb.njit((nb.uint32[:], nb.uint8[:], nb.uint16[:], nb.uint32), parallel=True, cache=True)
+    @nb.njit((nb.uint32[:], nb.bool_[:], nb.uint16[:], nb.int64), parallel=True, cache=True)
     def accumulate_susceptibility(node_susc, agent_susc, nodeids, count) -> None:  # pragma: no cover
         """Numba compiled function to accumulate susceptibility of individuals."""
         max_node_id = np.max(nodeids)
@@ -124,19 +124,18 @@ class Susceptibility:
 
         return
 
-    def census(self, model, tick):
+    def census(self, model, tick) -> None:
         patches = model.patches
         population = model.population
-
-        susceptible_count = patches.susceptibility[
-            tick, :
-        ]  # we will accumulate current susceptibles into this view into the susceptibility array
+        condition = population.susceptibility[0 : population.count]>np.uint8(0)
+        susceptible_count = patches.susceptibility[tick, :]  # we will accumulate current susceptibles into this view into the susceptibility array
         if len(model.patches) == 1:
-            np.add(susceptible_count, np.count_nonzero(population.susceptibility[0 : population.count]), out=susceptible_count)
+            np.add(susceptible_count, np.count_nonzero(condition), out=susceptible_count)
         else:
             nodeids = population.nodeid[0 : population.count]
-            susceptibility = population.susceptibility[0 : population.count]
-            self.accumulate_susceptibility(susceptible_count, susceptibility, nodeids, population.count)
+            #self.accumulate_susceptibility(susceptible_count, condition, nodeids, population.count)
+            np.add.at(susceptible_count, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
+        return
 
     def on_birth(self, model, _tick, istart, iend):
         """

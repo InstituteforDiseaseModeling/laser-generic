@@ -171,7 +171,7 @@ class Transmission:
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint8[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
+        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint16[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
         parallel=True,
         nogil=True,
         cache=True,
@@ -195,9 +195,7 @@ class Transmission:
                     doi[i] = tick
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
 
-        for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
-            for j in range(max_node_id + 1):
-                incidence[j] += thread_incidences[t, j]
+        incidence[:] = thread_incidences.sum(axis=0)
 
         return
 
