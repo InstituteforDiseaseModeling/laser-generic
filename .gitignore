@@ -93,3 +93,4 @@ notebooks/cases8.csv
 notebooks/cases9.csv
 notebooks/twopatchSIRoutputs/
 src/test.py
+outputs/*

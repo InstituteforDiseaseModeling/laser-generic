@@ -64,21 +64,30 @@ class Infection:
         return
 
     def census(self, model, tick) -> None:
-        population = model.population
         patches = model.patches
-        recovered_count = patches.recovered[tick, :]
-        condition = (population.susceptibility[0 : population.count] == 0) & (population.itimer[0 : population.count] == 0)
+        if tick == 0:
+            population = model.population
+            recovered_count = patches.recovered[tick, :]
+            #condition = population.state[0 : population.count] == 3  # Recovered
+            if hasattr(population, "etimer"):
+                condition = (population.susceptibility[0 : population.count] == 0) & (population.etimer[0 : population.count] == 0) & (population.itimer[0 : population.count] == 0)
+            else:
+                condition = (population.susceptibility[0 : population.count] == 0) & (population.itimer[0 : population.count] == 0)
 
-        if len(patches) == 1:
-            np.add(
-                recovered_count,
-                np.count_nonzero(condition),  # if you are susceptible or infected, you're not recovered
-                out=recovered_count,
-            )
-        else:
-            nodeids = population.nodeid[0 : population.count]
-            self.accumulate_recovered(recovered_count, condition, nodeids, population.count)
-            #np.add.at(recovered_count, nodeids[condition], np.uint32(1))
+            if len(patches) == 1:
+                np.add(
+                    recovered_count,
+                    np.count_nonzero(condition),  # if you are susceptible or infected, you're not recovered
+                    out=recovered_count,
+                )
+            else:
+                nodeids = population.nodeid[0 : population.count]
+                #self.accumulate_recovered(recovered_count, condition, nodeids, population.count)
+                np.add.at(recovered_count, nodeids[condition], np.uint32(1))
+            #if tick == 0:
+            patches.recovered_test[tick, :] = patches.recovered[tick, :].copy()
+
+        patches.recovered_test[tick+1, :] = patches.recovered_test[tick, :].copy()
         return
 
     def __call__(self, model, tick) -> None:
@@ -94,21 +103,42 @@ class Infection:
 
             None
         """
-
-        Infection.nb_infection_update(model.population.count, model.population.itimer)
-
+        flow = np.zeros(len(model.patches), dtype=np.uint32)
+        Infection.nb_infection_update_test(model.population.count, model.population.itimer, model.population.state, flow, model.population.nodeid)
+        model.patches.cases_test[tick+1, :] -= flow
+        model.patches.recovered_test[tick+1, :] += flow
         return
 
     @staticmethod
-    @nb.njit((nb.uint32, nb.uint16[:]), parallel=True, cache=True)
-    def nb_infection_update(count, itimers):  # pragma: no cover
+    @nb.njit((nb.uint32, nb.uint16[:], nb.uint8[:]), parallel=True, cache=True)
+    def nb_infection_update(count, itimers, state):  # pragma: no cover
         """Numba compiled function to check and update infection timers for the population in parallel."""
         for i in nb.prange(count):
             itimer = itimers[i]
             if itimer > 0:
                 itimer -= 1
+                if itimer == 0:
+                    state[i] = 3
                 itimers[i] = itimer
 
+        return
+    
+    @staticmethod
+    @nb.njit((nb.uint32, nb.uint16[:], nb.uint8[:], nb.uint32[:], nb.uint16[:]), parallel=True, cache=True)
+    def nb_infection_update_test(count, itimers, state, flow, nodeid):  # pragma: no cover
+        """Numba compiled function to check and update infection timers for the population in parallel."""
+        max_node_id = np.max(nodeid) + 1
+        thread_flow = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id), dtype=np.uint32)
+
+        for i in nb.prange(count):
+            itimer = itimers[i]
+            if itimer > 0:
+                itimer -= 1
+                if itimer == 0:
+                    thread_flow[nb.get_thread_id(), nodeid[i]] += 1
+                    state[i] = 3
+                itimers[i] = itimer
+        flow[:] += thread_flow.sum(axis=0)
         return
 
     @staticmethod
@@ -125,6 +155,7 @@ class Infection:
         for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
             for j in range(max_node_id + 1):
                 node_rec[j] += thread_recovereds[t, j]
+        node_rec[:] = thread_recovereds.sum(axis=0)
 
         return
 

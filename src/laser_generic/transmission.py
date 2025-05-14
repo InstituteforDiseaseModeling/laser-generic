@@ -66,19 +66,24 @@ class Transmission:
 
     def census(self, model, tick) -> None:
         patches = model.patches
-        population = model.population
+        if tick == 0:
+            population = model.population
 
-        contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
-        if hasattr(population, "itimer"):
-            condition = population.itimer[0 : population.count] > 0  # just look at the active agent indices
-        else:
-            condition = population.susceptibility[0 : population.count] == 0  # just look at the active agent indices
+            contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
+            #condition = population.state[0:population.count] == 2  # just look at the active agent indices
+            if hasattr(population, "itimer"):
+                condition = population.itimer[0 : population.count] > 0  # just look at the active agent indices
+            else:
+                condition = population.susceptibility[0 : population.count] == 0  # just look at the active agent indices
 
-        if len(patches) == 1:
-            np.add(contagion, np.count_nonzero(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
-        else:
-            nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
-            np.add.at(contagion, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
+            if len(patches) == 1:
+                np.add(contagion, np.count_nonzero(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
+            else:
+                nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
+                np.add.at(contagion, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
+            patches.cases_test[tick, :] = patches.cases[tick, :].copy()
+
+        patches.cases_test[tick+1, :] = patches.cases_test[tick, :].copy()
         return
 
     def __call__(self, model, tick) -> None:
@@ -104,20 +109,20 @@ class Transmission:
         patches = model.patches
         population = model.population
 
-        contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
-
+        #contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
+        contagion = patches.cases_test[tick, :].copy().astype(np.float32)
         if hasattr(patches, "network"):
             network = patches.network
-            transfer = (contagion * network).round().astype(np.uint32)
+            transfer = contagion * network
             contagion += transfer.sum(axis=1)  # increment by incoming "migration"
             contagion -= transfer.sum(axis=0)  # decrement by outgoing "migration"
 
         forces = patches.forces
         beta_effective = model.params.beta
-        #        if 'seasonality_factor' in model.params:
-        #            beta_effective *= (1+ model.params.seasonality_factor * np.sin(
-        #                2 * np.pi * (tick - model.params.seasonality_phase) / 365
-        #                ))
+        if 'seasonality_factor' in model.params:
+            beta_effective *= (1+ model.params.seasonality_factor * np.sin(
+            2 * np.pi * (tick - model.params.seasonality_phase) / 365
+            ))
 
         np.multiply(contagion, beta_effective, out=forces)
         np.divide(forces, model.patches.populations[tick, :], out=forces)  # per agent force of infection
@@ -135,6 +140,7 @@ class Transmission:
             Transmission.nb_transmission_update_exposed(
                 population.susceptibility,
                 population.nodeid,
+                population.state,
                 forces,
                 population.etimer,
                 population.count,
@@ -148,6 +154,7 @@ class Transmission:
             Transmission.nb_transmission_update_noexposed(
                 population.susceptibility,
                 population.nodeid,
+                population.state,
                 forces,
                 population.itimer,
                 population.count,
@@ -160,24 +167,31 @@ class Transmission:
             Transmission.nb_transmission_update_SI(
                 population.susceptibility,
                 population.nodeid,
+                population.state,
                 forces,
                 population.count,
                 model.patches.incidence[tick, :],
                 population.doi,
                 tick,
             )
+        if hasattr(population, "etimer"):
+            model.patches.exposed_test[tick+1, :] += model.patches.incidence[tick, :]
+            model.patches.susceptibility_test[tick+1, :] -= model.patches.incidence[tick, :]
+        else:
+            model.patches.cases_test[tick+1, :] += model.patches.incidence[tick, :]
+            model.patches.susceptibility_test[tick+1, :] -= model.patches.incidence[tick, :]
 
         return
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint16[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
+        (nb.uint8[:], nb.uint16[:], nb.uint8[:], nb.float32[:], nb.uint16[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
         parallel=True,
         nogil=True,
         cache=True,
     )
     def nb_transmission_update_exposed(
-        susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence, doi, tick
+        susceptibilities, nodeids, state, forces, etimers, count, exp_shape, exp_scale, incidence, doi, tick
     ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         max_node_id = np.max(nodeids)
@@ -191,7 +205,8 @@ class Transmission:
                 if (force > 0) and (np.random.random_sample() < force):  # draw random number < force means infection
                     susceptibilities[i] = 0  # no longer susceptible
                     # set exposure timer for newly infected individuals to a draw from a gamma distribution, must be at least 1 day
-                    etimers[i] = np.maximum(np.uint8(1), np.uint8(np.round(np.random.gamma(exp_shape, exp_scale))))
+                    etimers[i] = np.maximum(np.uint16(1), np.uint16(np.round(np.random.gamma(exp_shape, exp_scale))))
+                    state[i] = 1  # set state to exposed
                     doi[i] = tick
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
 
@@ -201,13 +216,13 @@ class Transmission:
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint16[:], nb.uint32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
+        (nb.uint8[:], nb.uint16[:], nb.uint8[:], nb.float32[:], nb.uint16[:], nb.uint32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
         parallel=True,
         nogil=True,
         cache=True,
     )
     def nb_transmission_update_noexposed(
-        susceptibilities, nodeids, forces, itimers, count, inf_mean, incidence, doi, tick
+        susceptibilities, nodeids, state, forces, itimers, count, inf_mean, incidence, doi, tick
     ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         max_node_id = np.max(nodeids)
@@ -223,6 +238,7 @@ class Transmission:
                     # set infectious timer for the individual to an exponential draw
                     itimers[i] = np.maximum(np.uint16(1), np.uint16(np.ceil(np.random.exponential(inf_mean))))
                     doi[i] = tick
+                    state[i] = 2
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
 
         # for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
@@ -234,12 +250,12 @@ class Transmission:
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.float32[:], nb.uint32, nb.uint32[:], nb.uint32[:], nb.int_),
+        (nb.uint8[:], nb.uint16[:], nb.uint8[:], nb.float32[:], nb.uint32, nb.uint32[:], nb.uint32[:], nb.int_),
         parallel=True,
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_SI(susceptibilities, nodeids, forces, count, incidence, doi, tick):  # pragma: no cover
+    def nb_transmission_update_SI(susceptibilities, nodeids, state, forces, count, incidence, doi, tick):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         max_node_id = np.max(nodeids)
         thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id + 1), dtype=np.uint32)
@@ -252,6 +268,7 @@ class Transmission:
                     # All we do is become no longer susceptible, which means infected in an SI model.  No timers.
                     susceptibilities[i] = 0  # no longer susceptible
                     doi[i] = tick
+                    state[i] = 2
                     thread_incidences[nb.get_thread_id(), nodeid] += 1
         for t in range(nb.config.NUMBA_DEFAULT_NUM_THREADS):
             for j in range(max_node_id + 1):

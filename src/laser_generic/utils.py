@@ -141,15 +141,16 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
     """
 
     # Seed initial infections in random locations at the start of the simulation
-    cinfections = 0
-    while cinfections < ninfections:
-        index = model.prng.integers(0, model.population.count)
-        if model.population.susceptibility[index] > 0:
-            model.population.susceptibility[index] = 0
-            model.population.itimer[index] = np.random.exponential(model.params.inf_mean)
-            cinfections += 1
+    inf_nodeids = np.zeros(ninfections, dtype=np.uint16)
 
-    return
+    myinds = np.where(model.population.susceptibility > 0)[0]
+    if len(myinds) > ninfections:
+        myinds = np.random.choice(myinds, ninfections, replace=False)
+    model.population.itimer[myinds] = model.params.inf_mean
+    model.population.susceptibility[myinds] = 0
+    inf_nodeids = model.population.nodeid[myinds]
+
+    return inf_nodeids
 
 
 def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
