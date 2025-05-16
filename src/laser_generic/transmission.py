@@ -113,7 +113,7 @@ class Transmission:
         contagion = patches.cases_test[tick, :].copy().astype(np.float32)
         if hasattr(patches, "network"):
             network = patches.network
-            transfer = contagion * network
+            transfer = contagion * network.T
             contagion += transfer.sum(axis=1)  # increment by incoming "migration"
             contagion -= transfer.sum(axis=0)  # decrement by outgoing "migration"
 
