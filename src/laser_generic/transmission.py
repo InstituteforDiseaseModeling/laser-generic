@@ -123,6 +123,8 @@ class Transmission:
             beta_effective *= (1+ model.params.seasonality_factor * np.sin(
             2 * np.pi * (tick - model.params.seasonality_phase) / 365
             ))
+        if hasattr(model.params, "biweekly_beta_scalar"):
+            beta_effective *= model.params.biweekly_beta_scalar[int(np.floor((tick % 365)/(14.0384615385)))]
 
         np.multiply(contagion, beta_effective, out=forces)
         np.divide(forces, model.patches.populations[tick, :], out=forces)  # per agent force of infection

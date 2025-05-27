@@ -141,14 +141,32 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
     """
 
     # Seed initial infections in random locations at the start of the simulation
-    inf_nodeids = np.zeros(ninfections, dtype=np.uint16)
+    pop = model.population
+    params = model.params
 
-    myinds = np.where(model.population.susceptibility > 0)[0]
+    myinds = np.flatnonzero(pop.susceptibility)
     if len(myinds) > ninfections:
-        myinds = np.random.choice(myinds, ninfections, replace=False)
-    model.population.itimer[myinds] = model.params.inf_mean
-    model.population.susceptibility[myinds] = 0
-    inf_nodeids = model.population.nodeid[myinds]
+        myinds = np.random.permutation(myinds)[:ninfections]
+
+    # all_inds = np.random.permutation(len(pop.susceptibility))
+    # myinds = []
+
+    # for i in all_inds:
+    #     if pop.susceptibility[i] > 0:
+    #         myinds.append(i)
+    #         if len(myinds) == ninfections:
+    #             break
+    # myinds = np.array(myinds)
+
+    pop.itimer[myinds] = params.inf_mean
+    pop.susceptibility[myinds] = 0
+    inf_nodeids = pop.nodeid[myinds]
+    # myinds = np.where(model.population.susceptibility > 0)[0]
+    # if len(myinds) > ninfections:
+    #     myinds = np.random.choice(myinds, ninfections, replace=False)
+    # model.population.itimer[myinds] = model.params.inf_mean
+    # model.population.susceptibility[myinds] = 0
+    # inf_nodeids = model.population.nodeid[myinds]
 
     return inf_nodeids
 

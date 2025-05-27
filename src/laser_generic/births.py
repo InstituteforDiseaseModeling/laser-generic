@@ -392,3 +392,77 @@ class Births_ConstantPop:
         yield
 
         return
+
+
+class Births_ConstantPop_VariableBirthRate(Births_ConstantPop):
+    """
+    A component to handle birth events in a model with constant population but variable birth rates over time.  .
+
+    This class extends Births_ConstantPop to allow for a variable birth rate over time (cbr).
+    """
+
+    def __init__(self, model, verbose: bool = False):
+        """
+        Initialize the Births_ConstantPop_VariableBirthRate component.
+
+        Parameters:
+            model (object): The model object which must have a `population` attribute.
+            verbose (bool, optional): If True, enables verbose output. Defaults to False.
+
+        Raises:
+            AssertionError: If the model does not have a `population` attribute.
+        """
+        assert getattr(model, "population", None) is not None, "Births requires the model to have a `population` attribute"
+
+        self.model = model
+
+        model.population.add_scalar_property("dob", dtype=np.int32)
+
+        # Expect model.params.cbr to be a dict with keys "rates" and "timesteps"
+        cbr_param = model.params.cbr
+        if not (isinstance(cbr_param, dict) and "rates" in cbr_param and "timesteps" in cbr_param):
+            raise ValueError("model.params.cbr must be a dict with keys 'rates' and 'timesteps'")
+
+        rates = np.asarray(cbr_param["rates"], dtype=float)
+        timesteps = np.asarray(cbr_param["timesteps"], dtype=int)
+
+        if len(rates) != len(timesteps):
+            raise ValueError("'rates' and 'timesteps' must have the same length")
+
+        nticks = model.params.nticks
+        cbr = np.empty(nticks, dtype=float)
+
+        # Handle before first timestep
+        if timesteps[0] > 0:
+            cbr[:timesteps[0]] = rates[0]
+
+        # Interpolate between timesteps
+        for i in range(len(timesteps) - 1):
+            start, end = timesteps[i], timesteps[i + 1]
+            cbr[start:end] = np.linspace(rates[i], rates[i + 1], end - start, endpoint=False)
+
+        # Handle after last timestep
+        if timesteps[-1] < nticks:
+            cbr[timesteps[-1]:] = rates[-1]
+
+
+        # Calculate daily mortality rate for each tick
+        daily_mortality_rate = (1 + cbr / 1000) ** (1 / 365) - 1
+
+        # Assign random ages to initial population (using first day's rate)
+        mu0 = daily_mortality_rate[0]
+        model.population.dob[0 : model.population.count] = -1 * model.prng.exponential(
+            1 / mu0, model.population.count
+        ).astype(np.int32)
+
+        model.patches.add_vector_property("births", length=model.params.nticks, dtype=np.uint32)
+        # For each tick, calculate births for each patch using the time-varying cbr
+        # Vectorized sampling for all ticks and patches at once
+        mu_t = daily_mortality_rate[:, np.newaxis]  # shape (nticks, 1)
+        lam = model.patches.populations[0, :][np.newaxis, :] * mu_t  # shape (nticks, n_patches)
+        model.patches.births[:, :] = model.prng.poisson(lam=lam)
+
+        self._initializers = []
+        self._metrics = []
+
+        return

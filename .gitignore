@@ -94,3 +94,6 @@ notebooks/cases9.csv
 notebooks/twopatchSIRoutputs/
 src/test.py
 outputs/*
+outputs2/*
+outputs3/*
+periodicity_outs/*

@@ -72,13 +72,18 @@ class Infect_Random_Agents:
 
             None
         """
+        #KM: something about this importation function is so slow I can see the timer slow down when running in a notebook.  Need to 
+        #figure this out.
         if (tick >= self.start) and ((tick - self.start) % self.period == 0) and (tick < self.end):
             inf_nodeids = seed_infections_randomly(model, self.count)
             if hasattr(model.patches, 'cases_test'):
-                unique, counts = np.unique(inf_nodeids, return_counts=True)
-                for nodeid, count in zip(unique, counts):
-                    model.patches.cases_test[tick+1, nodeid] += count
-                    model.patches.susceptibility_test[tick+1, nodeid] -= count
+                # Use numpy for efficient batch updates
+                np.add.at(model.patches.cases_test, (tick+1, inf_nodeids), 1)
+                np.add.at(model.patches.susceptibility_test, (tick+1, inf_nodeids), -1)
+                # unique, counts = np.unique(inf_nodeids, return_counts=True)
+                # for nodeid, count in zip(unique, counts):
+                #     model.patches.cases_test[tick+1, nodeid] += count
+                #     model.patches.susceptibility_test[tick+1, nodeid] -= count
 
 
         return
