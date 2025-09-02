@@ -33,6 +33,30 @@ laser\_generic.core module
    :undoc-members:
    :show-inheritance:
 
+laser\_generic.exposure module
+------------------------------
+
+.. automodule:: laser_generic.exposure
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+laser\_generic.immunization module
+----------------------------------
+
+.. automodule:: laser_generic.immunization
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+laser\_generic.importation module
+---------------------------------
+
+.. automodule:: laser_generic.importation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 laser\_generic.infection module
 -------------------------------
 

@@ -68,9 +68,13 @@ class Infection:
         if tick == 0:
             population = model.population
             recovered_count = patches.recovered[tick, :]
-            #condition = population.state[0 : population.count] == 3  # Recovered
+            # condition = population.state[0 : population.count] == 3  # Recovered
             if hasattr(population, "etimer"):
-                condition = (population.susceptibility[0 : population.count] == 0) & (population.etimer[0 : population.count] == 0) & (population.itimer[0 : population.count] == 0)
+                condition = (
+                    (population.susceptibility[0 : population.count] == 0)
+                    & (population.etimer[0 : population.count] == 0)
+                    & (population.itimer[0 : population.count] == 0)
+                )
             else:
                 condition = (population.susceptibility[0 : population.count] == 0) & (population.itimer[0 : population.count] == 0)
 
@@ -82,12 +86,12 @@ class Infection:
                 )
             else:
                 nodeids = population.nodeid[0 : population.count]
-                #self.accumulate_recovered(recovered_count, condition, nodeids, population.count)
+                # self.accumulate_recovered(recovered_count, condition, nodeids, population.count)
                 np.add.at(recovered_count, nodeids[condition], np.uint32(1))
-            #if tick == 0:
+            # if tick == 0:
             patches.recovered_test[tick, :] = patches.recovered[tick, :].copy()
 
-        patches.recovered_test[tick+1, :] = patches.recovered_test[tick, :].copy()
+        patches.recovered_test[tick + 1, :] = patches.recovered_test[tick, :].copy()
         return
 
     def __call__(self, model, tick) -> None:
@@ -104,9 +108,11 @@ class Infection:
             None
         """
         flow = np.zeros(len(model.patches), dtype=np.uint32)
-        Infection.nb_infection_update_test(model.population.count, model.population.itimer, model.population.state, flow, model.population.nodeid)
-        model.patches.cases_test[tick+1, :] -= flow
-        model.patches.recovered_test[tick+1, :] += flow
+        Infection.nb_infection_update_test(
+            model.population.count, model.population.itimer, model.population.state, flow, model.population.nodeid
+        )
+        model.patches.cases_test[tick + 1, :] -= flow
+        model.patches.recovered_test[tick + 1, :] += flow
         return
 
     @staticmethod
@@ -122,7 +128,7 @@ class Infection:
                 itimers[i] = itimer
 
         return
-    
+
     @staticmethod
     @nb.njit((nb.uint32, nb.uint16[:], nb.uint8[:], nb.uint32[:], nb.uint16[:]), parallel=True, cache=True)
     def nb_infection_update_test(count, itimers, state, flow, nodeid):  # pragma: no cover

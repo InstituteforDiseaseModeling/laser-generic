@@ -6,11 +6,12 @@ Classes:
     CampaignImmunization: A class to periodically immunize a random subset of agents in the population
 
 To do:
-    Right now, neither intervention deploys to nodes, only globally.  Would like to add targeting by patch, 
+    Right now, neither intervention deploys to nodes, only globally.  Would like to add targeting by patch,
     coverage by patch, and so on.
     RI coverage is constant over time, should have some ways to vary this.
     RI coverage basically looks like a campaign with the age window = target_age +/- period/2.
 """
+
 import numpy as np
 from matplotlib.figure import Figure
 
@@ -66,13 +67,10 @@ class RoutineImmunization:
             lower = int(self.age - half_window)
             upper = int(self.age + half_window)
             immunize_nodeids = immunize_in_age_window(model, lower, upper, self.coverage, tick)
-            if (hasattr(model.patches, 'recovered_test')) and (immunize_nodeids is not None) and (len(immunize_nodeids) > 0):
-                np.add.at(model.patches.recovered_test, (tick+1, immunize_nodeids), 1)
-                np.add.at(model.patches.susceptibility_test, (tick+1, immunize_nodeids), -1)
+            if (hasattr(model.patches, "recovered_test")) and (immunize_nodeids is not None) and (len(immunize_nodeids) > 0):
+                np.add.at(model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
+                np.add.at(model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
         return
-
-
-
 
     def plot(self, fig: Figure = None):
         """
@@ -80,13 +78,14 @@ class RoutineImmunization:
         """
         return
 
+
 def immunize_in_age_window(model, lower, upper, coverage, tick):
     pop = model.population
 
     # Find agents whose age is within a window centered on self.age and width = self.period/2
     ages = tick - pop.dob
     in_window = (ages >= lower) & (ages < upper)
-    #For now, immunization doesn't impact exposed or infected agents
+    # For now, immunization doesn't impact exposed or infected agents
     myinds = np.flatnonzero(pop.susceptibility & in_window)
     if len(myinds) == 0:
         return None
@@ -102,10 +101,12 @@ def immunize_in_age_window(model, lower, upper, coverage, tick):
     else:
         return None
 
+
 class ImmunizationCampaign:
     """
     A component to update the immunity status of a population in a model via routine immunization.
     """
+
     def __init__(self, model, period, coverage, age_lower, age_upper, start=0, end=-1, verbose: bool = False) -> None:
         """
         Initialize an ImmunizationCampaign instance.
@@ -150,9 +151,9 @@ class ImmunizationCampaign:
         if (tick >= self.start) and ((tick - self.start) % self.period == 0) and (tick < self.end):
             # Immunize random agents
             immunize_nodeids = immunize_in_age_window(model, self.age_lower, self.age_upper, self.coverage, tick)
-            if (hasattr(model.patches, 'recovered_test')) and (immunize_nodeids is not None) and (len(immunize_nodeids) > 0):
-                np.add.at(model.patches.recovered_test, (tick+1, immunize_nodeids), 1)
-                np.add.at(model.patches.susceptibility_test, (tick+1, immunize_nodeids), -1)
+            if (hasattr(model.patches, "recovered_test")) and (immunize_nodeids is not None) and (len(immunize_nodeids) > 0):
+                np.add.at(model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
+                np.add.at(model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
         return
 
     def plot(self, fig: Figure = None):

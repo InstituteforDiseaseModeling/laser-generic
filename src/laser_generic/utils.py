@@ -21,8 +21,11 @@ Functions:
         Set the population susceptibility level at the start of the simulation in a specific patch.
 """
 
+from math import ceil
+
 import click
 import numpy as np
+from laser_core import PropertySet
 from laser_core.migration import distance
 
 
@@ -252,3 +255,33 @@ def add_at(A, indices, B):
     uniques, run_lengths = np.unique(indices[sorted_indices], return_counts=True)
     for i, length, end in zip(uniques, run_lengths, run_lengths.cumsum()):
         A[i] += B[sorted_indices[end - length : end]].sum(axis=0)
+
+
+def get_default_parameters() -> PropertySet:
+    """
+    Returns a default PropertySet with common parameters used across laser-generic models.
+
+    These values are chosen to be broadly reasonable for seasonal SIR-type models with importation.
+    """
+    nticks = 365 * 2
+    biweekly_steps = ceil(nticks / 14)
+    return PropertySet(
+        {
+            "nticks": nticks,
+            "beta": 0.15,
+            "biweekly_beta_scalar": [1.0] * biweekly_steps,
+            "cbr": 0.03,
+            "exp_shape": 2.0,
+            "exp_scale": 2.0,
+            "inf_mean": 4.0,
+            "inf_sigma": 1.0,
+            "seasonality_factor": 0.2,
+            "seasonality_phase": 0.0,
+            "importation_count": 1,
+            "importation_period": 30,
+            "importation_start": 0,
+            "importation_end": 365 * 2,
+            "seed": 123,
+            "verbose": False,
+        }
+    )
