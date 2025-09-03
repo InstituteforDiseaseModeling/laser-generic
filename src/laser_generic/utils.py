@@ -257,6 +257,9 @@ def add_at(A, indices, B):
         A[i] += B[sorted_indices[end - length : end]].sum(axis=0)
 
 
+def get_default_parameters() -> PropertySet:
+    """
+    Returns a default PropertySet with common parameters used across laser-generic models.
 
     Each parameter in the returned PropertySet is described below, along with its default value and rationale:
 
