@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# This script does an nbconvert on each ipynb file but just before that it has to remove
+# all the %%capture lines because this cause nbconvert to skip those cells and there's
+# no other nice way to convert those cells also.
 set -e  # exit on any error
 
 for notebook in notebooks/*.ipynb; do

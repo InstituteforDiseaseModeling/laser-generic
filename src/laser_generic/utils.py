@@ -262,6 +262,10 @@ def get_default_parameters() -> PropertySet:
     Returns a default PropertySet with common parameters used across laser-generic models.
 
     These values are chosen to be broadly reasonable for seasonal SIR-type models with importation.
+
+    We need a function like this because even-though laser-core requires no particular param name,
+    laser-generic code does presume certain parameters and there's no elegant way to just discover
+    what those are. So we put them here.
     """
     nticks = 365 * 2
     biweekly_steps = ceil(nticks / 14)
