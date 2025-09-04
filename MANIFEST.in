@@ -21,3 +21,6 @@ include README.rst
 
 recursive-exclude notebooks *.ipynb
 global-exclude *.py[cod] __pycache__/* *.so *.dylib
+
+exclude convert_clean.sh
+prune data

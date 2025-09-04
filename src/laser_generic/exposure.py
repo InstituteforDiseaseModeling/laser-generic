@@ -67,7 +67,7 @@ class Exposure:
         if tick == 0:
             population = model.population
             exposed_count = patches.exposed[tick, :]
-            #condition = population.state[0 : population.count] == 1  # Exposed
+            # condition = population.state[0 : population.count] == 1  # Exposed
             condition = population.etimer[0 : population.count] > 0
 
             if len(patches) == 1:
@@ -78,12 +78,12 @@ class Exposure:
                 )
             else:
                 nodeids = population.nodeid[0 : population.count]
-                #self.accumulate_exposed(exposed_count, condition, nodeids, population.count)
+                # self.accumulate_exposed(exposed_count, condition, nodeids, population.count)
                 np.add.at(exposed_count, nodeids[condition], np.uint32(1))
-        #if tick == 0:
+            # if tick == 0:
             patches.exposed_test[tick, :] = patches.exposed[tick, :].copy()
 
-        patches.exposed_test[tick+1, :] = patches.exposed_test[tick, :].copy()
+        patches.exposed_test[tick + 1, :] = patches.exposed_test[tick, :].copy()
         return
 
     def __call__(self, model, tick) -> None:
@@ -100,13 +100,21 @@ class Exposure:
             None
         """
         flow = np.zeros(len(model.patches), dtype=np.uint32)
-        Exposure.nb_exposure_update_test(model.population.count, model.population.etimer, model.population.itimer, model.population.state,
-                                    model.params.inf_mean, model.params.inf_sigma, flow, model.population.nodeid)
-        #Exposure.nb_exposure_update(model.population.count, model.population.etimer, model.population.itimer, model.population.state,
+        Exposure.nb_exposure_update_test(
+            model.population.count,
+            model.population.etimer,
+            model.population.itimer,
+            model.population.state,
+            model.params.inf_mean,
+            model.params.inf_sigma,
+            flow,
+            model.population.nodeid,
+        )
+        # Exposure.nb_exposure_update(model.population.count, model.population.etimer, model.population.itimer, model.population.state,
         #                            model.params.inf_mean, model.params.inf_sigma)
         # Update the exposed count in the patches
-        model.patches.exposed_test[tick+1, :] -= flow
-        model.patches.cases_test[tick+1, :] += flow
+        model.patches.exposed_test[tick + 1, :] -= flow
+        model.patches.cases_test[tick + 1, :] += flow
 
         return
 
@@ -118,7 +126,7 @@ class Exposure:
             etimer = etimers[i]
             if etimer > 0:
                 etimer -= 1
-                #if we have decremented etimer from >0 to <=0, set infectious timer.
+                # if we have decremented etimer from >0 to <=0, set infectious timer.
                 if etimer <= 0:
                     itimers[i] = np.maximum(np.uint16(1), np.uint16(np.ceil(np.random.normal(inf_mean, inf_sigma))))
                     state[i] = 2
@@ -127,7 +135,9 @@ class Exposure:
         return
 
     @staticmethod
-    @nb.njit((nb.uint32, nb.uint16[:], nb.uint16[:], nb.uint8[:], nb.float32, nb.float32, nb.uint32[:], nb.uint16[:]), parallel=True, cache=True)
+    @nb.njit(
+        (nb.uint32, nb.uint16[:], nb.uint16[:], nb.uint8[:], nb.float32, nb.float32, nb.uint32[:], nb.uint16[:]), parallel=True, cache=True
+    )
     def nb_exposure_update_test(count, etimers, itimers, state, inf_mean, inf_sigma, flow, nodeid):  # pragma: no cover
         """Numba compiled function to check and update exposed timers for the population in parallel."""
         max_node_id = np.max(nodeid) + 1

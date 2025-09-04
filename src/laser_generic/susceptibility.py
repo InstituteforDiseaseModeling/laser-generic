@@ -126,20 +126,24 @@ class Susceptibility:
         patches = model.patches
         if tick == 0:
             population = model.population
-            susceptible_count = patches.susceptibility[tick, :]  # we will accumulate current susceptibles into this view into the susceptibility array
-            condition = population.susceptibility[0 : population.count]>0
+            susceptible_count = patches.susceptibility[
+                tick, :
+            ]  # we will accumulate current susceptibles into this view into the susceptibility array
+            condition = population.susceptibility[0 : population.count] > 0
 
             if len(model.patches) == 1:
                 np.add(susceptible_count, np.count_nonzero(condition), out=susceptible_count)
             else:
                 nodeids = population.nodeid[0 : population.count]
-                #self.accumulate_susceptibility(susceptible_count, condition, nodeids, population.count)
-                np.add.at(susceptible_count, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
+                # self.accumulate_susceptibility(susceptible_count, condition, nodeids, population.count)
+                np.add.at(
+                    susceptible_count, nodeids[condition], np.uint32(1)
+                )  # increment by the number of active agents with non-zero itimer
 
-            #if tick == 0:
+            # if tick == 0:
             patches.susceptibility_test[tick, :] = patches.susceptibility[tick, :].copy()
 
-        patches.susceptibility_test[tick+1, :] = patches.susceptibility_test[tick, :].copy()
+        patches.susceptibility_test[tick + 1, :] = patches.susceptibility_test[tick, :].copy()
         return
 
     def on_birth(self, model, _tick, istart, iend):

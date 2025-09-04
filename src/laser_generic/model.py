@@ -105,10 +105,10 @@ class Model:
         # "activate" all the patches (count == capacity)
         self.patches.add(npatches)
         self.patches.add_vector_property("populations", length=parameters.nticks + 1)
-        self.patches.add_vector_property("cases_test", length=parameters.nticks+1, dtype=np.uint32)
-        self.patches.add_vector_property("exposed_test", length=parameters.nticks+1, dtype=np.uint32)
-        self.patches.add_vector_property("recovered_test", length=parameters.nticks+1, dtype=np.uint32)
-        self.patches.add_vector_property("susceptibility_test", length=parameters.nticks+1, dtype=np.uint32)
+        self.patches.add_vector_property("cases_test", length=parameters.nticks + 1, dtype=np.uint32)
+        self.patches.add_vector_property("exposed_test", length=parameters.nticks + 1, dtype=np.uint32)
+        self.patches.add_vector_property("recovered_test", length=parameters.nticks + 1, dtype=np.uint32)
+        self.patches.add_vector_property("susceptibility_test", length=parameters.nticks + 1, dtype=np.uint32)
         # set patch populations at t = 0 to initial populations
         self.patches.populations[0, :] = scenario.population
 

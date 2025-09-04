@@ -70,7 +70,7 @@ class Transmission:
             population = model.population
 
             contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
-            #condition = population.state[0:population.count] == 2  # just look at the active agent indices
+            # condition = population.state[0:population.count] == 2  # just look at the active agent indices
             if hasattr(population, "itimer"):
                 condition = population.itimer[0 : population.count] > 0  # just look at the active agent indices
             else:
@@ -83,7 +83,7 @@ class Transmission:
                 np.add.at(contagion, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
             patches.cases_test[tick, :] = patches.cases[tick, :].copy()
 
-        patches.cases_test[tick+1, :] = patches.cases_test[tick, :].copy()
+        patches.cases_test[tick + 1, :] = patches.cases_test[tick, :].copy()
         return
 
     def __call__(self, model, tick) -> None:
@@ -109,7 +109,7 @@ class Transmission:
         patches = model.patches
         population = model.population
 
-        #contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
+        # contagion = patches.cases[tick, :]  # we will accumulate current infections into this view into the cases array
         contagion = patches.cases_test[tick, :].copy().astype(np.float32)
         if hasattr(patches, "network"):
             network = patches.network
@@ -119,12 +119,10 @@ class Transmission:
 
         forces = patches.forces
         beta_effective = model.params.beta
-        if 'seasonality_factor' in model.params:
-            beta_effective *= (1+ model.params.seasonality_factor * np.sin(
-            2 * np.pi * (tick - model.params.seasonality_phase) / 365
-            ))
+        if "seasonality_factor" in model.params:
+            beta_effective *= 1 + model.params.seasonality_factor * np.sin(2 * np.pi * (tick - model.params.seasonality_phase) / 365)
         if hasattr(model.params, "biweekly_beta_scalar"):
-            beta_effective *= model.params.biweekly_beta_scalar[int(np.floor((tick % 365)/(14.0384615385)))]
+            beta_effective *= model.params.biweekly_beta_scalar[int(np.floor((tick % 365) / (14.0384615385)))]
 
         np.multiply(contagion, beta_effective, out=forces)
         np.divide(forces, model.patches.populations[tick, :], out=forces)  # per agent force of infection
@@ -177,17 +175,29 @@ class Transmission:
                 tick,
             )
         if hasattr(population, "etimer"):
-            model.patches.exposed_test[tick+1, :] += model.patches.incidence[tick, :]
-            model.patches.susceptibility_test[tick+1, :] -= model.patches.incidence[tick, :]
+            model.patches.exposed_test[tick + 1, :] += model.patches.incidence[tick, :]
+            model.patches.susceptibility_test[tick + 1, :] -= model.patches.incidence[tick, :]
         else:
-            model.patches.cases_test[tick+1, :] += model.patches.incidence[tick, :]
-            model.patches.susceptibility_test[tick+1, :] -= model.patches.incidence[tick, :]
+            model.patches.cases_test[tick + 1, :] += model.patches.incidence[tick, :]
+            model.patches.susceptibility_test[tick + 1, :] -= model.patches.incidence[tick, :]
 
         return
 
     @staticmethod
     @nb.njit(
-        (nb.uint8[:], nb.uint16[:], nb.uint8[:], nb.float32[:], nb.uint16[:], nb.uint32, nb.float32, nb.float32, nb.uint32[:], nb.uint32[:], nb.int_),
+        (
+            nb.uint8[:],
+            nb.uint16[:],
+            nb.uint8[:],
+            nb.float32[:],
+            nb.uint16[:],
+            nb.uint32,
+            nb.float32,
+            nb.float32,
+            nb.uint32[:],
+            nb.uint32[:],
+            nb.int_,
+        ),
         parallel=True,
         nogil=True,
         cache=True,
