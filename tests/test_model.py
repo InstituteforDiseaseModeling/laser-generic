@@ -3,16 +3,20 @@ import pandas as pd
 import pytest
 from laser_core import PropertySet
 
-from laser_generic import Births, Births_ConstantPop, Births_ConstantPop_VariableBirthRate
+from laser_generic import Births
+from laser_generic import Births_ConstantPop
+from laser_generic import Births_ConstantPop_VariableBirthRate
 from laser_generic import Exposure
+from laser_generic import ImmunizationCampaign
 from laser_generic import Model
 from laser_generic import RoutineImmunization
 from laser_generic import Susceptibility
-from laser_generic.transmission import Transmission
-from laser_generic.transmission import TransmissionSIR
-from laser_generic.importation import Infect_Random_Agents, Infect_Agents_In_Patch
+from laser_generic.importation import Infect_Agents_In_Patch
+from laser_generic.importation import Infect_Random_Agents
 from laser_generic.infection import Infection
 from laser_generic.infection import Infection_SIS
+from laser_generic.transmission import Transmission
+from laser_generic.transmission import TransmissionSIR
 from laser_generic.utils import get_default_parameters
 from laser_generic.utils import seed_infections_in_patch
 from laser_generic.utils import seed_infections_randomly
@@ -298,6 +302,7 @@ def test_biweekly_scalar_modulates_transmission():
 
     assert total2 < total1, "Reduced beta scalar should lower cumulative infections"
 
+
 @pytest.mark.modeltest
 def test_births_base_runs_minimally():
     """
@@ -307,10 +312,12 @@ def test_births_base_runs_minimally():
     pop = 1000
     nticks = 10
 
-    scenario = pd.DataFrame({
-        "name": ["home"],
-        "population": [pop],
-    })
+    scenario = pd.DataFrame(
+        {
+            "name": ["home"],
+            "population": [pop],
+        }
+    )
 
     params = get_default_parameters() | {
         "nticks": nticks,
@@ -337,19 +344,21 @@ def test_births_variable_birthrate_maintains_population():
     """
     pop = 10000
     nticks = 100
-    scenario = pd.DataFrame({
-        "name": ["home"],
-        "population": [pop],
-    })
+    scenario = pd.DataFrame(
+        {
+            "name": ["home"],
+            "population": [pop],
+        }
+    )
 
     params = get_default_parameters() | {
         "nticks": nticks,
         "seed": 123,
         "verbose": False,
         "cbr": {
-            "rates": [0.02],          # constant birth rate
-            "timesteps": [0],         # start at tick 0
-        }
+            "rates": [0.02],  # constant birth rate
+            "timesteps": [0],  # start at tick 0
+        },
     }
 
     model = Model(scenario, params)
@@ -365,6 +374,7 @@ def test_births_variable_birthrate_maintains_population():
 
     # Allow minor fluctuations
     assert pop_diff < pop * 0.01, f"Population drifted too far: {pop_diff}"
+
 
 @pytest.mark.modeltest
 def test_routine_immunization_blocks_spread_compare():
@@ -414,7 +424,6 @@ def test_routine_immunization_blocks_spread_compare():
 
     assert total_cases2 < total_cases1 * 0.5, "Routine immunization should reduce infections"
 
-from laser_generic import ImmunizationCampaign
 
 @pytest.mark.modeltest
 def test_immunization_campaign_temporarily_blocks_spread():
@@ -450,29 +459,21 @@ def test_immunization_campaign_temporarily_blocks_spread():
     model2 = Model(scenario, base_params)
     campaign = ImmunizationCampaign(
         model2,
-        period=1,                # Apply every day during campaign
+        period=1,  # Apply every day during campaign
         coverage=0.9,
         age_lower=0,
-        age_upper=365 * 5,       # Ages 0 to 5 years
+        age_upper=365 * 5,  # Ages 0 to 5 years
         start=100,
         end=120,
         verbose=base_params.verbose,
     )
-    model2.components = [
-        Births_ConstantPop,
-        Susceptibility,
-        Exposure,
-        Infection,
-        Transmission,
-        campaign
-    ]
+    model2.components = [Births_ConstantPop, Susceptibility, Exposure, Infection, Transmission, campaign]
     seed_infections_randomly_SI(model2, ninfections=10)
     model2.run()
     cases2 = model2.patches.cases_test[:, 0]
 
     # We expect fewer cases during the campaign period
     assert np.mean(cases2[100:121]) < np.mean(cases1[100:121]), "Campaign should reduce infections during its window"
-
 
 
 @pytest.mark.modeltest
@@ -513,7 +514,6 @@ def test_importation_keeps_infection_alive():
     assert final_I > 0, "Importation should maintain infections"
 
 
-
 @pytest.mark.modeltest
 def test_targeted_importation_hits_correct_patch():
     """
@@ -521,10 +521,12 @@ def test_targeted_importation_hits_correct_patch():
     """
     nticks = 365
     pop = 100_000
-    scenario = pd.DataFrame({
-        "name": ["patch0", "patch1"],
-        "population": [pop, pop],
-    })
+    scenario = pd.DataFrame(
+        {
+            "name": ["patch0", "patch1"],
+            "population": [pop, pop],
+        }
+    )
 
     params = get_default_parameters() | {
         "nticks": nticks,
@@ -542,14 +544,7 @@ def test_targeted_importation_hits_correct_patch():
 
     model = Model(scenario, params)
     importation = Infect_Agents_In_Patch(model, verbose=params.verbose)  # Inject into patch 1
-    model.components = [
-        Births_ConstantPop,
-        Susceptibility,
-        Exposure,
-        Infection,
-        Transmission,
-        importation
-    ]
+    model.components = [Births_ConstantPop, Susceptibility, Exposure, Infection, Transmission, importation]
     seed_infections_in_patch(model, ipatch=1, ninfections=1)
     model.run()
 
@@ -559,7 +554,6 @@ def test_targeted_importation_hits_correct_patch():
     assert np.sum(cases_patch1) > 0, "Patch 1 should receive infections"
     assert np.sum(cases_patch0) == 0, "Patch 0 should remain uninfected"
 
-    
 
 @pytest.mark.modeltest
 def test_transmission_sir_behaves_like_transmission():
