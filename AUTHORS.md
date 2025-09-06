@@ -1,6 +1,4 @@
-
-Authors
-=======
+# Authors
 
 * Christopher Lorton - https://www.idmod.org
 * Jonathan Bloedow - https://www.idmod.org
