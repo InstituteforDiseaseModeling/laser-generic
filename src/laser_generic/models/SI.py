@@ -1,10 +1,16 @@
 """Components for the SI model."""
 
 import geopandas as gpd
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 from laser_core import LaserFrame
 from laser_core import PropertySet
+from laser_core.migration import distance
+from laser_core.migration import gravity
+from laser_core.migration import row_normalizer
+from shapely.geometry import Polygon
+from tqdm import tqdm
 
 
 def validate(pre, post):
@@ -36,12 +42,12 @@ class Susceptible:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        if self.model.validating:
+        if self.model.validating and tick < 10:
             print(f"Pre-validating Susceptible.step() at tick {tick}")
         # ...
 
     def postvalidate_step(self, tick: int) -> None:
-        if self.model.validating:
+        if self.model.validating and tick < 10:
             print(f"Post-validating Susceptible.step() at tick {tick}")
         # ...
 
@@ -131,12 +137,12 @@ class Infected:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        if self.model.validating:
+        if self.model.validating and tick < 10:
             print(f"Pre-validating Infected.step() at tick {tick}")
         # ...
 
     def postvalidate_step(self, tick: int) -> None:
-        if self.model.validating:
+        if self.model.validating and tick < 10:
             print(f"Post-validating Infected.step() at tick {tick}")
         # ...
 
@@ -164,8 +170,50 @@ class Infected:
         return
 
 
-def grid():
-    return
+def grid(M=5, N=5, grid_size=10_000, population=None):
+    """
+    Create an MxN grid of cells anchored at (0, 0) with populations and geometries.
+
+    Args:
+        M (int): Number of rows (north-south).
+        N (int): Number of columns (east-west).
+        grid_size (float): Size of each cell in meters.
+        population (callable): Function returning population for a cell.
+
+    Returns:
+        GeoDataFrame: Columns are nodeid, population, geometry.
+    """
+    if population is None:
+
+        def population():
+            return int(np.random.uniform(1000, 100000))
+
+    # Convert grid_size from meters to degrees (approximate)
+    meters_per_degree = 111_320
+    grid_size_deg = grid_size / meters_per_degree
+
+    cells = []
+    nodeid = 0
+    for i in range(M):
+        for j in range(N):
+            x0 = j * grid_size_deg
+            y0 = i * grid_size_deg
+            x1 = x0 + grid_size_deg
+            y1 = y0 + grid_size_deg
+            poly = Polygon(
+                [
+                    (x0, y0),  # NW
+                    (x1, y0),  # NE
+                    (x1, y1),  # SE
+                    (x0, y1),  # SW
+                    (x0, y0),  # Close polygon
+                ]
+            )
+            cells.append({"nodeid": nodeid, "population": population(), "geometry": poly})
+            nodeid += 1
+
+    gdf = gpd.GeoDataFrame(cells, columns=["nodeid", "population", "geometry"], crs="EPSG:4326")
+    return gdf
 
 
 if __name__ == "__main__":
@@ -184,24 +232,36 @@ if __name__ == "__main__":
             self.scenario = scenario
             self.validating = True
 
-            self.network = np.array(
-                [
-                    [0.0, 0.1, 0.0],
-                    [0.1, 0.0, 0.1],
-                    [0.0, 0.1, 0.0],
-                ],
-                dtype=np.float32,
-            )
+            self.scenario["x"] = self.scenario.geometry.centroid.x
+            self.scenario["y"] = self.scenario.geometry.centroid.y
+            # Calculate pairwise distances between nodes using centroids
+            longs = self.scenario["x"].values
+            lats = self.scenario["y"].values
+            population = self.scenario["population"].values
+
+            # Compute distance matrix
+            dist_matrix = distance(lats, longs, lats, longs)
+
+            # Compute gravity network matrix
+            self.network = gravity(population, dist_matrix, k=100, a=1, b=1, c=2)
+            self.network = row_normalizer(self.network, (1 / 16) + (1 / 32))
+
+            # self.network = np.array(
+            #     [
+            #         [0.0, 0.1, 0.0],
+            #         [0.1, 0.0, 0.1],
+            #         [0.0, 0.1, 0.0],
+            #     ],
+            #     dtype=np.float32,
+            # )
 
             self._components = []
 
             return
 
         def run(self):
-            for tick in range(1, self.params.nticks + 1):
-                print(f"Tick {tick}")
+            for tick in tqdm(range(1, self.params.nticks + 1), desc="Running Simulation"):
                 for c in self.components:
-                    print(f"  Component: {c.__class__.__name__}")
                     c.step(tick)
 
             return
@@ -219,28 +279,41 @@ if __name__ == "__main__":
         def _plot(self):
             if "geometry" in self.scenario.columns:
                 gdf = gpd.GeoDataFrame(self.scenario, geometry="geometry")
-                gdf.boundary.plot(color="black", linewidth=1)
-                plt.title("Node Boundaries")
+
+                pop = gdf["population"].values
+                norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
+                saturations = 0.1 + 0.9 * norm(pop)
+                colors = [mcolors.to_rgba("blue", alpha=sat) for sat in saturations]
+
+                ax = gdf.plot(facecolor=colors, edgecolor="black", linewidth=1)
+                sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
+                sm.set_array([])
+                cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+                cbar.set_label("Population")
+                # gdf.boundary.plot(color="black", linewidth=1)
+                plt.title("Node Boundaries and Populations")
                 plt.show()
             else:
                 return
 
         def plot(self):
+            self._plot()
             for c in self.components:
                 if hasattr(c, "plot") and callable(c.plot):
                     c.plot()
 
             return
 
-    import pandas as pd
-
-    # nodeid, population, initial S, initial I
-    data = [
-        (0, 100, 90, 10),
-        (1, 150, 130, 20),
-        (2, 200, 175, 25),
-    ]
-    scenario = pd.DataFrame(data, columns=["nodeid", "population", "S", "I"])
+    # # nodeid, population, initial S, initial I
+    # data = [
+    #     (0, 100, 90, 10),
+    #     (1, 150, 130, 20),
+    #     (2, 200, 175, 25),
+    # ]
+    # scenario = pd.DataFrame(data, columns=["nodeid", "population", "S", "I"])
+    scenario = grid(M=10, N=10, grid_size=10_000)
+    scenario["S"] = scenario["population"] - 10
+    scenario["I"] = 10
 
     model = Model(scenario)
     s = Susceptible(model)
