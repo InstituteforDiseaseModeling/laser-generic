@@ -3,6 +3,7 @@
 import geopandas as gpd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import mplcursors
 import numpy as np
 from laser_core import LaserFrame
 from laser_core import PropertySet
@@ -43,13 +44,11 @@ class Susceptible:
 
     def prevalidate_step(self, tick: int) -> None:
         if self.model.validating and tick < 10:
-            print(f"Pre-validating Susceptible.step() at tick {tick}")
-        # ...
+            ...
 
     def postvalidate_step(self, tick: int) -> None:
         if self.model.validating and tick < 10:
-            print(f"Post-validating Susceptible.step() at tick {tick}")
-        # ...
+            ...
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
@@ -138,13 +137,11 @@ class Infected:
 
     def prevalidate_step(self, tick: int) -> None:
         if self.model.validating and tick < 10:
-            print(f"Pre-validating Infected.step() at tick {tick}")
-        # ...
+            ...
 
     def postvalidate_step(self, tick: int) -> None:
         if self.model.validating and tick < 10:
-            print(f"Post-validating Infected.step() at tick {tick}")
-        # ...
+            ...
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
@@ -220,7 +217,8 @@ if __name__ == "__main__":
 
     class Model:
         def __init__(self, scenario):
-            self.params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
+            # self.params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
+            self.params = PropertySet({"nticks": 31, "beta": 1.0 / 32})
 
             num_agents = scenario.population.sum()
             num_patches = max(np.unique(scenario.nodeid)) + 1
@@ -290,8 +288,18 @@ if __name__ == "__main__":
                 sm.set_array([])
                 cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
                 cbar.set_label("Population")
-                # gdf.boundary.plot(color="black", linewidth=1)
                 plt.title("Node Boundaries and Populations")
+
+                # Add interactive hover to display population
+                cursor = mplcursors.cursor(ax.collections[0], hover=True)
+
+                @cursor.connect("add")
+                def on_add(sel):
+                    # sel.index is a tuple; sel.index[0] is the nodeid (row index in gdf)
+                    nodeid = sel.index[0]
+                    pop_val = gdf.iloc[nodeid]["population"]
+                    sel.annotation.set_text(f"Population: {pop_val}")
+
                 plt.show()
             else:
                 return
