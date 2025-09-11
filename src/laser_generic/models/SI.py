@@ -1,5 +1,6 @@
 """Components for the SI model."""
 
+import contextily as ctx
 import geopandas as gpd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -213,6 +214,73 @@ def grid(M=5, N=5, grid_size=10_000, population=None):
     return gdf
 
 
+class RateMap:
+    def __init__(self, npatches: int, nsteps: int):
+        self.npatches = npatches
+        self.nsteps = nsteps
+
+        return
+
+    @staticmethod
+    def from_scalar(scalar: float, npatches: int, nsteps: int) -> "RateMap":
+        assert scalar >= 0.0, "scalar must be non-negative"
+        assert npatches > 0, "npatches must be greater than 0"
+        assert nsteps > 0, "nsteps must be greater than 0"
+        instance = RateMap(npatches=npatches, nsteps=nsteps)
+        tmp = np.array([[scalar]], dtype=np.float32)
+        instance._data = np.broadcast_to(tmp, (nsteps, npatches))
+
+        return instance
+
+    @staticmethod
+    def from_timeseries(data: np.ndarray, npatches: int) -> "RateMap":
+        assert all(data >= 0.0), "data must be non-negative"
+        assert len(data.shape) == 1, "data must be a 1D array"
+        assert data.shape[0] > 0, "data must have at least one element"
+        assert npatches > 0, "npatches must be greater than 0"
+        nsteps = data.shape[0]
+        instance = RateMap(npatches=npatches, nsteps=nsteps)
+        instance._data = np.broadcast_to(data[:, None], (nsteps, npatches))
+
+        return instance
+
+    @staticmethod
+    def from_patches(data: np.ndarray, nsteps: int) -> "RateMap":
+        assert all(data >= 0.0), "data must be non-negative"
+        assert len(data.shape) == 1, "data must be a 1D array"
+        assert data.shape[0] > 0, "data must have at least one element"
+        assert nsteps > 0, "nsteps must be greater than 0"
+        npatches = data.shape[0]
+        instance = RateMap(npatches=npatches, nsteps=nsteps)
+        instance._data = np.broadcast_to(data[None, :], (nsteps, npatches))
+
+        return instance
+
+    @staticmethod
+    def from_array(data: np.ndarray) -> "RateMap":
+        assert all(data >= 0.0), "data must be non-negative"
+        assert len(data.shape) == 2, "data must be a 2D array"
+        assert data.shape[0] > 0, "data must have at least one row"
+        assert data.shape[1] > 0, "data must have at least one column"
+        nsteps, npatches = data.shape
+        instance = RateMap(npatches=npatches, nsteps=nsteps)
+        instance._data = data.astype(np.float32)
+
+        return instance
+
+    @property
+    def rates(self):
+        return self._data
+
+    @property
+    def npatches(self):
+        return self._npatches
+
+    @property
+    def nsteps(self):
+        return self._nsteps
+
+
 if __name__ == "__main__":
 
     class Model:
@@ -230,8 +298,14 @@ if __name__ == "__main__":
             self.scenario = scenario
             self.validating = True
 
-            self.scenario["x"] = self.scenario.geometry.centroid.x
-            self.scenario["y"] = self.scenario.geometry.centroid.y
+            # Project to EPSG:3857, calculate centroids, then convert back to degrees
+            gdf_proj = self.scenario.to_crs(epsg=3857)
+            centroids_proj = gdf_proj.geometry.centroid
+            centroids_deg = centroids_proj.to_crs(epsg=4326)
+
+            self.scenario["x"] = centroids_deg.x
+            self.scenario["y"] = centroids_deg.y
+
             # Calculate pairwise distances between nodes using centroids
             longs = self.scenario["x"].values
             lats = self.scenario["y"].values
@@ -244,14 +318,7 @@ if __name__ == "__main__":
             self.network = gravity(population, dist_matrix, k=100, a=1, b=1, c=2)
             self.network = row_normalizer(self.network, (1 / 16) + (1 / 32))
 
-            # self.network = np.array(
-            #     [
-            #         [0.0, 0.1, 0.0],
-            #         [0.1, 0.0, 0.1],
-            #         [0.0, 0.1, 0.0],
-            #     ],
-            #     dtype=np.float32,
-            # )
+            self.basemap_provider = ctx.providers.Esri.WorldImagery
 
             self._components = []
 
@@ -274,7 +341,7 @@ if __name__ == "__main__":
 
             return
 
-        def _plot(self):
+        def _plot(self, basemap_provider=ctx.providers.Esri.WorldImagery):
             if "geometry" in self.scenario.columns:
                 gdf = gpd.GeoDataFrame(self.scenario, geometry="geometry")
 
@@ -283,7 +350,13 @@ if __name__ == "__main__":
                 saturations = 0.1 + 0.9 * norm(pop)
                 colors = [mcolors.to_rgba("blue", alpha=sat) for sat in saturations]
 
-                ax = gdf.plot(facecolor=colors, edgecolor="black", linewidth=1)
+                # Project to Web Mercator for basemap compatibility
+                gdf_merc = gdf.to_crs(epsg=3857)
+                ax = gdf_merc.plot(facecolor=colors, edgecolor="black", linewidth=1, alpha=0.5)
+
+                # Add basemap if provider specified
+                if basemap_provider:
+                    ctx.add_basemap(ax, source=basemap_provider)
                 sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
                 sm.set_array([])
                 cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
@@ -305,20 +378,14 @@ if __name__ == "__main__":
                 return
 
         def plot(self):
-            self._plot()
+            # Pass basemap_provider argument to _plot if provided
+            self._plot(getattr(self, "basemap_provider", None))
             for c in self.components:
                 if hasattr(c, "plot") and callable(c.plot):
                     c.plot()
 
             return
 
-    # # nodeid, population, initial S, initial I
-    # data = [
-    #     (0, 100, 90, 10),
-    #     (1, 150, 130, 20),
-    #     (2, 200, 175, 25),
-    # ]
-    # scenario = pd.DataFrame(data, columns=["nodeid", "population", "S", "I"])
     scenario = grid(M=10, N=10, grid_size=10_000)
     scenario["S"] = scenario["population"] - 10
     scenario["I"] = 10
@@ -334,3 +401,24 @@ if __name__ == "__main__":
     model.plot()
 
     print("done")
+
+"""
+OpenStreetMap
+ - ctx.providers.OpenStreetMap.Mapnik (default OSM map)
+ - ctx.providers.OpenStreetMap.HOT
+ - ctx.providers.OpenStreetMap.BlackAndWhite
+Stamen
+ - ctx.providers.Stamen.Terrain
+ - ctx.providers.Stamen.Toner
+ - ctx.providers.Stamen.Watercolor
+CartoDB
+ - ctx.providers.CartoDB.Positron (light)
+ - ctx.providers.CartoDB.DarkMatter (dark)
+Esri
+ - ctx.providers.Esri.WorldStreetMap
+ - ctx.providers.Esri.WorldImagery (satellite)
+ - ctx.providers.Esri.WorldTopoMap
+Other
+ - ctx.providers.NASAGIBS.ModisTerraTrueColorCR (NASA satellite imagery)
+ - ctx.providers.GeoportailFrance.orthos (France aerial imagery)
+"""
