@@ -47,7 +47,9 @@ dependencies = [
   "pandas",
   "numpy",
   "scipy",
-  "scikit-learn"
+  "scikit-learn",
+  "mplcursors>=0.7",
+  "contextily>=1.6.2",
 ]
 
 [project.optional-dependencies]
