@@ -216,8 +216,8 @@ def grid(M=5, N=5, grid_size=10_000, population=None):
 
 class RateMap:
     def __init__(self, npatches: int, nsteps: int):
-        self.npatches = npatches
-        self.nsteps = nsteps
+        self._npatches = npatches
+        self._nsteps = nsteps
 
         return
 
@@ -257,7 +257,7 @@ class RateMap:
         return instance
 
     @staticmethod
-    def from_array(data: np.ndarray) -> "RateMap":
+    def from_array(data: np.ndarray, writeable: bool = False) -> "RateMap":
         assert all(data >= 0.0), "data must be non-negative"
         assert len(data.shape) == 2, "data must be a 2D array"
         assert data.shape[0] > 0, "data must have at least one row"
@@ -265,6 +265,7 @@ class RateMap:
         nsteps, npatches = data.shape
         instance = RateMap(npatches=npatches, nsteps=nsteps)
         instance._data = data.astype(np.float32)
+        instance._data.flags.writeable = writeable
 
         return instance
 
