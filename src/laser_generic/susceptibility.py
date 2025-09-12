@@ -3,17 +3,13 @@ This module defines the Susceptibility class and associated functions for managi
 the susceptibility of a population.
 
 Classes:
-
     Susceptibility: Manages the susceptibility property of a population and provides methods for
                     updating and plotting susceptibility data.
-
     Susceptibility_SI: Manages the susceptibility property of a population for the SI model.
 
 Functions:
-
     nb_initialize_susceptibility(count, dob, susceptibility):
         Initializes the susceptibility of individuals in the population.
-
     nb_set_susceptibility(istart, iend, susceptibility, value):
         Sets the susceptibility of a range of individuals in the population to a specified value.
 """
@@ -33,19 +29,13 @@ class Susceptibility:
         Initialize the susceptibility component of the model.
 
         Parameters:
-
             model : object
-
                 The model object that contains the population data.
-
             verbose : bool, optional
-
                 If True, enables verbose output (default is False).
 
         Attributes:
-
             model : object
-
                 The model object passed to the initializer.
 
         The method also adds a scalar property "susceptibility" to the model's population
@@ -155,14 +145,12 @@ class Susceptibility:
         to the disease.
 
         Parameters:
-
             model (object): The model object containing the population data.
             tick (int): The current tick or time step in the simulation.
             istart (int): The starting index of the newborns in the population array.
             iend (int): The ending index of the newborns in the population array.
 
         Returns:
-
             None
         """
 
@@ -180,11 +168,9 @@ class Susceptibility:
         Plots the susceptibility distribution by age.
 
         Parameters:
-
             fig (Figure, optional): A Matplotlib Figure object. If None, a new figure is created with a size of 12x9 inches and a DPI of 128.
 
         Yields:
-
             None: This function uses a generator to yield control back to the caller.
         """
 

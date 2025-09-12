@@ -41,16 +41,13 @@ class Infection:
         Initialize an Infection instance.
 
         Args:
-
             model: The model object that contains the population.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
-
             model: The model object that contains the population.
 
         Side Effects:
-
             Adds a scalar property "itimer" to the model's population with dtype np.uint16 and default value 0.
             Calls the nb_set_itimers method to initialize the itimer values for the population.
         """
@@ -99,12 +96,10 @@ class Infection:
         Updates the infection timers for the population in the model.
 
         Args:
-
             model: The model containing the population data.
             tick: The current tick or time step in the simulation.
 
         Returns:
-
             None
         """
         flow = np.zeros(len(model.patches), dtype=np.uint32)
@@ -170,14 +165,12 @@ class Infection:
         This function sets the infection timer for newborns to zero, indicating that they are not infectious.
 
         Args:
-
             model: The simulation model containing the population data.
             tick: The current tick or time step in the simulation (unused in this function).
             istart: The starting index of the newborns in the population array.
             iend: The ending index of the newborns in the population array.
 
         Returns:
-
             None
         """
 
@@ -215,11 +208,9 @@ class Infection:
         and overlays a bar chart showing the number of infected individuals in each age group.
 
         Parameters:
-
             fig (Figure, optional): A Matplotlib Figure object to plot on. If None, a new figure is created.
 
         Yields:
-
             None: This function uses a generator to yield control back to the caller.
         """
 
@@ -248,16 +239,13 @@ class Infection_SIS:
         Initialize an Infection instance.
 
         Args:
-
             model: The model object that contains the population.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
-
             model: The model object that contains the population.
 
         Side Effects:
-
             Adds a scalar property "itimer" to the model's population with dtype np.uint16 and default value 0.
             Calls the nb_set_itimers method to initialize the itimer values for the population.
         """
@@ -274,12 +262,10 @@ class Infection_SIS:
         Updates the infection timers for the population in the model.
 
         Args:
-
             model: The model containing the population data.
             tick: The current tick or time step in the simulation.
 
         Returns:
-
             None
         """
 
@@ -305,14 +291,12 @@ class Infection_SIS:
         This function sets the infection timer for newborns to zero, indicating that they are not infectious.
 
         Args:
-
             model: The simulation model containing the population data.
             tick: The current tick or time step in the simulation (unused in this function).
             istart: The starting index of the newborns in the population array.
             iend: The ending index of the newborns in the population array.
 
         Returns:
-
             None
         """
 
@@ -338,11 +322,9 @@ class Infection_SIS:
         and overlays a bar chart showing the number of infected individuals in each age group.
 
         Parameters:
-
             fig (Figure, optional): A Matplotlib Figure object to plot on. If None, a new figure is created.
 
         Yields:
-
             None: This function uses a generator to yield control back to the caller.
         """
 

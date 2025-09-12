@@ -1,5 +1,5 @@
 site_name: LASER-generic # update to your project name
-site_url: https://docs.idmod.org/laser-generic # update to your project URL 
+site_url: https://institutefordiseasemodeling.github.io/laser-generic # update to your project URL 
 repo_name: InstituteforDiseaseModeling/laser-generic # update to your repo name
 repo_url: https://github.com/InstituteforDiseaseModeling/laser-generic # update to your repo URL
 theme:
@@ -31,11 +31,11 @@ theme:
       accent: light blue
 
 nav: # Navigation structure for the documentation
-  - Home: index.md # the rest of the nav illustrates a typical doc structure
+  - index.md 
   - What's New: whatsnew.md 
-  - Get Started: get-started.md # including the topic title is optional
+  - Get Started: get-started.md 
   - Tutorials: # this creates a section in the TOC
-    - Overview: notebooks/index.md # parent topics for sections must be an index.md file
+    - notebooks/index.md # parent topics for sections must be an index.md file
     - SI Model with No Demographics: notebooks/01_SI_nobirths_logistic_growth.ipynb # parent topics for sections must be an index.md file
     - SI Model with Constant Population Demographics: notebooks/02_SI_wbirths_logistic_growth.ipynb
     - SIS Model with No Demographics: notebooks/03_SIS_nobirths_logistic_growth.ipynb
@@ -44,9 +44,8 @@ nav: # Navigation structure for the documentation
     - Intrinsic Periodicity of the SIR System: notebooks/06_SIR_wbirths_natural_periodicity.ipynb
     - Exploring the Critical Community Size of an SIR Model: notebooks/07_SIR_CCS.ipynb
     - The Relationship Between Spatial Coupling and Incidence Correlation in a 2-Patch Model: notebooks/08_2patch_SIR_wbirths_correlation.ipynb
-  - Glossary: glossary.md # single page
+  - Glossary: glossary.md 
   - Contributing: contribute.md
-
 
 # icons, semantic markup, emojis 
 markdown_extensions:
@@ -113,7 +112,7 @@ extra:
     - href: "https://www.gatesfoundation.org/Terms-of-Use"
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/InstituteforDiseaseModeling/modeling-hub # update to your repo
+      link: https://github.com/InstituteforDiseaseModeling/laser-generic # update to your repo
     - icon: fontawesome/regular/envelope
       link: mailto:idm@gatesfoundation.org
     - icon: octicons/globe-24

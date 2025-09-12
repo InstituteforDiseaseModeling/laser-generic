@@ -4,8 +4,6 @@
 
 ## Learn more 
 
-One visually appealing way to present the high-level sections of the documentation is to include [grid cards](https://squidfunk.github.io/mkdocs-material/reference/grids/). There are many different icons available and the cards can be combined with other MkDocs formatting, such as content tabs, code blocks, or lists. This is an illustrative example; you may add or remove grid cards to best meet the needs of your documentation set. 
-
 <div class="grid cards" markdown>
 
 -   :simple-jupyter:{ .lg .middle } __Tutorials__
@@ -20,7 +18,7 @@ One visually appealing way to present the high-level sections of the documentati
 
     ---
 
-    Full details on all classes and functions. Update the path with the package name.
+    Full details on all classes and functions.
 
     [:octicons-arrow-right-24: API reference](autoapi/laser_generic/index.md)
 

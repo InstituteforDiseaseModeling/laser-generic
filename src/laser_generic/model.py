@@ -5,43 +5,45 @@ with options for simple demographics (births, deaths, aging) and single or multi
 Classes:
     Model: A general class from which to define specific types of simulation models.
 
-Imports:
-    - datetime: For handling date and time operations.
-    - click: For command-line interface utilities.
-    - numpy as np: For numerical operations.
-    - pandas as pd: For data manipulation and analysis.
-    - laser_core.demographics: For demographic data handling.
-    - laser_core.laserframe: For handling laser frame data structures.
-    - laser_core.migration: For migration modeling.
-    - laser_core.propertyset: For handling property sets.
-    - laser_core.random: For random number generation.
-    - matplotlib.pyplot as plt: For plotting.
-    - matplotlib.backends.backend_pdf: For PDF generation.
-    - matplotlib.figure: For figure handling.
-    - tqdm: For progress bar visualization.
+**Imports:**
 
-Model Class:
-    Methods:
-        __init__(self, scenario: pd.DataFrame, parameters: PropertySet, name: str) -> None:
-            Initializes the model with the given scenario and parameters.
+- datetime: For handling date and time operations.
+- click: For command-line interface utilities.
+- numpy as np: For numerical operations.
+- pandas as pd: For data manipulation and analysis.
+- laser_core.demographics: For demographic data handling.
+- laser_core.laserframe: For handling laser frame data structures.
+- laser_core.migration: For migration modeling.
+- laser_core.propertyset: For handling property sets.
+- laser_core.random: For random number generation.
+- matplotlib.pyplot as plt: For plotting.
+- matplotlib.backends.backend_pdf: For PDF generation.
+- matplotlib.figure: For figure handling.
+- tqdm: For progress bar visualization.
 
-        components(self) -> list:
-            Gets the list of components in the model.
+**Model Class:**
 
-        components(self, components: list) -> None:
-            Sets the list of components in the model and initializes instances and phases.
+Methods:
+    __init__(self, scenario: pd.DataFrame, parameters: PropertySet, name: str) -> None:
+        Initializes the model with the given scenario and parameters.
 
-        __call__(self, model, tick: int) -> None:
-            Updates the model for a given tick.
+    components(self) -> list:
+        Gets the list of components in the model.
 
-        run(self) -> None:
-            Runs the model for the specified number of ticks.
+    components(self, components: list) -> None:
+        Sets the list of components in the model and initializes instances and phases.
 
-        visualize(self, pdf: bool = True) -> None:
-            Generates visualizations of the model's results, either displaying them or saving to a PDF.
+    __call__(self, model, tick: int) -> None:
+        Updates the model for a given tick.
 
-        plot(self, fig: Figure = None):
-            Generates plots for the scenario patches and populations, distribution of day of birth, and update phase times.
+    run(self) -> None:
+        Runs the model for the specified number of ticks.
+
+    visualize(self, pdf: bool = True) -> None:
+        Generates visualizations of the model's results, either displaying them or saving to a PDF.
+
+    plot(self, fig: Figure = None):
+        Generates plots for the scenario patches and populations, distribution of day of birth, and update phase times.
 """
 
 from datetime import datetime
@@ -71,13 +73,11 @@ class Model:
         Initialize the disease model with the given scenario and parameters.
 
         Args:
-
             scenario (pd.DataFrame): A DataFrame containing the metapopulation patch data, including population, latitude, and longitude.
             parameters (PropertySet): A set of parameters for the model and simulations.
             name (str, optional): The name of the model. Defaults to "generic".
 
         Returns:
-
             None
         """
 
@@ -177,7 +177,6 @@ class Model:
         Retrieve the list of model components.
 
         Returns:
-
             list: A list containing the components.
         """
 
@@ -192,11 +191,9 @@ class Model:
         It also registers any components with an `on_birth` function with the `Births` component.
 
         Args:
-
             components (list): A list of component classes to be initialized and integrated into the model.
 
         Returns:
-
             None
         """
 
@@ -226,12 +223,10 @@ class Model:
         Mortality component.
 
         Args:
-
             model: The model containing the patches and their populations.
             tick (int): The current time step or tick.
 
         Returns:
-
             None
         """
 
@@ -249,13 +244,11 @@ class Model:
         if verbose mode is enabled, prints a summary of the timing metrics.
 
         Attributes:
-
             tstart (datetime): The start time of the model execution.
             tfinish (datetime): The finish time of the model execution.
             metrics (list): A list of timing metrics for each tick and phase.
 
         Returns:
-
             None
         """
 
@@ -302,11 +295,9 @@ class Model:
         Visualize each compoonent instances either by displaying plots or saving them to a PDF file.
 
         Parameters:
-
             pdf (bool): If True, save the plots to a PDF file. If False, display the plots interactively. Default is True.
 
         Returns:
-
             None
         """
 
@@ -333,18 +324,16 @@ class Model:
         Plots various visualizations related to the scenario and population data.
 
         Parameters:
-
             fig (Figure, optional): A matplotlib Figure object to use for plotting. If None, a new figure will be created.
 
         Yields:
-
             None: This function uses a generator to yield control back to the caller after each plot is created.
 
         The function generates three plots:
 
-            1. A scatter plot of the scenario patches and populations.
-            2. A histogram of the distribution of the day of birth for the initial population.
-            3. A pie chart showing the distribution of update phase times.
+        1. A scatter plot of the scenario patches and populations.
+        2. A histogram of the distribution of the day of birth for the initial population.
+        3. A pie chart showing the distribution of update phase times.
         """
 
         _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig

@@ -32,7 +32,6 @@ class Infect_Random_Agents:
         Initialize an Infect_Random_Agents instance.
 
         Args:
-
             model: The model object that contains the population.
             period: The number of ticks between each infection event.
             count: The number of agents to infect at each event.
@@ -40,7 +39,6 @@ class Infect_Random_Agents:
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
-
             model: The model object that contains the population.
 
         Side Effects:
@@ -64,12 +62,10 @@ class Infect_Random_Agents:
         Updates the infection timers for the population in the model.
 
         Args:
-
             model: The model containing the population data.
             tick: The current tick or time step in the simulation.
 
         Returns:
-
             None
         """
         # KM: something about this importation function is so slow I can see the timer slow down when running in a notebook.  Need to
@@ -104,7 +100,6 @@ class Infect_Agents_In_Patch:
         Initialize an Infect_Random_Agents instance.
 
         Args:
-
             model: The model object that contains the population.
             period: The number of ticks between each infection event.
             count: The number of agents to infect at each event.
@@ -112,7 +107,6 @@ class Infect_Agents_In_Patch:
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
-
             model: The model object that contains the population.
 
         Side Effects:
@@ -136,12 +130,10 @@ class Infect_Agents_In_Patch:
         Updates the infection timers for the population in the model.
 
         Args:
-
             model: The model containing the population data.
             tick: The current tick or time step in the simulation.
 
         Returns:
-
             None
         """
         if (tick >= self.start) and ((tick - self.start) % self.period == 0) and (tick < self.end):

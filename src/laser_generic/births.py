@@ -2,13 +2,10 @@
 This module defines the Births component, which is responsible for simulating births in a population model.
 
 Classes:
-
     Births:
-
         Manages the birth process within a population model, including initializing births, updating population data, and plotting birth statistics.
 
 Usage:
-
     The Births component requires a model with a `population` attribute that has a `dob` attribute.
     It calculates the number of births based on the model's parameters and updates the population
     accordingly. It also provides methods to plot birth statistics.
@@ -21,7 +18,6 @@ Example:
     births.plot()
 
 Attributes:
-
     model (object): The population model.
     _initializers (list): List of initializers to be called on birth.
     _metrics (list): List to store timing metrics for initializers.
@@ -40,7 +36,6 @@ class Births:
     A component to handle the birth events in a model.
 
     Attributes:
-
         model: The model instance containing population and parameters.
         verbose (bool): Flag to enable verbose output. Default is False.
         initializers (list): List of initializers to be called on birth events.
@@ -52,12 +47,10 @@ class Births:
         Initialize the Births component.
 
         Parameters:
-
             model (object): The model object which must have a `population` attribute.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Raises:
-
             AssertionError: If the model does not have a `population` attribute.
             AssertionError: If the model's population does not have a `dob` attribute.
         """
@@ -84,7 +77,6 @@ class Births:
         initial state or configuration for agents at birth.
 
         Returns:
-
             list: A list of initializers - instances of objects with an `on_birth` method.
         """
 
@@ -98,7 +90,6 @@ class Births:
         This method retrieves the timing metrics for the births initializers.
 
         Returns:
-
             DataFrame: A Pandas DataFrame of timing metrics for the births initializers.
         """
 
@@ -109,23 +100,21 @@ class Births:
         Adds new agents to each patch based on expected daily births calculated from CBR. Calls each of the registered initializers for the newborns.
 
         Args:
-
             model: The simulation model containing patches, population, and parameters.
             tick: The current time step in the simulation.
 
         Returns:
-
             None
 
-        This method performs the following steps:
+        This method performs the following steps
 
-            1. Calculates the day of the year (doy) and the current year based on the tick.
-            2. On the first day of the year, it generates annual births for each patch using a Poisson distribution.
-            3. Calculates the number of births for the current day.
-            4. Adds the newborns to the population and sets their date of birth.
-            5. Assigns node IDs to the newborns.
-            6. Calls any additional initializers for the newborns and records the timing of these initializations.
-            7. Updates the population counts for the next tick with the new births.
+        1. Calculates the day of the year (doy) and the current year based on the tick.
+        2. On the first day of the year, it generates annual births for each patch using a Poisson distribution.
+        3. Calculates the number of births for the current day.
+        4. Adds the newborns to the population and sets their date of birth.
+        5. Assigns node IDs to the newborns.
+        6. Calls any additional initializers for the newborns and records the timing of these initializations.
+        7. Updates the population counts for the next tick with the new births.
         """
         # KM: I like this setup for now; I think there are ways we could improve it but not a priority for now.
         # Potential improvements - if population is growing/shrinking, there should be more/fewer births later in the year
@@ -172,11 +161,9 @@ class Births:
         Plots the births in the top 5 most populous patches and a pie chart of birth initializer times.
 
         Parameters:
-
             fig (Figure, optional): A matplotlib Figure object. If None, a new figure will be created. Defaults to None.
 
         Yields:
-
             None: This function yields twice to allow for intermediate plotting steps.
         """
 
@@ -215,7 +202,6 @@ class Births_ConstantPop:
     A component to handle the birth events in a model with constant population - that is, births == deaths.
 
     Attributes:
-
         model: The model instance containing population and parameters.
         verbose (bool): Flag to enable verbose output. Default is False.
         initializers (list): List of initializers to be called on birth events.
@@ -227,12 +213,10 @@ class Births_ConstantPop:
         Initialize the Births component.
 
         Parameters:
-
             model (object): The model object which must have a `population` attribute.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Raises:
-
             AssertionError: If the model does not have a `population` attribute.
             AssertionError: If the model's population does not have a `dob` attribute.
         """
@@ -267,7 +251,6 @@ class Births_ConstantPop:
         initial state or configuration for agents at birth.
 
         Returns:
-
             list: A list of initializers - instances of objects with an `on_birth` method.
         """
 
@@ -281,7 +264,6 @@ class Births_ConstantPop:
         This method retrieves the timing metrics for the births initializers.
 
         Returns:
-
             DataFrame: A Pandas DataFrame of timing metrics for the births initializers.
         """
 
@@ -292,17 +274,15 @@ class Births_ConstantPop:
         Adds new agents to each patch based on expected daily births calculated from CBR. Calls each of the registered initializers for the newborns.
 
         Args:
-
             model: The simulation model containing patches, population, and parameters.
             tick: The current time step in the simulation.
 
         Returns:
-
             None
 
         This method performs the following steps:
 
-            1. Draw a random set of indices, or size size "number of births"  from the population,
+        1. Draw a random set of indices, or size size "number of births"  from the population,
         """
 
         # When we get to having birth rate per node, will need to be more clever here, but with constant birth rate across nodes,
@@ -353,11 +333,9 @@ class Births_ConstantPop:
         Plots the births in the top 5 most populous patches and a pie chart of birth initializer times.
 
         Parameters:
-
             fig (Figure, optional): A matplotlib Figure object. If None, a new figure will be created. Defaults to None.
 
         Yields:
-
             None: This function yields twice to allow for intermediate plotting steps.
         """
 
