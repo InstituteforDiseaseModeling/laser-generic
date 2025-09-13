@@ -4,7 +4,6 @@ import contextily as ctx
 import geopandas as gpd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
-import mplcursors
 import numpy as np
 from laser_core import LaserFrame
 from laser_core import PropertySet
@@ -36,7 +35,7 @@ class Susceptible:
         self.model.people.add_scalar_property("nodeid")  # uint32 (default), initial value 0 (default)
         self.model.patches.add_vector_property("S", model.params.nticks + 1)  # uint32 (default), initial value 0 (default)
 
-        self.model.people.nodeid[:] = np.repeat(
+        self.model.people.nodeid[: self.model.people.count] = np.repeat(
             np.arange(self.model.patches.count, dtype=np.uint32), self.model.scenario.population
         )  # .values)
         self.model.patches.S[0] = self.model.scenario.S  # .values
@@ -54,9 +53,9 @@ class Susceptible:
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         # Update the number of infected individuals in each patch
-        self.model.patches.S[tick] = np.bincount(
-            self.model.people.nodeid, self.model.people.infected == 0, minlength=self.model.patches.count
-        )
+        nodeids = self.model.people.nodeid[: self.model.people.count]
+        infflag = self.model.people.infected[: self.model.people.count]
+        self.model.patches.S[tick] = np.bincount(nodeids, infflag == 0, minlength=self.model.patches.count)
 
         return
 
@@ -86,11 +85,13 @@ class Transmission:
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
 
-        susceptible = self.model.people.infected == 0
+        infflags = self.model.people.infected[: self.model.people.count]
+        susceptible = infflags == 0
         draws = np.random.rand(self.model.people.count).astype(np.float32)
-        infections = (draws < ft[self.model.people.nodeid]) & susceptible
-        self.model.people.infected[infections] = 1
-        inf_by_node = np.bincount(self.model.people.nodeid[infections], minlength=self.model.patches.count).astype(np.uint32)
+        nodeids = self.model.people.nodeid[: self.model.people.count]  # convenience
+        infections = (draws < ft[nodeids]) & susceptible
+        infflags[infections] = 1
+        inf_by_node = np.bincount(nodeids[infections], minlength=self.model.patches.count).astype(np.uint32)
         self.model.patches.S[tick] -= inf_by_node
         self.model.patches.I[tick] += inf_by_node
 
@@ -118,11 +119,13 @@ class Infected:
         # seeds = np.random.choice(model.people.count, size=32, replace=False)
         # model.people.infected[seeds] = 1
 
+        # convenience
+        nodeids = self.model.people.nodeid[: self.model.people.count]
+        populations = self.model.scenario.population.values
+
         for node in range(self.model.patches.count):
-            citizens = np.nonzero(self.model.people.nodeid == node)[0]
-            assert (
-                len(citizens) == self.model.scenario.population[node]
-            ), f"Found {len(citizens)} citizens in node {node} but expected {self.model.scenario.population[node]}"
+            citizens = np.nonzero(nodeids == node)[0]
+            assert len(citizens) == populations[node], f"Found {len(citizens)} citizens in node {node} but expected {populations[node]}"
             nseeds = self.model.scenario.I[node]
             assert nseeds <= len(citizens), f"Node {node} has more initial infected ({nseeds}) than population ({len(citizens)})"
             if nseeds > 0:
@@ -152,7 +155,9 @@ class Infected:
             tick (int): The current tick of the simulation.
         """
         # Update the number of infected individuals in each patch
-        self.model.patches.I[tick] = np.bincount(self.model.people.nodeid, self.model.people.infected, minlength=self.model.patches.count)
+        nodeids = self.model.people.nodeid[: self.model.people.count]
+        infflag = self.model.people.infected[: self.model.people.count]
+        self.model.patches.I[tick] = np.bincount(nodeids, infflag, minlength=self.model.patches.count)
 
         return
 
@@ -162,6 +167,33 @@ class Infected:
         plt.xlabel("Tick")
         plt.ylabel("Infected")
         plt.title("Infected over Time by Node")
+        plt.legend()
+        plt.show()
+
+        return
+
+
+class VitalDynamics:
+    def __init__(self, model):
+        self.model = model
+        assert hasattr(self.model, "births")
+        assert hasattr(self.model, "deaths")
+        return
+
+    def prevalidate_step(self, tick: int) -> None: ...
+
+    def postvalidate_step(self, tick: int) -> None: ...
+
+    @validate(pre=prevalidate_step, post=postvalidate_step)
+    def step(self, tick: int) -> None: ...
+
+    def plot(self):
+        plt.figure(figsize=(10, 5))
+        plt.plot(np.sum(self.model.births, axis=1), label="Total Births")
+        plt.plot(np.sum(self.model.deaths, axis=1), label="Total Deaths")
+        plt.xlabel("Tick")
+        plt.ylabel("Count")
+        plt.title("Births and Deaths Over Time")
         plt.legend()
         plt.show()
 
@@ -282,18 +314,46 @@ class RateMap:
         return self._nsteps
 
 
+def draw_vital_dynamics(birthrates: RateMap, mortality: RateMap, initial_pop: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    assert (
+        birthrates.npatches == mortality.npatches == initial_pop.shape[0]
+    ), "birthrates, mortality, and initial_pop must have the same number of patches"
+    assert birthrates.nsteps == mortality.nsteps, "birthrates and mortality must have the same number of steps"
+
+    current_pop = initial_pop.copy()
+    births = np.zeros_like(birthrates.rates, dtype=np.uint32)
+    deaths = np.zeros_like(mortality.rates, dtype=np.uint32)
+
+    for t in range(birthrates.nsteps):
+        # Poisson draw for births per patch
+        births[t] = np.random.poisson(birthrates.rates[t] * current_pop / 1000)  # CBR is per 1,000 population
+        # Binomial draw for deaths per patch
+        # np.expm1(x) computes exp(x) - 1 accurately for small x
+        # -np.expm1(x) computes 1 - exp(x) accurately for small x
+        # -np.expm1(-mortality.rates[t]) gives the probability of death in a time step
+        deaths[t] = np.random.binomial(current_pop, -np.expm1(-mortality.rates[t]))
+        # Update population
+        current_pop += births[t]
+        current_pop -= deaths[t]
+
+    return births, deaths
+
+
 if __name__ == "__main__":
 
     class Model:
-        def __init__(self, scenario):
+        def __init__(self, scenario, births=None, deaths=None):
             # self.params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
             self.params = PropertySet({"nticks": 31, "beta": 1.0 / 32})
 
-            num_agents = scenario.population.sum()
             num_patches = max(np.unique(scenario.nodeid)) + 1
+            self.births = births if births is not None else RateMap.from_scalar(0, num_patches, self.params.nticks)
+            self.deaths = deaths if deaths is not None else RateMap.from_scalar(0, num_patches, self.params.nticks)
+            num_active = scenario.population.sum()
+            num_agents = num_active + self.births.sum() + self.deaths.sum()
 
             # TODO - remove int() cast with newer version of laser-core
-            self.people = LaserFrame(int(num_agents))
+            self.people = LaserFrame(int(num_agents), int(num_active))
             self.patches = LaserFrame(int(num_patches))
 
             self.scenario = scenario
@@ -346,24 +406,53 @@ if __name__ == "__main__":
             if "geometry" in self.scenario.columns:
                 gdf = gpd.GeoDataFrame(self.scenario, geometry="geometry")
 
-                pop = gdf["population"].values
-                norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
-                saturations = 0.1 + 0.9 * norm(pop)
-                colors = [mcolors.to_rgba("blue", alpha=sat) for sat in saturations]
-
-                # Project to Web Mercator for basemap compatibility
-                gdf_merc = gdf.to_crs(epsg=3857)
-                ax = gdf_merc.plot(facecolor=colors, edgecolor="black", linewidth=1, alpha=0.5)
-
-                # Add basemap if provider specified
-                if basemap_provider:
+                if basemap_provider is None:
+                    pop = gdf["population"].values
+                    norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
+                    saturations = norm(pop)
+                    colors = [plt.cm.Blues(sat) for sat in saturations]
+                    ax = gdf.plot(facecolor=colors, edgecolor="black", linewidth=1)
+                    sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
+                    sm.set_array([])
+                    cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+                    cbar.set_label("Population")
+                    plt.title("Node Boundaries and Populations")
+                else:
+                    gdf_merc = gdf.to_crs(epsg=3857)
+                    pop = gdf_merc["population"].values
+                    norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
+                    saturations = norm(pop)
+                    colors = [plt.cm.Blues(sat) for sat in saturations]
+                    ax = gdf_merc.plot(facecolor=colors, edgecolor="black", linewidth=1)
                     ctx.add_basemap(ax, source=basemap_provider)
-                sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
-                sm.set_array([])
-                cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
-                cbar.set_label("Population")
-                plt.title("Node Boundaries and Populations")
+                    centroids = gdf_merc.geometry.centroid
+                    sizes = np.log(pop + 1) * 20
+                    ax.scatter(centroids.x, centroids.y, s=sizes, color="red", edgecolor="black", zorder=5)
+                    sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
+                    sm.set_array([])
+                    cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+                    cbar.set_label("Population")
+                    plt.title("Node Boundaries and Populations")
 
+                # pop = gdf["population"].values
+                # norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
+                # saturations = 0.1 + 0.9 * norm(pop)
+                # colors = [mcolors.to_rgba("blue", alpha=sat) for sat in saturations]
+
+                # # Project to Web Mercator for basemap compatibility
+                # gdf_merc = gdf.to_crs(epsg=3857)
+                # ax = gdf_merc.plot(facecolor=colors, edgecolor="black", linewidth=1, alpha=0.5)
+
+                # # Add basemap if provider specified
+                # if basemap_provider:
+                #     ctx.add_basemap(ax, source=basemap_provider)
+                # sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
+                # sm.set_array([])
+                # cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+                # cbar.set_label("Population")
+                # plt.title("Node Boundaries and Populations")
+
+                """
                 # Add interactive hover to display population
                 cursor = mplcursors.cursor(ax.collections[0], hover=True)
 
@@ -373,6 +462,7 @@ if __name__ == "__main__":
                     nodeid = sel.index[0]
                     pop_val = gdf.iloc[nodeid]["population"]
                     sel.annotation.set_text(f"Population: {pop_val}")
+                """
 
                 plt.show()
             else:
@@ -387,18 +477,26 @@ if __name__ == "__main__":
 
             return
 
-    scenario = grid(M=10, N=10, grid_size=10_000)
+    # scenario = grid(M=10, N=10, grid_size=10_000)
+
+    scenario = grid(M=4, N=4, grid_size=10_000, population=lambda: int(np.random.uniform(10_000, 1_000_000)))
     scenario["S"] = scenario["population"] - 10
     scenario["I"] = 10
 
-    model = Model(scenario)
+    crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
+    birthrate_map = RateMap.from_patches(crude_birthrate, nsteps=365)
+    crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
+    mortality_map = RateMap.from_scalar(crude_mortality_rate, npatches=scenario.shape[0], nsteps=365)
+    births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
+
+    model = Model(scenario, births, deaths)
     s = Susceptible(model)
     i = Infected(model)
     tx = Transmission(model)
-    model.components = [s, i, tx]
+    vitals = VitalDynamics(model)
+    model.components = [s, i, tx, vitals]
 
     model.run()
-
     model.plot()
 
     print("done")
