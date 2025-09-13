@@ -200,7 +200,7 @@ class VitalDynamics:
         return
 
 
-def grid(M=5, N=5, grid_size=10_000, population=None):
+def grid(M=5, N=5, grid_size=10_000, population=None, origin_x=0, origin_y=0):
     """
     Create an MxN grid of cells anchored at (0, 0) with populations and geometries.
 
@@ -209,6 +209,8 @@ def grid(M=5, N=5, grid_size=10_000, population=None):
         N (int): Number of columns (east-west).
         grid_size (float): Size of each cell in meters.
         population (callable): Function returning population for a cell.
+        origin_x (float): X-coordinate of the origin (bottom-left corner).
+        origin_y (float): Y-coordinate of the origin (bottom-left corner).
 
     Returns:
         GeoDataFrame: Columns are nodeid, population, geometry.
@@ -226,8 +228,8 @@ def grid(M=5, N=5, grid_size=10_000, population=None):
     nodeid = 0
     for i in range(M):
         for j in range(N):
-            x0 = j * grid_size_deg
-            y0 = i * grid_size_deg
+            x0 = origin_x + j * grid_size_deg
+            y0 = origin_y + i * grid_size_deg
             x1 = x0 + grid_size_deg
             y1 = y0 + grid_size_deg
             poly = Polygon(
@@ -420,19 +422,17 @@ if __name__ == "__main__":
                 else:
                     gdf_merc = gdf.to_crs(epsg=3857)
                     pop = gdf_merc["population"].values
-                    norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
-                    saturations = norm(pop)
-                    colors = [plt.cm.Blues(sat) for sat in saturations]
-                    ax = gdf_merc.plot(facecolor=colors, edgecolor="black", linewidth=1)
+                    # Only plot the basemap and set bounds
+                    fig, ax = plt.subplots(figsize=(12, 9))
+                    bounds = gdf_merc.total_bounds  # [minx, miny, maxx, maxy]
+                    xmid = (bounds[0] + bounds[2]) / 2
+                    ymid = (bounds[1] + bounds[3]) / 2
+                    xhalf = (bounds[2] - bounds[0]) / 2
+                    yhalf = (bounds[3] - bounds[1]) / 2
+                    ax.set_xlim(xmid - 2 * xhalf, xmid + 2 * xhalf)
+                    ax.set_ylim(ymid - 2 * yhalf, ymid + 2 * yhalf)
                     ctx.add_basemap(ax, source=basemap_provider)
-                    centroids = gdf_merc.geometry.centroid
-                    sizes = np.log(pop + 1) * 20
-                    ax.scatter(centroids.x, centroids.y, s=sizes, color="red", edgecolor="black", zorder=5)
-                    sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
-                    sm.set_array([])
-                    cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
-                    cbar.set_label("Population")
-                    plt.title("Node Boundaries and Populations")
+                    plt.title("Basemap Only")
 
                 # pop = gdf["population"].values
                 # norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
@@ -478,8 +478,15 @@ if __name__ == "__main__":
             return
 
     # scenario = grid(M=10, N=10, grid_size=10_000)
-
-    scenario = grid(M=4, N=4, grid_size=10_000, population=lambda: int(np.random.uniform(10_000, 1_000_000)))
+    # Brothers, OR = 43°48'47"N 120°36'05"W (43.8130555556, -120.601388889)
+    scenario = grid(
+        M=4,
+        N=4,
+        grid_size=10_000,
+        population=lambda: int(np.random.uniform(10_000, 1_000_000)),
+        origin_x=-120.601388889,
+        origin_y=43.8130555556,
+    )
     scenario["S"] = scenario["population"] - 10
     scenario["I"] = 10
 
@@ -490,6 +497,9 @@ if __name__ == "__main__":
     births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
 
     model = Model(scenario, births, deaths)
+
+    # model.basemap_provider = ctx.providers.OpenStreetMap.Mapnik
+
     s = Susceptible(model)
     i = Infected(model)
     tx = Transmission(model)
