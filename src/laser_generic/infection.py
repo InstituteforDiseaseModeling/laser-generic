@@ -1,28 +1,6 @@
 """
 This module defines the Infection class, which models the infection dynamics within a population.
 
-Classes:
-    Infection: A class to handle infection updates, initialization, and plotting of infection data.
-    Infection_SIS: Duplicate of infection class, but sets susceptibility to 1 when itimer hits zero.
-
-Functions:
-    Infection.__init__(self, model, verbose: bool = False) -> None:
-        Initializes the Infection class with a given model and verbosity option.
-
-    Infection.__call__(self, model, tick) -> None:
-        Updates the infection status of the population at each tick.
-
-    Infection.nb_infection_update(count, itimers):
-        A static method that updates the infection timers for the population using Numba for performance.
-
-    Infection.on_birth(self, model, _tick, istart, iend) -> None:
-        Resets the infection timer for newborns in the population.
-
-    Infection.nb_set_itimers(istart, iend, itimers, value) -> None:
-        A static method that sets the infection timers for a range of individuals in the population using Numba for performance.
-
-    Infection.plot(self, fig: Figure = None):
-        Plots the infection data by age using Matplotlib.
 """
 
 import numba as nb

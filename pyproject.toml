@@ -57,7 +57,7 @@ dev = [
 
 [project.urls]
 Homepage = "https://github.com/InstituteforDiseaseModeling/laser-generic/"
-Documentation = "https://laser-generic.readthedocs.io/en/latest/"
+Documentation = "https://institutefordiseasemodeling.github.io/laser-generic"
 Repository = "https://github.com/InstituteforDiseaseModeling/laser-generic.git"
 Issues = "https://github.com/InstituteforDiseaseModeling/laser-generic/issues"
 Changelog = "https://github.com/InstituteforDiseaseModeling/laser-generic/blob/master/CHANGELOG.md"
@@ -153,12 +153,12 @@ search = "v{current_version}"
 replace = "v{new_version}"
 
 [[tool.bumpversion.files]]
- filename = "README.rst"
+ filename = "README.md"
 search = "/v{current_version}.svg"
 replace = "/v{new_version}.svg"
 
 [[tool.bumpversion.files]]
-filename = "README.rst"
+filename = "README.md"
 search = "/v{current_version}...main"
 replace = "/v{new_version}...main"
 

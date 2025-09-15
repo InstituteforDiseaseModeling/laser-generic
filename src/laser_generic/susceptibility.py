@@ -2,16 +2,6 @@
 This module defines the Susceptibility class and associated functions for managing and visualizing
 the susceptibility of a population.
 
-Classes:
-    Susceptibility: Manages the susceptibility property of a population and provides methods for
-                    updating and plotting susceptibility data.
-    Susceptibility_SI: Manages the susceptibility property of a population for the SI model.
-
-Functions:
-    nb_initialize_susceptibility(count, dob, susceptibility):
-        Initializes the susceptibility of individuals in the population.
-    nb_set_susceptibility(istart, iend, susceptibility, value):
-        Sets the susceptibility of a range of individuals in the population to a specified value.
 """
 
 import numba as nb

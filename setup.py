@@ -71,8 +71,8 @@ setup(
     # license="MIT",
     # description="Generic disease models implented with the LASER framework.",
     long_description="{}\n{}".format(
-        re.compile("^.. start-badges.*^.. end-badges", re.M | re.S).sub("", read("README.rst")),
-        re.sub(":[a-z]+:`~?(.*?)`", r"``\1``", read("CHANGELOG.rst")),
+        re.compile("^.. start-badges.*^.. end-badges", re.M | re.S).sub("", read("README.md")),
+        re.sub(":[a-z]+:`~?(.*?)`", r"``\1``", read("CHANGELOG.md")),
     ),
     author="Christopher Lorton",
     author_email="christopher.lorton@gatesfoundation.org",
@@ -106,8 +106,8 @@ setup(
     #     "Topic :: Utilities",
     # ],
     # project_urls={
-    #     "Documentation": "https://laser-generic.readthedocs.io/",
-    #     "Changelog": "https://laser-generic.readthedocs.io/en/latest/changelog.html",
+    #     "Documentation": "https://institutefordiseasemodeling.github.io/laser-generic",
+    #     "Changelog": "https://institutefordiseasemodeling.github.io/laser-generic/whatsnew.html",
     #     "Issue Tracker": "https://github.com/InstituteforDiseaseModeling/laser-generic/issues",
     # },
     # keywords=[

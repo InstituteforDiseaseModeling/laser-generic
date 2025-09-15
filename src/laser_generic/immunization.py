@@ -1,10 +1,6 @@
 """
 This module defines Immunization classes, which provide methods to import cases into a population during simulation.
 
-Classes:
-    RoutineImmunization: A class to periodically immunize a random subset of agents in the population
-    CampaignImmunization: A class to periodically immunize a random subset of agents in the population
-
 To do:
     Right now, neither intervention deploys to nodes, only globally.  Would like to add targeting by patch,
     coverage by patch, and so on.

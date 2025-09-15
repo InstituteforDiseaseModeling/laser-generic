@@ -1,15 +1,6 @@
 """
 This module defines the Births component, which is responsible for simulating births in a population model.
 
-Classes:
-    Births:
-        Manages the birth process within a population model, including initializing births, updating population data, and plotting birth statistics.
-
-Usage:
-    The Births component requires a model with a `population` attribute that has a `dob` attribute.
-    It calculates the number of births based on the model's parameters and updates the population
-    accordingly. It also provides methods to plot birth statistics.
-
 Example:
 
     model = YourModelClass()
@@ -17,10 +8,6 @@ Example:
     births(model, tick)
     births.plot()
 
-Attributes:
-    model (object): The population model.
-    _initializers (list): List of initializers to be called on birth.
-    _metrics (list): List to store timing metrics for initializers.
 """
 
 from datetime import datetime
@@ -33,7 +20,9 @@ from matplotlib.figure import Figure
 
 class Births:
     """
-    A component to handle the birth events in a model.
+    A component to handle the birth events in a model. Requires a model with a `population` attribute 
+    that has a `dob` attribute. It calculates the number of births based on the model's parameters and 
+    updates the population accordingly. It also provides methods to plot birth statistics.
 
     Attributes:
         model: The model instance containing population and parameters.

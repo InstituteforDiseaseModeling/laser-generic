@@ -2,8 +2,6 @@
 This module defines a `Model` class for simulating classic "generic" disease models (SI, SIS, SIR, SEIR, ...),
 with options for simple demographics (births, deaths, aging) and single or multiple patches with flexible connection structure.
 
-Classes:
-    Model: A general class from which to define specific types of simulation models.
 
 **Imports:**
 
@@ -21,29 +19,6 @@ Classes:
 - matplotlib.figure: For figure handling.
 - tqdm: For progress bar visualization.
 
-**Model Class:**
-
-Methods:
-    __init__(self, scenario: pd.DataFrame, parameters: PropertySet, name: str) -> None:
-        Initializes the model with the given scenario and parameters.
-
-    components(self) -> list:
-        Gets the list of components in the model.
-
-    components(self, components: list) -> None:
-        Sets the list of components in the model and initializes instances and phases.
-
-    __call__(self, model, tick: int) -> None:
-        Updates the model for a given tick.
-
-    run(self) -> None:
-        Runs the model for the specified number of ticks.
-
-    visualize(self, pdf: bool = True) -> None:
-        Generates visualizations of the model's results, either displaying them or saving to a PDF.
-
-    plot(self, fig: Figure = None):
-        Generates plots for the scenario patches and populations, distribution of day of birth, and update phase times.
 """
 
 from datetime import datetime

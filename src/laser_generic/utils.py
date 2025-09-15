@@ -1,24 +1,6 @@
 """
 This module provides utility functions for the laser-measles project.
 
-Functions:
-    calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool = False) -> np.ndarray:
-        Calculate the pairwise distances between points given their latitudes and longitudes.
-
-    calc_capacity(population: np.uint32, nticks: np.uint32, cbr: np.float32, verbose: bool = False) -> np.uint32:
-        Calculate the population capacity after a given number of ticks based on a constant birth rate.
-
-    seed_infections_randomly(model, ninfections: int = 100) -> None:
-        Seed initial infections in random locations at the start of the simulation.
-
-    seed_infections_in_patch(model, ipatch: int, ninfections: int = 100) -> None:
-        Seed initial infections in a specific location at the start of the simulation.
-
-    set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
-        Set the population susceptibility level at the start of the simulation.
-
-    set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
-        Set the population susceptibility level at the start of the simulation in a specific patch.
 """
 
 from math import ceil

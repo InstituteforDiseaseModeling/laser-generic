@@ -1,18 +1,6 @@
 """
 This module defines Importation classes, which provide methods to import cases into a population during simulation.
 
-Classes:
-    Infect_Random_Agents: A class to periodically infect a random subset of agents in the population
-
-Functions:
-    Infect_Random_Agents.__init__(self, model, period, count, start, verbose: bool = False) -> None:
-        Initializes the Infect_Random_Agents class with a given model, period, count, and verbosity option.
-
-    Infect_Random_Agents.__call__(self, model, tick) -> None:
-        Checks whether it is time to infect a random subset of agents and infects them if necessary.
-
-    Infect_Random_Agents.plot(self, fig: Figure = None):
-        Nothing yet.
 """
 
 import numpy as np

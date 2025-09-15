@@ -26,6 +26,8 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - run: |
+          [testenv:docs]
+          usedevelop = true
           pip install mkdocs mkdocs-material # Or your specific theme and plugins
           pip install -r docs/requirements.txt  # If you have a requirements.txt file
       - run: mkdocs gh-deploy --force

@@ -1,27 +1,6 @@
 """
 This module defines the Exposure class, which models the transition between being infected and become infectious.
 
-Classes:
-    Exposure: A class to handle exposed state updates, initialization, and plotting of exposed data.
-
-Functions:
-    Exposure.__init__(self, model, verbose: bool = False) -> None:
-        Initializes the Exposure class with a given model and verbosity option.
-
-    Exposure.__call__(self, model, tick) -> None:
-        Updates the exposed status of the population at each tick.
-
-    Exposure.nb_exposure_update(count, itimers):
-        A static method that updates the exposed timers for the population using Numba for performance.
-
-    Exposure.on_birth(self, model, _tick, istart, iend) -> None:
-        Resets the exposed timer for newborns in the population.
-
-    Exposure.nb_set_etimers(istart, iend, itimers, value) -> None:
-        A static method that sets the exposure timers for a range of individuals in the population using Numba for performance.
-
-    Exposure.plot(self, fig: Figure = None):
-        Plots the exposed data by age using Matplotlib.
 """
 
 import numba as nb

@@ -19,6 +19,8 @@ jobs:
 
     - name: Install MkDocs and dependencies
       run: |
+        [testenv:docs]
+        usedevelop = true
         pip install mkdocs mkdocs-material # Or your specific theme and plugins
         pip install -r docs/requirements.txt  # If you have a requirements.txt file
 
