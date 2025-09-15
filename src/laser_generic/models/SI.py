@@ -200,29 +200,29 @@ class VitalDynamics:
         return
 
 
-def grid(M=5, N=5, grid_size=10_000, population=None, origin_x=0, origin_y=0):
+def grid(M=5, N=5, grid_size=10, population_fn=None, origin_x=0, origin_y=0):
     """
     Create an MxN grid of cells anchored at (0, 0) with populations and geometries.
 
     Args:
         M (int): Number of rows (north-south).
         N (int): Number of columns (east-west).
-        grid_size (float): Size of each cell in meters.
+        grid_size (float): Size of each cell in kilometers (default 10).
         population (callable): Function returning population for a cell.
-        origin_x (float): X-coordinate of the origin (bottom-left corner).
-        origin_y (float): Y-coordinate of the origin (bottom-left corner).
+        origin_x (float): longitude of the origin (bottom-left corner) -180 <= origin_x < 180.
+        origin_y (float): latitude of the origin (bottom-left corner) -90 <= origin_y < 90.
 
     Returns:
         GeoDataFrame: Columns are nodeid, population, geometry.
     """
-    if population is None:
+    if population_fn is None:
 
-        def population():
+        def population_fn(x: int, y: int) -> int:
             return int(np.random.uniform(1000, 100000))
 
-    # Convert grid_size from meters to degrees (approximate)
-    meters_per_degree = 111_320
-    grid_size_deg = grid_size / meters_per_degree
+    # Convert grid_size from kilometers to degrees (approximate)
+    km_per_degree = 111.320
+    grid_size_deg = grid_size / km_per_degree
 
     cells = []
     nodeid = 0
@@ -241,10 +241,56 @@ def grid(M=5, N=5, grid_size=10_000, population=None, origin_x=0, origin_y=0):
                     (x0, y0),  # Close polygon
                 ]
             )
-            cells.append({"nodeid": nodeid, "population": population(), "geometry": poly})
+            cells.append({"nodeid": nodeid, "population": population_fn(j, i), "geometry": poly})
             nodeid += 1
 
     gdf = gpd.GeoDataFrame(cells, columns=["nodeid", "population", "geometry"], crs="EPSG:4326")
+
+    return gdf
+
+
+def linear(N=10, node_size_km=10, population_fn=None, origin_x=0, origin_y=0):
+    """
+    Create a linear set of population nodes as rectangular cells.
+
+    Args:
+        N (int): Number of nodes.
+        node_size_km (float): Size of each node in kilometers (width).
+        population_fn (callable): Function taking node index and returning population.
+        origin_x (float): Longitude of the starting node (westmost).
+        origin_y (float): Latitude of the starting node (southmost).
+
+    Returns:
+        GeoDataFrame: Columns are nodeid, population, geometry.
+    """
+    if population_fn is None:
+
+        def population_fn(idx: int) -> int:
+            return int(np.random.uniform(1000, 100000))
+
+    # Convert node size from km to degrees (approximate)
+    meters_per_degree = 111_320
+    node_size_deg = (node_size_km * 1000) / meters_per_degree
+
+    cells = []
+    for idx in range(N):
+        x0 = origin_x + idx * node_size_deg
+        y0 = origin_y
+        x1 = x0 + node_size_deg
+        y1 = y0 + node_size_deg
+        poly = Polygon(
+            [
+                (x0, y0),  # SW
+                (x1, y0),  # SE
+                (x1, y1),  # NE
+                (x0, y1),  # NW
+                (x0, y0),  # Close polygon
+            ]
+        )
+        cells.append({"nodeid": idx, "population": population_fn(idx), "geometry": poly})
+
+    gdf = gpd.GeoDataFrame(cells, columns=["nodeid", "population", "geometry"], crs="EPSG:4326")
+
     return gdf
 
 
@@ -345,8 +391,8 @@ if __name__ == "__main__":
 
     class Model:
         def __init__(self, scenario, births=None, deaths=None):
-            # self.params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
-            self.params = PropertySet({"nticks": 31, "beta": 1.0 / 32})
+            self.params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
+            # self.params = PropertySet({"nticks": 31, "beta": 1.0 / 32})
 
             num_patches = max(np.unique(scenario.nodeid)) + 1
             self.births = births if births is not None else RateMap.from_scalar(0, num_patches, self.params.nticks)
@@ -422,8 +468,8 @@ if __name__ == "__main__":
                 else:
                     gdf_merc = gdf.to_crs(epsg=3857)
                     pop = gdf_merc["population"].values
-                    # Only plot the basemap and set bounds
-                    fig, ax = plt.subplots(figsize=(12, 9))
+                    # Plot the basemap and shape outlines
+                    fig, ax = plt.subplots(figsize=(8, 8))
                     bounds = gdf_merc.total_bounds  # [minx, miny, maxx, maxy]
                     xmid = (bounds[0] + bounds[2]) / 2
                     ymid = (bounds[1] + bounds[3]) / 2
@@ -432,25 +478,15 @@ if __name__ == "__main__":
                     ax.set_xlim(xmid - 2 * xhalf, xmid + 2 * xhalf)
                     ax.set_ylim(ymid - 2 * yhalf, ymid + 2 * yhalf)
                     ctx.add_basemap(ax, source=basemap_provider)
-                    plt.title("Basemap Only")
+                    gdf_merc.boundary.plot(ax=ax, edgecolor="black", linewidth=1)
 
-                # pop = gdf["population"].values
-                # norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
-                # saturations = 0.1 + 0.9 * norm(pop)
-                # colors = [mcolors.to_rgba("blue", alpha=sat) for sat in saturations]
+                    # Draw circles at centroids sized by log(population)
+                    centroids = gdf_merc.geometry.centroid
+                    print(f"{pop=}")
+                    sizes = 20 + 2 * pop / 10_000
+                    ax.scatter(centroids.x, centroids.y, s=sizes, color="red", edgecolor="black", zorder=10, alpha=0.8)
 
-                # # Project to Web Mercator for basemap compatibility
-                # gdf_merc = gdf.to_crs(epsg=3857)
-                # ax = gdf_merc.plot(facecolor=colors, edgecolor="black", linewidth=1, alpha=0.5)
-
-                # # Add basemap if provider specified
-                # if basemap_provider:
-                #     ctx.add_basemap(ax, source=basemap_provider)
-                # sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
-                # sm.set_array([])
-                # cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
-                # cbar.set_label("Population")
-                # plt.title("Node Boundaries and Populations")
+                    plt.title("Node Boundaries, Centroids, and Basemap")
 
                 """
                 # Add interactive hover to display population
@@ -479,11 +515,18 @@ if __name__ == "__main__":
 
     # scenario = grid(M=10, N=10, grid_size=10_000)
     # Brothers, OR = 43°48'47"N 120°36'05"W (43.8130555556, -120.601388889)
-    scenario = grid(
-        M=4,
-        N=4,
-        grid_size=10_000,
-        population=lambda: int(np.random.uniform(10_000, 1_000_000)),
+    # scenario = grid(
+    #     M=4,
+    #     N=4,
+    #     grid_size=10_000,
+    #     population=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
+    #     origin_x=-120.601388889,
+    #     origin_y=43.8130555556,
+    # )
+    scenario = linear(
+        N=10,
+        node_size_km=10,
+        population_fn=lambda idx: int(np.random.uniform(10_000, 1_000_000)),
         origin_x=-120.601388889,
         origin_y=43.8130555556,
     )
@@ -498,7 +541,8 @@ if __name__ == "__main__":
 
     model = Model(scenario, births, deaths)
 
-    # model.basemap_provider = ctx.providers.OpenStreetMap.Mapnik
+    model.basemap_provider = ctx.providers.OpenStreetMap.Mapnik
+    # model.basemap_provider = None
 
     s = Susceptible(model)
     i = Infected(model)
