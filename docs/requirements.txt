@@ -8,6 +8,5 @@ pymdown-extensions # various extensions for markdown
 mkdocs-jupyter # jupyter notebooks
 mkdocstrings # generate API reference from docstrings
 mkdocstrings-python # python handler for mkdocstrings
-pytest-doctest-mkdocstrings # test code blocks in markdown files
 
 # include all packages needed for running Jupyter notebooks
