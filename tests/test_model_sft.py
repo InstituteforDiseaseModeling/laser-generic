@@ -67,6 +67,7 @@ def test_si_model_nobirths():
     seeds = list(range(10))
     betas = [0.01 * i for i in range(1, 11)]
     scenario = pd.DataFrame(data=[["homenode", pop, "47°36′35″N 122°19′59″W"]], columns=["name", "population", "location"])
+    output = []
     for seed, beta in zip(seeds, betas):
         parameters = PropertySet({"seed": seed, "nticks": nticks, "verbose": True, "beta": beta})
         model = Model(scenario, parameters)
@@ -79,7 +80,7 @@ def test_si_model_nobirths():
         cases = [model.patches.cases[i][0] for i in range(nticks)]
         popt, pcov = curve_fit(SI_logistic, t, cases, p0=[0.05, 1.1e5, 1])
 
-        output = pd.DataFrame.from_dict(
+        output.append( pd.DataFrame.from_dict(
             {
                 "seed": seed,
                 "beta": beta,
@@ -88,7 +89,7 @@ def test_si_model_nobirths():
                 "fitted_size": popt[1],
                 "fitted_t0": popt[2],
             }
-        )
+        ) )
 
     assert np.all(np.abs((output["beta"] - output["fitted_beta"]) / output["beta"]) < 0.05)
 
@@ -121,6 +122,7 @@ def test_si_model_wbirths():
     cbrs = np.random.randint(10, 120, 10)
     scenario = pd.DataFrame(data=[["homenode", pop]], columns=["name", "population"])
 
+    output = []
     for seed, beta, cbr in zip(seeds, betas, cbrs):
         parameters = PropertySet({"seed": seed, "nticks": nticks, "verbose": True, "beta": beta, "cbr": cbr})
         model = Model(scenario, parameters)
@@ -139,7 +141,7 @@ def test_si_model_wbirths():
             p0=[beta * (1 + 0.1 * np.random.normal()), pop, cbr * (1 + 0.1 * np.random.normal()), 1],
             bounds=([0, pop - 1, 0, -100], [1, pop + 1, 600, 100]),
         )
-        output = pd.DataFrame.from_dict(
+        output.append( pd.DataFrame.from_dict(
             {
                 "seed": seed,
                 "beta": beta,
@@ -150,7 +152,7 @@ def test_si_model_wbirths():
                 "fitted_cbr": popt[2],
                 "fitted_t0": popt[3],
             }
-        )
+        ) )
 
     assert np.all(np.abs((output["beta"] - output["fitted_beta"]) / output["beta"]) < 0.05)
     assert np.all(np.abs((output["cbr"] - output["fitted_cbr"]) / output["cbr"]) < 0.05)
@@ -204,7 +206,7 @@ def test_sir_nobirths():
             bounds=([betarange[0] / 2, pop - 1, gammarange[0] / 2, -300], [betarange[1] * 2, pop + 1, gammarange[1] * 2, 300]),
         )
 
-        output = pd.DataFrame.from_dict(
+        output.append( pd.DataFrame.from_dict(
             {
                 "seed": seed,
                 "beta": beta,
@@ -214,7 +216,7 @@ def test_sir_nobirths():
                 "fitted_gamma": popt[2],
                 "fitted_t0": popt[3],
             }
-        )
+        ) )
 
     assert np.all(np.abs((output["beta"] - output["fitted_beta"]) / output["beta"]) < 0.05)
     assert np.all(np.abs((output["gamma"] - output["fitted_gamma"]) / output["gamma"]) < 0.1)

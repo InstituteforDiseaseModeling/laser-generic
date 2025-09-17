@@ -43,7 +43,7 @@ def test_si_model_nobirths_flow():
     nticks = 180
     pop = 1e5
     scenario = pd.DataFrame(data=[["homenode", pop, "0,0"]], columns=["name", "population", "location"])
-    parameters = PropertySet({"seed": 42, "nticks": nticks, "verbose": False, "beta": 0.01})
+    parameters = PropertySet({"seed": 42, "nticks": nticks, "verbose": False, "beta": 0.03})
 
     model = Model(scenario, parameters)
     model.components = [Susceptibility, Transmission]
@@ -58,7 +58,7 @@ def test_si_model_nobirths_flow():
 def test_sir_nobirths_short():
     pop = 1e5
     nticks = 365
-    beta = 0.05
+    beta = 0.06
     gamma = 1 / 20
     scenario = pd.DataFrame(data=[["homenode", pop]], columns=["name", "population"])
     parameters = PropertySet({"seed": 1, "nticks": nticks, "verbose": False, "beta": beta, "inf_mean": 1 / gamma})
@@ -109,7 +109,6 @@ def test_sei_model_with_births_short():
     }
 
     model = Model(scenario, parameters)
-    # model.components = [Births_ConstantPop, Susceptibility, Exposure, Infection, Transmission]
     model.components = [Births_ConstantPop, Susceptibility, Infection, Transmission]
     seed_infections_randomly_SI(model, ninfections=10)
     model.run()
@@ -243,11 +242,10 @@ def test_births_only_maintain_population_stability():
 
     model.run()
 
-    N0 = model.patches.populations[0, 0]
-    Nf = model.patches.populations[-1, 0]
-    relative_change = abs(Nf - N0) / N0
+    populations = model.patches.populations[:, 0]
+    assert np.all(populations == pop), "Population changed under Births_ConstantPop when it shouldn't"
 
-    assert relative_change < 0.01, f"Population drifted more than 1%: {relative_change:.2%}"
+    
 
 
 @pytest.mark.modeltest
