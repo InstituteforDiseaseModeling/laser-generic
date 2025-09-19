@@ -82,9 +82,10 @@ plugins:
   - autorefs # automatically create linkable references
   - include-markdown # include other files, such as READMEs
   - mkdocs-jupyter: # enables Jupyter notebooks to be rendered
-      execute: false
+      execute: true
       allow_errors: true
-  #- section-index # enables nested sections getting mkdocsrings breaks when this is enabled
+      include-source: true
+ # - section-index # enables nested sections, but seeing mkdocstrings breaks when this is enabled
   - mkdocs-autoapi: # API reference generation
       autoapi_dir: src/laser_generic/ # path to source code
       autoapi_ignore: # list of files or folder to ignore for API generation
@@ -124,8 +125,6 @@ extra:
 
 
   analytics:
-    provider: google
-    property: G-SVDSQH04EM
     feedback:
       title: Was this page helpful?
       ratings:

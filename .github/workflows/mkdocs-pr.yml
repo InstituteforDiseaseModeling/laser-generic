@@ -15,12 +15,11 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.x'
+        python-version: '3.12'
 
     - name: Install MkDocs and dependencies
       run: |
-        [testenv:docs]
-        usedevelop = true
+        pip install -e .
         pip install mkdocs mkdocs-material # Or your specific theme and plugins
         pip install -r docs/requirements.txt  # If you have a requirements.txt file
 
