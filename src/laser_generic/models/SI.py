@@ -6,12 +6,14 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 from laser_core import LaserFrame
-from laser_core import PropertySet
 from laser_core.migration import distance
 from laser_core.migration import gravity
 from laser_core.migration import row_normalizer
-from shapely.geometry import Polygon
 from tqdm import tqdm
+
+from laser_generic.newutils import RateMap
+
+__all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "Susceptible", "Transmission", "VitalDynamics"]
 
 
 def validate(pre, post):
@@ -32,13 +34,11 @@ def validate(pre, post):
 class Susceptible:
     def __init__(self, model):
         self.model = model
-        self.model.people.add_scalar_property("nodeid")  # uint32 (default), initial value 0 (default)
-        self.model.patches.add_vector_property("S", model.params.nticks + 1)  # uint32 (default), initial value 0 (default)
+        self.model.people.add_scalar_property("nodeid", dtype=np.uint16)
+        self.model.patches.add_vector_property("S", model.params.nticks)
 
-        self.model.people.nodeid[: self.model.people.count] = np.repeat(
-            np.arange(self.model.patches.count, dtype=np.uint32), self.model.scenario.population
-        )  # .values)
-        self.model.patches.S[0] = self.model.scenario.S  # .values
+        self.model.people.nodeid[:] = np.repeat(np.arange(self.model.patches.count, dtype=np.uint16), self.model.scenario.population)
+        self.model.patches.S[0] = self.model.scenario.S
 
         return
 
@@ -52,10 +52,9 @@ class Susceptible:
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
-        # Update the number of infected individuals in each patch
-        nodeids = self.model.people.nodeid[: self.model.people.count]
-        infflag = self.model.people.infected[: self.model.people.count]
-        self.model.patches.S[tick] = np.bincount(nodeids, infflag == 0, minlength=self.model.patches.count)
+        # Propagate the number of susceptible individuals in each patch
+        if tick > 0:
+            self.model.patches.S[tick] = self.model.patches.S[tick - 1]
 
         return
 
@@ -74,32 +73,34 @@ class Susceptible:
 class Transmission:
     def __init__(self, model):
         self.model = model
-        self.model.patches.add_vector_property("force", model.params.nticks + 1, dtype=np.float32)  # initial value 0.0 (default)
+        self.model.patches.add_vector_property("forces", model.params.nticks, dtype=np.float32)
+        self.model.patches.add_vector_property("incidence", model.params.nticks, dtype=np.uint32)
 
         return
 
     def step(self, tick: int) -> None:
-        ft = self.model.patches.force[tick]
+        ft = self.model.patches.forces[tick]
         ft[:] = self.model.params.beta * self.model.patches.I[tick] / (self.model.patches.S[tick] + self.model.patches.I[tick])
         transfer = ft[:, None] * self.model.network
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
 
-        infflags = self.model.people.infected[: self.model.people.count]
+        infflags = self.model.people.infected
         susceptible = infflags == 0
         draws = np.random.rand(self.model.people.count).astype(np.float32)
-        nodeids = self.model.people.nodeid[: self.model.people.count]  # convenience
+        nodeids = self.model.people.nodeid
         infections = (draws < ft[nodeids]) & susceptible
         infflags[infections] = 1
         inf_by_node = np.bincount(nodeids[infections], minlength=self.model.patches.count).astype(np.uint32)
         self.model.patches.S[tick] -= inf_by_node
         self.model.patches.I[tick] += inf_by_node
+        self.model.patches.incidence[tick] = inf_by_node
 
         return
 
     def plot(self):
         for node in range(self.model.patches.count):
-            plt.plot(self.model.patches.force[:, node], label=f"Node {node}")
+            plt.plot(self.model.patches.forces[:, node], label=f"Node {node}")
         plt.xlabel("Tick")
         plt.ylabel("Force of Infection")
         plt.title("Force of Infection over Time by Node")
@@ -112,15 +113,15 @@ class Transmission:
 class Infected:
     def __init__(self, model):
         self.model = model
-        self.model.people.add_scalar_property("infected", dtype=np.uint32)  # initial value 0 (default)
-        self.model.patches.add_vector_property("I", model.params.nticks + 1)  # uint32 (default), initial value 0 (default)
+        self.model.people.add_scalar_property("infected", dtype=np.uint8)
+        self.model.patches.add_vector_property("I", model.params.nticks)
 
         # Naïve/brute force approach to seed initial infections
         # seeds = np.random.choice(model.people.count, size=32, replace=False)
         # model.people.infected[seeds] = 1
 
         # convenience
-        nodeids = self.model.people.nodeid[: self.model.people.count]
+        nodeids = self.model.people.nodeid
         populations = self.model.scenario.population.values
 
         for node in range(self.model.patches.count):
@@ -132,20 +133,27 @@ class Infected:
                 indices = np.random.choice(citizens, size=nseeds, replace=False)
                 self.model.people.infected[indices] = 1
 
-        self.model.patches.I[0] = self.model.scenario.I  # .values
-        assert np.all(
-            self.model.patches.S[0] + self.model.patches.I[0] == self.model.scenario.population
-        ), "Initial S + I does not equal population"
+        self.model.patches.I[0] = self.model.scenario.I
+        assert np.all(self.model.patches.S[0] + self.model.patches.I[0] == self.model.scenario.population), (
+            "Initial S + I does not equal population"
+        )
 
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        if self.model.validating and tick < 10:
+        if self.model.validating:
             ...
 
     def postvalidate_step(self, tick: int) -> None:
-        if self.model.validating and tick < 10:
-            ...
+        if self.model.validating:
+            nodeids = self.model.people.nodeid
+            infflag = self.model.people.infected
+            # print(
+            #     f"Tick {tick}: I {self.model.patches.I[tick]} vs. counts {np.bincount(nodeids, infflag, minlength=self.model.patches.count)}"
+            # )
+            assert np.all(self.model.patches.I[tick] == np.bincount(nodeids, infflag, minlength=self.model.patches.count)), (
+                "Infected census does not match infected counts."
+            )
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
@@ -154,10 +162,9 @@ class Infected:
         Args:
             tick (int): The current tick of the simulation.
         """
-        # Update the number of infected individuals in each patch
-        nodeids = self.model.people.nodeid[: self.model.people.count]
-        infflag = self.model.people.infected[: self.model.people.count]
-        self.model.patches.I[tick] = np.bincount(nodeids, infflag, minlength=self.model.patches.count)
+        # Propagate the number of infected individuals in each patch
+        if tick > 0:
+            self.model.patches.I[tick] = self.model.patches.I[tick - 1]
 
         return
 
@@ -189,8 +196,8 @@ class VitalDynamics:
 
     def plot(self):
         plt.figure(figsize=(10, 5))
-        plt.plot(np.sum(self.model.births, axis=1), label="Total Births")
-        plt.plot(np.sum(self.model.deaths, axis=1), label="Total Deaths")
+        plt.plot(np.sum(self.model.births, axis=1), label="Daily Births")
+        plt.plot(np.sum(self.model.deaths, axis=1), label="Daily Deaths")
         plt.xlabel("Tick")
         plt.ylabel("Count")
         plt.title("Births and Deaths Over Time")
@@ -200,378 +207,193 @@ class VitalDynamics:
         return
 
 
-def grid(M=5, N=5, grid_size=10, population_fn=None, origin_x=0, origin_y=0):
-    """
-    Create an MxN grid of cells anchored at (0, 0) with populations and geometries.
+class ConstantPopVitalDynamics:
+    def __init__(self, model):
+        self.model = model
+        self.model.patches.add_vector_property("births", model.params.nticks, dtype=np.uint32)
+        self.model.patches.add_vector_property("deaths", model.params.nticks, dtype=np.uint32)
 
-    Args:
-        M (int): Number of rows (north-south).
-        N (int): Number of columns (east-west).
-        grid_size (float): Size of each cell in kilometers (default 10).
-        population (callable): Function returning population for a cell.
-        origin_x (float): longitude of the origin (bottom-left corner) -180 <= origin_x < 180.
-        origin_y (float): latitude of the origin (bottom-left corner) -90 <= origin_y < 90.
-
-    Returns:
-        GeoDataFrame: Columns are nodeid, population, geometry.
-    """
-    if population_fn is None:
-
-        def population_fn(x: int, y: int) -> int:
-            return int(np.random.uniform(1000, 100000))
-
-    # Convert grid_size from kilometers to degrees (approximate)
-    km_per_degree = 111.320
-    grid_size_deg = grid_size / km_per_degree
-
-    cells = []
-    nodeid = 0
-    for i in range(M):
-        for j in range(N):
-            x0 = origin_x + j * grid_size_deg
-            y0 = origin_y + i * grid_size_deg
-            x1 = x0 + grid_size_deg
-            y1 = y0 + grid_size_deg
-            poly = Polygon(
-                [
-                    (x0, y0),  # NW
-                    (x1, y0),  # NE
-                    (x1, y1),  # SE
-                    (x0, y1),  # SW
-                    (x0, y0),  # Close polygon
-                ]
-            )
-            cells.append({"nodeid": nodeid, "population": population_fn(j, i), "geometry": poly})
-            nodeid += 1
-
-    gdf = gpd.GeoDataFrame(cells, columns=["nodeid", "population", "geometry"], crs="EPSG:4326")
-
-    return gdf
-
-
-def linear(N=10, node_size_km=10, population_fn=None, origin_x=0, origin_y=0):
-    """
-    Create a linear set of population nodes as rectangular cells.
-
-    Args:
-        N (int): Number of nodes.
-        node_size_km (float): Size of each node in kilometers (width).
-        population_fn (callable): Function taking node index and returning population.
-        origin_x (float): Longitude of the starting node (westmost).
-        origin_y (float): Latitude of the starting node (southmost).
-
-    Returns:
-        GeoDataFrame: Columns are nodeid, population, geometry.
-    """
-    if population_fn is None:
-
-        def population_fn(idx: int) -> int:
-            return int(np.random.uniform(1000, 100000))
-
-    # Convert node size from km to degrees (approximate)
-    meters_per_degree = 111_320
-    node_size_deg = (node_size_km * 1000) / meters_per_degree
-
-    cells = []
-    for idx in range(N):
-        x0 = origin_x + idx * node_size_deg
-        y0 = origin_y
-        x1 = x0 + node_size_deg
-        y1 = y0 + node_size_deg
-        poly = Polygon(
-            [
-                (x0, y0),  # SW
-                (x1, y0),  # SE
-                (x1, y1),  # NE
-                (x0, y1),  # NW
-                (x0, y0),  # Close polygon
-            ]
+        births = (
+            self.model.births if hasattr(self.model, "births") else RateMap.from_scalar(0.0, model.params.nticks, model.patches.count).rates
         )
-        cells.append({"nodeid": idx, "population": population_fn(idx), "geometry": poly})
+        deaths = (
+            self.model.deaths if hasattr(self.model, "deaths") else RateMap.from_scalar(0.0, model.params.nticks, model.patches.count).rates
+        )
 
-    gdf = gpd.GeoDataFrame(cells, columns=["nodeid", "population", "geometry"], crs="EPSG:4326")
+        self.rates = np.maximum(births, deaths)
 
-    return gdf
-
-
-class RateMap:
-    def __init__(self, npatches: int, nsteps: int):
-        self._npatches = npatches
-        self._nsteps = nsteps
+        assert self.rates.shape == (self.model.params.nticks, self.model.patches.count), "Births/deaths array shape mismatch"
 
         return
 
-    @staticmethod
-    def from_scalar(scalar: float, npatches: int, nsteps: int) -> "RateMap":
-        assert scalar >= 0.0, "scalar must be non-negative"
-        assert npatches > 0, "npatches must be greater than 0"
-        assert nsteps > 0, "nsteps must be greater than 0"
-        instance = RateMap(npatches=npatches, nsteps=nsteps)
-        tmp = np.array([[scalar]], dtype=np.float32)
-        instance._data = np.broadcast_to(tmp, (nsteps, npatches))
+    def prevalidate_step(self, tick: int) -> None: ...
 
-        return instance
+    def postvalidate_step(self, tick: int) -> None: ...
 
-    @staticmethod
-    def from_timeseries(data: np.ndarray, npatches: int) -> "RateMap":
-        assert all(data >= 0.0), "data must be non-negative"
-        assert len(data.shape) == 1, "data must be a 1D array"
-        assert data.shape[0] > 0, "data must have at least one element"
-        assert npatches > 0, "npatches must be greater than 0"
-        nsteps = data.shape[0]
-        instance = RateMap(npatches=npatches, nsteps=nsteps)
-        instance._data = np.broadcast_to(data[:, None], (nsteps, npatches))
+    @validate(pre=prevalidate_step, post=postvalidate_step)
+    def step(self, tick: int) -> None:
+        for node in range(self.model.patches.count):
+            # TODO - figure out tick and time step indexing
+            if self.rates[tick, node] > 0:
+                citizens = np.nonzero(self.model.people.nodeid == node)[0]
+                recycled = np.random.choice(citizens, size=self.rates[tick, node], replace=False)
+                infected = self.model.people.infected[recycled].sum()
+                self.model.people.infected[recycled] = 0
+                if infected > self.model.patches.I[tick, node]:
+                    ...
+                self.model.patches.S[tick, node] += infected
+                self.model.patches.I[tick, node] -= infected
 
-        return instance
+        return
 
-    @staticmethod
-    def from_patches(data: np.ndarray, nsteps: int) -> "RateMap":
-        assert all(data >= 0.0), "data must be non-negative"
-        assert len(data.shape) == 1, "data must be a 1D array"
-        assert data.shape[0] > 0, "data must have at least one element"
-        assert nsteps > 0, "nsteps must be greater than 0"
-        npatches = data.shape[0]
-        instance = RateMap(npatches=npatches, nsteps=nsteps)
-        instance._data = np.broadcast_to(data[None, :], (nsteps, npatches))
+    def plot(self):
+        plt.figure(figsize=(10, 5))
+        plt.plot(np.sum(self.rates, axis=1), label="Daily Recycling")
+        plt.xlabel("Tick")
+        plt.ylabel("Count")
+        plt.title("Recycling Over Time")
+        plt.legend()
+        plt.show()
 
-        return instance
-
-    @staticmethod
-    def from_array(data: np.ndarray, writeable: bool = False) -> "RateMap":
-        assert all(data >= 0.0), "data must be non-negative"
-        assert len(data.shape) == 2, "data must be a 2D array"
-        assert data.shape[0] > 0, "data must have at least one row"
-        assert data.shape[1] > 0, "data must have at least one column"
-        nsteps, npatches = data.shape
-        instance = RateMap(npatches=npatches, nsteps=nsteps)
-        instance._data = data.astype(np.float32)
-        instance._data.flags.writeable = writeable
-
-        return instance
-
-    @property
-    def rates(self):
-        return self._data
-
-    @property
-    def npatches(self):
-        return self._npatches
-
-    @property
-    def nsteps(self):
-        return self._nsteps
+        return
 
 
-def draw_vital_dynamics(birthrates: RateMap, mortality: RateMap, initial_pop: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    assert (
-        birthrates.npatches == mortality.npatches == initial_pop.shape[0]
-    ), "birthrates, mortality, and initial_pop must have the same number of patches"
-    assert birthrates.nsteps == mortality.nsteps, "birthrates and mortality must have the same number of steps"
+class Model:
+    def __init__(self, scenario, params, births=None, deaths=None, skip_capacity: bool = False):
+        """
+        Initialize the SI model.
 
-    current_pop = initial_pop.copy()
-    births = np.zeros_like(birthrates.rates, dtype=np.uint32)
-    deaths = np.zeros_like(mortality.rates, dtype=np.uint32)
+        Args:
+            scenario (GeoDataFrame): The scenario data containing per patch population, initial S and I counts, and geometry.
+            params (PropertySet): The parameters for the model, including 'nticks' and 'beta'.
+            births (np.ndarray, optional): Birth counts per patch per tick. Defaults to None.
+            deaths (np.ndarray, optional): Death counts per patch per tick. Defaults to None.
+            skip_capacity (bool, optional): If True, skips capacity checks. Defaults to False.
+        """
+        self.params = params
 
-    for t in range(birthrates.nsteps):
-        # Poisson draw for births per patch
-        births[t] = np.random.poisson(birthrates.rates[t] * current_pop / 1000)  # CBR is per 1,000 population
-        # Binomial draw for deaths per patch
-        # np.expm1(x) computes exp(x) - 1 accurately for small x
-        # -np.expm1(x) computes 1 - exp(x) accurately for small x
-        # -np.expm1(-mortality.rates[t]) gives the probability of death in a time step
-        deaths[t] = np.random.binomial(current_pop, -np.expm1(-mortality.rates[t]))
-        # Update population
-        current_pop += births[t]
-        current_pop -= deaths[t]
+        num_patches = max(np.unique(scenario.nodeid)) + 1
+        self.births = births if births is not None else RateMap.from_scalar(0, num_patches, self.params.nticks).rates
+        self.deaths = deaths if deaths is not None else RateMap.from_scalar(0, num_patches, self.params.nticks).rates
+        num_active = scenario.population.sum()
+        if not skip_capacity:
+            num_agents = num_active + self.births.sum()
+        else:
+            # Ignore births for capacity calculation
+            num_agents = num_active
 
-    return births, deaths
+        # TODO - remove int() cast with newer version of laser-core
+        self.people = LaserFrame(int(num_agents), int(num_active))
+        self.patches = LaserFrame(int(num_patches))
 
+        self.scenario = scenario
+        self.validating = False
 
-if __name__ == "__main__":
+        # Project to EPSG:3857, calculate centroids, then convert back to degrees
+        gdf_proj = self.scenario.to_crs(epsg=3857)
+        centroids_proj = gdf_proj.geometry.centroid
+        centroids_deg = centroids_proj.to_crs(epsg=4326)
 
-    class Model:
-        def __init__(self, scenario, births=None, deaths=None):
-            self.params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
-            # self.params = PropertySet({"nticks": 31, "beta": 1.0 / 32})
+        self.scenario["x"] = centroids_deg.x
+        self.scenario["y"] = centroids_deg.y
 
-            num_patches = max(np.unique(scenario.nodeid)) + 1
-            self.births = births if births is not None else RateMap.from_scalar(0, num_patches, self.params.nticks)
-            self.deaths = deaths if deaths is not None else RateMap.from_scalar(0, num_patches, self.params.nticks)
-            num_active = scenario.population.sum()
-            num_agents = num_active + self.births.sum() + self.deaths.sum()
+        # Calculate pairwise distances between nodes using centroids
+        longs = self.scenario["x"].values
+        lats = self.scenario["y"].values
+        population = self.scenario["population"].values
 
-            # TODO - remove int() cast with newer version of laser-core
-            self.people = LaserFrame(int(num_agents), int(num_active))
-            self.patches = LaserFrame(int(num_patches))
-
-            self.scenario = scenario
-            self.validating = True
-
-            # Project to EPSG:3857, calculate centroids, then convert back to degrees
-            gdf_proj = self.scenario.to_crs(epsg=3857)
-            centroids_proj = gdf_proj.geometry.centroid
-            centroids_deg = centroids_proj.to_crs(epsg=4326)
-
-            self.scenario["x"] = centroids_deg.x
-            self.scenario["y"] = centroids_deg.y
-
-            # Calculate pairwise distances between nodes using centroids
-            longs = self.scenario["x"].values
-            lats = self.scenario["y"].values
-            population = self.scenario["population"].values
-
-            # Compute distance matrix
+        # Compute distance matrix
+        if len(scenario) > 1:
             dist_matrix = distance(lats, longs, lats, longs)
+        else:
+            dist_matrix = np.array([[0.0]], dtype=np.float32)
+        assert dist_matrix.shape == (self.patches.count, self.patches.count), "Distance matrix shape mismatch"
 
-            # Compute gravity network matrix
-            self.network = gravity(population, dist_matrix, k=100, a=1, b=1, c=2)
-            self.network = row_normalizer(self.network, (1 / 16) + (1 / 32))
+        # Compute gravity network matrix
+        self.network = gravity(population, dist_matrix, k=500, a=1, b=1, c=2)
+        self.network = row_normalizer(self.network, (1 / 16) + (1 / 32))
 
-            self.basemap_provider = ctx.providers.Esri.WorldImagery
+        self.basemap_provider = ctx.providers.Esri.WorldImagery
 
-            self._components = []
+        self._components = []
 
-            return
+        return
 
-        def run(self):
-            for tick in tqdm(range(1, self.params.nticks + 1), desc="Running Simulation"):
-                for c in self.components:
-                    c.step(tick)
-
-            return
-
-        @property
-        def components(self):
-            return self._components
-
-        @components.setter
-        def components(self, value):
-            self._components = value
-
-            return
-
-        def _plot(self, basemap_provider=ctx.providers.Esri.WorldImagery):
-            if "geometry" in self.scenario.columns:
-                gdf = gpd.GeoDataFrame(self.scenario, geometry="geometry")
-
-                if basemap_provider is None:
-                    pop = gdf["population"].values
-                    norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
-                    saturations = norm(pop)
-                    colors = [plt.cm.Blues(sat) for sat in saturations]
-                    ax = gdf.plot(facecolor=colors, edgecolor="black", linewidth=1)
-                    sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
-                    sm.set_array([])
-                    cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
-                    cbar.set_label("Population")
-                    plt.title("Node Boundaries and Populations")
-                else:
-                    gdf_merc = gdf.to_crs(epsg=3857)
-                    pop = gdf_merc["population"].values
-                    # Plot the basemap and shape outlines
-                    fig, ax = plt.subplots(figsize=(8, 8))
-                    bounds = gdf_merc.total_bounds  # [minx, miny, maxx, maxy]
-                    xmid = (bounds[0] + bounds[2]) / 2
-                    ymid = (bounds[1] + bounds[3]) / 2
-                    xhalf = (bounds[2] - bounds[0]) / 2
-                    yhalf = (bounds[3] - bounds[1]) / 2
-                    ax.set_xlim(xmid - 2 * xhalf, xmid + 2 * xhalf)
-                    ax.set_ylim(ymid - 2 * yhalf, ymid + 2 * yhalf)
-                    ctx.add_basemap(ax, source=basemap_provider)
-                    gdf_merc.boundary.plot(ax=ax, edgecolor="black", linewidth=1)
-
-                    # Draw circles at centroids sized by log(population)
-                    centroids = gdf_merc.geometry.centroid
-                    print(f"{pop=}")
-                    sizes = 20 + 2 * pop / 10_000
-                    ax.scatter(centroids.x, centroids.y, s=sizes, color="red", edgecolor="black", zorder=10, alpha=0.8)
-
-                    plt.title("Node Boundaries, Centroids, and Basemap")
-
-                """
-                # Add interactive hover to display population
-                cursor = mplcursors.cursor(ax.collections[0], hover=True)
-
-                @cursor.connect("add")
-                def on_add(sel):
-                    # sel.index is a tuple; sel.index[0] is the nodeid (row index in gdf)
-                    nodeid = sel.index[0]
-                    pop_val = gdf.iloc[nodeid]["population"]
-                    sel.annotation.set_text(f"Population: {pop_val}")
-                """
-
-                plt.show()
-            else:
-                return
-
-        def plot(self):
-            # Pass basemap_provider argument to _plot if provided
-            self._plot(getattr(self, "basemap_provider", None))
+    def run(self):
+        for tick in tqdm(range(self.params.nticks), desc="Running Simulation"):
             for c in self.components:
-                if hasattr(c, "plot") and callable(c.plot):
-                    c.plot()
+                c.step(tick)
 
+        return
+
+    @property
+    def components(self):
+        return self._components
+
+    @components.setter
+    def components(self, value):
+        self._components = value
+
+        return
+
+    def _plot(self, basemap_provider=ctx.providers.Esri.WorldImagery):
+        if "geometry" in self.scenario.columns:
+            gdf = gpd.GeoDataFrame(self.scenario, geometry="geometry")
+
+            if basemap_provider is None:
+                pop = gdf["population"].values
+                norm = mcolors.Normalize(vmin=pop.min(), vmax=pop.max())
+                saturations = norm(pop)
+                colors = [plt.cm.Blues(sat) for sat in saturations]
+                ax = gdf.plot(facecolor=colors, edgecolor="black", linewidth=1)
+                sm = plt.cm.ScalarMappable(cmap=plt.cm.Blues, norm=norm)
+                sm.set_array([])
+                cbar = plt.colorbar(sm, ax=ax, fraction=0.03, pad=0.04)
+                cbar.set_label("Population")
+                plt.title("Node Boundaries and Populations")
+            else:
+                gdf_merc = gdf.to_crs(epsg=3857)
+                pop = gdf_merc["population"].values
+                # Plot the basemap and shape outlines
+                _fig, ax = plt.subplots(figsize=(8, 8))
+                bounds = gdf_merc.total_bounds  # [minx, miny, maxx, maxy]
+                xmid = (bounds[0] + bounds[2]) / 2
+                ymid = (bounds[1] + bounds[3]) / 2
+                xhalf = (bounds[2] - bounds[0]) / 2
+                yhalf = (bounds[3] - bounds[1]) / 2
+                ax.set_xlim(xmid - 2 * xhalf, xmid + 2 * xhalf)
+                ax.set_ylim(ymid - 2 * yhalf, ymid + 2 * yhalf)
+                ctx.add_basemap(ax, source=basemap_provider)
+                gdf_merc.boundary.plot(ax=ax, edgecolor="black", linewidth=1)
+
+                # Draw circles at centroids sized by log(population)
+                centroids = gdf_merc.geometry.centroid
+                print(f"{pop=}")
+                sizes = 20 + 2 * pop / 10_000
+                ax.scatter(centroids.x, centroids.y, s=sizes, color="red", edgecolor="black", zorder=10, alpha=0.8)
+
+                plt.title("Node Boundaries, Centroids, and Basemap")
+
+            """
+            # Add interactive hover to display population
+            cursor = mplcursors.cursor(ax.collections[0], hover=True)
+
+            @cursor.connect("add")
+            def on_add(sel):
+                # sel.index is a tuple; sel.index[0] is the nodeid (row index in gdf)
+                nodeid = sel.index[0]
+                pop_val = gdf.iloc[nodeid]["population"]
+                sel.annotation.set_text(f"Population: {pop_val}")
+            """
+
+            plt.show()
+        else:
             return
 
-    # scenario = grid(M=10, N=10, grid_size=10_000)
-    # Brothers, OR = 43°48'47"N 120°36'05"W (43.8130555556, -120.601388889)
-    # scenario = grid(
-    #     M=4,
-    #     N=4,
-    #     grid_size=10_000,
-    #     population=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
-    #     origin_x=-120.601388889,
-    #     origin_y=43.8130555556,
-    # )
-    scenario = linear(
-        N=10,
-        node_size_km=10,
-        population_fn=lambda idx: int(np.random.uniform(10_000, 1_000_000)),
-        origin_x=-120.601388889,
-        origin_y=43.8130555556,
-    )
-    scenario["S"] = scenario["population"] - 10
-    scenario["I"] = 10
+    def plot(self):
+        self._plot(getattr(self, "basemap_provider", None))  # Pass basemap_provider argument to _plot if provided
+        for c in self.components:
+            if hasattr(c, "plot") and callable(c.plot):
+                c.plot()
 
-    crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
-    birthrate_map = RateMap.from_patches(crude_birthrate, nsteps=365)
-    crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-    mortality_map = RateMap.from_scalar(crude_mortality_rate, npatches=scenario.shape[0], nsteps=365)
-    births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
-
-    model = Model(scenario, births, deaths)
-
-    model.basemap_provider = ctx.providers.OpenStreetMap.Mapnik
-    # model.basemap_provider = None
-
-    s = Susceptible(model)
-    i = Infected(model)
-    tx = Transmission(model)
-    vitals = VitalDynamics(model)
-    model.components = [s, i, tx, vitals]
-
-    model.run()
-    model.plot()
-
-    print("done")
-
-"""
-OpenStreetMap
- - ctx.providers.OpenStreetMap.Mapnik (default OSM map)
- - ctx.providers.OpenStreetMap.HOT
- - ctx.providers.OpenStreetMap.BlackAndWhite
-Stamen
- - ctx.providers.Stamen.Terrain
- - ctx.providers.Stamen.Toner
- - ctx.providers.Stamen.Watercolor
-CartoDB
- - ctx.providers.CartoDB.Positron (light)
- - ctx.providers.CartoDB.DarkMatter (dark)
-Esri
- - ctx.providers.Esri.WorldStreetMap
- - ctx.providers.Esri.WorldImagery (satellite)
- - ctx.providers.Esri.WorldTopoMap
-Other
- - ctx.providers.NASAGIBS.ModisTerraTrueColorCR (NASA satellite imagery)
- - ctx.providers.GeoportailFrance.orthos (France aerial imagery)
-"""
+        return
