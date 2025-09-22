@@ -131,7 +131,7 @@ class Births:
         # Potential improvements - if population is growing/shrinking, there should be more/fewer births later in the year
         # If we are doing annually, could generate a 1-year random series of births all at once, rather than a number for the year and then interpolate every day
         # Could consider increments other than 1 year.
-        doy = tick % 365 + 1  # day of year 1…365
+        doy = (tick % 365) + 1  # day of year 1…365
         year = tick // 365
 
         if doy == 1:

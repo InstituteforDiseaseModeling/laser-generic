@@ -20,7 +20,7 @@ def exec_in_env():
     else:
         bin_path = env_path / "bin"
     if not env_path.exists():
-        import subprocess
+        import subprocess  # noqa: PLC0415
 
         print(f"Making bootstrap env in: {env_path} ...")
         try:
@@ -42,7 +42,7 @@ def exec_in_env():
 
 
 def main():
-    import jinja2
+    import jinja2  # noqa: PLC0415
 
     print(f"Project path: {base_path}")
 
