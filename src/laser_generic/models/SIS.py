@@ -1,4 +1,6 @@
-"""Components for the SI model."""
+"""Components for the SIS model."""
+
+from enum import Enum
 
 import contextily as ctx
 import geopandas as gpd
@@ -14,14 +16,19 @@ from tqdm import tqdm
 from laser_generic.newutils import RateMap
 from laser_generic.newutils import validate
 
-__all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "Susceptible", "Transmission", "VitalDynamics"]
+
+class State(Enum):
+    SUSCEPTIBLE = 0
+    INFECTED = 1
+    DECEASED = -1
 
 
 class Susceptible:
     def __init__(self, model):
         self.model = model
         self.model.people.add_scalar_property("nodeid", dtype=np.uint16)
-        self.model.patches.add_vector_property("S", model.params.nticks)
+        self.model.people.add_scalar_property("state", dtype=np.int8, default=State.SUSCEPTIBLE.value)
+        self.model.patches.add_vector_property("S", model.params.nticks + 1, dtype=np.uint32)
 
         self.model.people.nodeid[:] = np.repeat(np.arange(self.model.patches.count, dtype=np.uint16), self.model.scenario.population)
         self.model.patches.S[0] = self.model.scenario.S
@@ -39,8 +46,7 @@ class Susceptible:
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         # Propagate the number of susceptible individuals in each patch
-        if tick > 0:
-            self.model.patches.S[tick] = self.model.patches.S[tick - 1]
+        self.model.patches.S[tick] = self.model.patches.S[tick - 1]
 
         return
 
@@ -56,11 +62,91 @@ class Susceptible:
         return
 
 
+class Infected:
+    def __init__(self, model):
+        self.model = model
+        self.model.people.add_scalar_property("itimer", dtype=np.uint8)
+        self.model.patches.add_vector_property("I", model.params.nticks + 1, dtype=np.uint32)
+
+        self.infectious_duration_fn = model.infectious_duration_distribution
+
+        # convenience
+        nodeids = self.model.people.nodeid
+        populations = self.model.scenario.population.values
+
+        for node in range(self.model.patches.count):
+            citizens = np.nonzero(nodeids == node)[0]
+            assert len(citizens) == populations[node], f"Found {len(citizens)} citizens in node {node} but expected {populations[node]}"
+            nseeds = self.model.scenario.I[node]
+            assert nseeds <= len(citizens), f"Node {node} has more initial infected ({nseeds}) than population ({len(citizens)})"
+            if nseeds > 0:
+                indices = np.random.choice(citizens, size=nseeds, replace=False)
+                self.model.people.state[indices] = State.INFECTED.value
+                self.model.people.itimer[indices] = self.infectious_duration_fn(nseeds)
+
+        self.model.patches.I[0] = self.model.scenario.I
+        assert np.all(self.model.patches.S[0] + self.model.patches.I[0] == self.model.scenario.population), (
+            "Initial S + I does not equal population"
+        )
+
+        return
+
+    def prevalidate_step(self, tick: int) -> None:
+        if self.model.validating:
+            ...
+
+    def postvalidate_step(self, tick: int) -> None:
+        if self.model.validating:
+            nodeids = self.model.people.nodeid
+            itimers = self.model.people.itimer
+            # All infected people should have itimer > 0
+            assert np.all(itimers[self.model.people.state == State.INFECTED.value] > 0), "Infected individuals should have itimer > 0"
+            # patches.I should match count of infected by node
+            assert np.all(self.model.patches.I[tick] == np.bincount(nodeids, itimers > 0, minlength=self.model.patches.count)), (
+                "Infected census does not match infected counts."
+            )
+
+    @validate(pre=prevalidate_step, post=postvalidate_step)
+    def step(self, tick: int) -> None:
+        """Step function for the Infected component.
+
+        Args:
+            tick (int): The current tick of the simulation.
+        """
+        # Propagate the number of infected individuals in each patch
+        self.model.patches.I[tick] = self.model.patches.I[tick - 1]
+
+        infectious = self.model.people.itimer > 0
+        self.model.people.itimer[infectious] -= 1
+        recovered = infectious & (self.model.people.itimer == 0)
+        self.model.people.state[recovered] = State.SUSCEPTIBLE.value
+
+        # Update patch counts
+        recovered_by_node = np.bincount(self.model.people.nodeid[recovered], minlength=self.model.patches.count).astype(np.uint32)
+        self.model.patches.S[tick] += recovered_by_node
+        self.model.patches.I[tick] -= recovered_by_node
+
+        return
+
+    def plot(self):
+        for node in range(self.model.patches.count):
+            plt.plot(self.model.patches.I[:, node], label=f"Node {node}")
+        plt.xlabel("Tick")
+        plt.ylabel("Infected")
+        plt.title("Infected over Time by Node")
+        plt.legend()
+        plt.show()
+
+        return
+
+
 class Transmission:
     def __init__(self, model):
         self.model = model
-        self.model.patches.add_vector_property("forces", model.params.nticks, dtype=np.float32)
-        self.model.patches.add_vector_property("incidence", model.params.nticks, dtype=np.uint32)
+        self.model.patches.add_vector_property("forces", model.params.nticks + 1, dtype=np.float32)
+        self.model.patches.add_vector_property("incidence", model.params.nticks + 1, dtype=np.uint32)
+
+        self.infectious_duration_fn = model.infectious_duration_distribution
 
         return
 
@@ -71,12 +157,14 @@ class Transmission:
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
 
-        infflags = self.model.people.infected
-        susceptible = infflags == 0
+        itimers = self.model.people.itimer
+        susceptible = itimers == 0
         draws = np.random.rand(self.model.people.count).astype(np.float32)
         nodeids = self.model.people.nodeid
         infections = (draws < ft[nodeids]) & susceptible
-        infflags[infections] = 1
+        itimers[infections] = self.infectious_duration_fn(infections.sum())
+        self.model.people.state[infections] = State.INFECTED.value
+
         inf_by_node = np.bincount(nodeids[infections], minlength=self.model.patches.count).astype(np.uint32)
         self.model.patches.S[tick] -= inf_by_node
         self.model.patches.I[tick] += inf_by_node
@@ -96,89 +184,79 @@ class Transmission:
         return
 
 
-class Infected:
-    def __init__(self, model):
-        self.model = model
-        self.model.people.add_scalar_property("infected", dtype=np.uint8)
-        self.model.patches.add_vector_property("I", model.params.nticks)
-
-        # Naïve/brute force approach to seed initial infections
-        # seeds = np.random.choice(model.people.count, size=32, replace=False)
-        # model.people.infected[seeds] = 1
-
-        # convenience
-        nodeids = self.model.people.nodeid
-        populations = self.model.scenario.population.values
-
-        for node in range(self.model.patches.count):
-            citizens = np.nonzero(nodeids == node)[0]
-            assert len(citizens) == populations[node], f"Found {len(citizens)} citizens in node {node} but expected {populations[node]}"
-            nseeds = self.model.scenario.I[node]
-            assert nseeds <= len(citizens), f"Node {node} has more initial infected ({nseeds}) than population ({len(citizens)})"
-            if nseeds > 0:
-                indices = np.random.choice(citizens, size=nseeds, replace=False)
-                self.model.people.infected[indices] = 1
-
-        self.model.patches.I[0] = self.model.scenario.I
-        assert np.all(self.model.patches.S[0] + self.model.patches.I[0] == self.model.scenario.population), (
-            "Initial S + I does not equal population"
-        )
-
-        return
-
-    def prevalidate_step(self, tick: int) -> None:
-        if self.model.validating:
-            ...
-
-    def postvalidate_step(self, tick: int) -> None:
-        if self.model.validating:
-            nodeids = self.model.people.nodeid
-            infflag = self.model.people.infected
-            # print(
-            #     f"Tick {tick}: I {self.model.patches.I[tick]} vs. counts {np.bincount(nodeids, infflag, minlength=self.model.patches.count)}"
-            # )
-            assert np.all(self.model.patches.I[tick] == np.bincount(nodeids, infflag, minlength=self.model.patches.count)), (
-                "Infected census does not match infected counts."
-            )
-
-    @validate(pre=prevalidate_step, post=postvalidate_step)
-    def step(self, tick: int) -> None:
-        """Step function for the Infected component.
-
-        Args:
-            tick (int): The current tick of the simulation.
-        """
-        # Propagate the number of infected individuals in each patch
-        if tick > 0:
-            self.model.patches.I[tick] = self.model.patches.I[tick - 1]
-
-        return
-
-    def plot(self):
-        for node in range(self.model.patches.count):
-            plt.plot(self.model.patches.I[:, node], label=f"Node {node}")
-        plt.xlabel("Tick")
-        plt.ylabel("Infected")
-        plt.title("Infected over Time by Node")
-        plt.legend()
-        plt.show()
-
-        return
-
-
 class VitalDynamics:
     def __init__(self, model):
         self.model = model
         assert hasattr(self.model, "births")
         assert hasattr(self.model, "deaths")
+        self.model.patches.add_vector_property("births", model.params.nticks + 1, dtype=np.uint32)
+        self.model.patches.add_vector_property("deaths", model.params.nticks + 1, dtype=np.uint32)
         return
 
-    def prevalidate_step(self, tick: int) -> None: ...
+    def prevalidate_step(self, tick: int) -> None:
+        if self.model.validating:
+            self._cpeople = self.model.people.count
+            self._deceased = self.model.people.state == State.DECEASED.value
 
-    def postvalidate_step(self, tick: int) -> None: ...
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        if self.model.validating:
+            nbirths = self.model.births[tick - 1].sum()
+            assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
+            istart = self._cpeople
+            iend = self.model.people.count
+            # Assert that number of births by patch matches self.model.births[tick-1]
+            birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.patches.count)
+            assert np.all(birth_counts == self.model.births[tick - 1]), "Birth counts by patch mismatch"
+            assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
+            assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
+
+            ndeaths = self.model.deaths[tick - 1].sum()
+            deceased = self.model.people.state == State.DECEASED.value
+            assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
+            # Assert that new deaths by patch matches self.model.deaths[tick-1]
+            prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.patches.count)
+            now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.patches.count)
+            death_counts = now - prv
+            assert np.all(death_counts == self.model.deaths[tick - 1]), "Death counts by patch mismatch"
+
+        return
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
-    def step(self, tick: int) -> None: ...
+    def step(self, tick: int) -> None:
+        # For each node id...
+        for node in range(self.model.patches.count):
+            # If there are deaths in this node at this tick...
+            ndeaths = self.model.deaths[tick - 1, node]
+            if ndeaths > 0:
+                # Find indices of non-deceased people in this node
+                citizens = np.nonzero((self.model.people.nodeid == node) & (self.model.people.state != State.DECEASED.value))[0]
+                npop = len(citizens)
+                if npop < ndeaths:
+                    print(
+                        f"Warning: Node {node} has {npop} citizens but {ndeaths} deaths requested at tick {tick}. Capping deaths to {npop}."
+                    )
+                    ndeaths = npop
+                # Sample deaths from the population
+                if ndeaths > 0:
+                    death_indices = np.random.choice(citizens, size=ndeaths, replace=False)
+                    self.model.people.state[death_indices] = State.DECEASED.value
+                    # Update patch counts
+                    ninf_deaths = np.sum(self.model.people.itimer[death_indices] > 0)
+                    nsus_deaths = ndeaths - ninf_deaths
+                    self.model.patches.S[tick, node] -= nsus_deaths
+                    self.model.patches.I[tick, node] -= ninf_deaths
+                    self.model.patches.deaths[tick, node] = ndeaths
+
+        births = self.model.births[tick - 1]
+        nbirths = births.sum()
+        if nbirths > 0:
+            istart, iend = self.model.people.add(nbirths)
+            nodeids = self.model.people.nodeid[istart:iend]
+            nodeids[:] = np.repeat(np.arange(self.model.patches.count, dtype=np.uint16), births)
+
+        return
 
     def plot(self):
         plt.figure(figsize=(10, 5))
@@ -187,57 +265,6 @@ class VitalDynamics:
         plt.xlabel("Tick")
         plt.ylabel("Count")
         plt.title("Births and Deaths Over Time")
-        plt.legend()
-        plt.show()
-
-        return
-
-
-class ConstantPopVitalDynamics:
-    def __init__(self, model):
-        self.model = model
-        self.model.patches.add_vector_property("births", model.params.nticks, dtype=np.uint32)
-        self.model.patches.add_vector_property("deaths", model.params.nticks, dtype=np.uint32)
-
-        births = (
-            self.model.births if hasattr(self.model, "births") else RateMap.from_scalar(0.0, model.params.nticks, model.patches.count).rates
-        )
-        deaths = (
-            self.model.deaths if hasattr(self.model, "deaths") else RateMap.from_scalar(0.0, model.params.nticks, model.patches.count).rates
-        )
-
-        self.rates = np.maximum(births, deaths)
-
-        assert self.rates.shape == (self.model.params.nticks, self.model.patches.count), "Births/deaths array shape mismatch"
-
-        return
-
-    def prevalidate_step(self, tick: int) -> None: ...
-
-    def postvalidate_step(self, tick: int) -> None: ...
-
-    @validate(pre=prevalidate_step, post=postvalidate_step)
-    def step(self, tick: int) -> None:
-        for node in range(self.model.patches.count):
-            # TODO - figure out tick and time step indexing
-            if self.rates[tick, node] > 0:
-                citizens = np.nonzero(self.model.people.nodeid == node)[0]
-                recycled = np.random.choice(citizens, size=self.rates[tick, node], replace=False)
-                infected = self.model.people.infected[recycled].sum()
-                self.model.people.infected[recycled] = 0
-                if infected > self.model.patches.I[tick, node]:
-                    ...
-                self.model.patches.S[tick, node] += infected
-                self.model.patches.I[tick, node] -= infected
-
-        return
-
-    def plot(self):
-        plt.figure(figsize=(10, 5))
-        plt.plot(np.sum(self.rates, axis=1), label="Daily Recycling")
-        plt.xlabel("Tick")
-        plt.ylabel("Count")
-        plt.title("Recycling Over Time")
         plt.legend()
         plt.show()
 
@@ -306,7 +333,7 @@ class Model:
         return
 
     def run(self):
-        for tick in tqdm(range(self.params.nticks), desc="Running Simulation"):
+        for tick in tqdm(range(1, self.params.nticks + 1), desc="Running Simulation"):
             for c in self.components:
                 c.step(tick)
 
@@ -319,6 +346,29 @@ class Model:
     @components.setter
     def components(self, value):
         self._components = value
+
+        return
+
+    @property
+    def infectious_duration_distribution(self):
+        return self._infectious_duration_distribution
+
+    @infectious_duration_distribution.setter
+    def infectious_duration_distribution(self, value):
+        if callable(value):
+            self._infectious_duration_distribution = value
+        elif isinstance(value, (list, np.ndarray)):
+            values = np.array(value)
+            assert np.all(values > 0), "All infectious duration values must be positive"
+            assert np.all(values == values.astype(int)), "All infectious duration values must be integers"
+            values = values.astype(np.uint8)
+
+            def sampler(n):
+                return np.random.choice(values, size=n, replace=True)
+
+            self._infectious_duration_distribution = sampler
+        else:
+            raise ValueError("infectious_duration_distribution must be a callable or a list/array of positive integers")
 
         return
 

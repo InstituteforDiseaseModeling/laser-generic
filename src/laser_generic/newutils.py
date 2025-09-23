@@ -192,3 +192,18 @@ def draw_vital_dynamics(birthrates: RateMap, mortality: RateMap, initial_pop: np
         current_pop -= deaths[t]
 
     return births, deaths
+
+
+def validate(pre, post):
+    def decorator(func):
+        def wrapper(self, tick: int, *args, **kwargs):
+            if pre:
+                getattr(self, pre.__name__)(tick)
+            result = func(self, tick, *args, **kwargs)
+            if post:
+                getattr(self, post.__name__)(tick)
+            return result
+
+        return wrapper
+
+    return decorator
