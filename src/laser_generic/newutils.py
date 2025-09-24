@@ -1,8 +1,13 @@
+import time
+from typing import Any
+
 import geopandas as gpd
+import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Rectangle
 from shapely.geometry import Polygon
 
-__all__ = ["RateMap", "draw_vital_dynamics", "grid", "linear"]
+__all__ = ["RateMap", "TimingStats", "draw_vital_dynamics", "grid", "linear"]
 
 
 class RateMap:
@@ -207,3 +212,204 @@ def validate(pre, post):
         return wrapper
 
     return decorator
+
+
+class _TimerContext:
+    def __init__(self, timer_stats: "TimingStats", label: str):
+        self._timer_stats = timer_stats
+        self._label = label
+        self._start_time = None
+
+    def __enter__(self):
+        self._start_time = time.perf_counter_ns()
+        self._timer_stats._enter_context(self._label, self._start_time)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        end_time = time.perf_counter_ns()
+        self._timer_stats._exit_context(self._label, self._start_time, end_time)
+
+
+class TimingStats:
+    def __init__(self):
+        self._global_start_time = time.perf_counter_ns()
+        self._frozen = False
+        self._timer_stack: list[str] = []
+        self._timing_data: dict[str, dict[str, Any]] = {}
+
+    def freeze(self) -> None:
+        if self._frozen:
+            return
+
+        self._frozen = True
+        global_end_time = time.perf_counter_ns()
+
+        if "__global__" not in self._timing_data:
+            self._timing_data["__global__"] = {
+                "total_time": global_end_time - self._global_start_time,
+                "call_count": 1,
+                "children": set(),
+                "parent": None,
+                "self_time": global_end_time - self._global_start_time,
+            }
+
+    def start(self, label: str) -> "_TimerContext":
+        if self._frozen:
+            raise RuntimeError("Cannot start new timers after freeze() has been called")
+
+        return _TimerContext(self, label)
+
+    def _enter_context(self, label: str, start_time: int) -> None:
+        current_parent = self._timer_stack[-1] if self._timer_stack else None
+        self._timer_stack.append(label)
+
+        if label not in self._timing_data:
+            self._timing_data[label] = {"total_time": 0, "call_count": 0, "children": set(), "parent": current_parent, "self_time": 0}
+
+        if current_parent:
+            self._timing_data[current_parent]["children"].add(label)
+
+        self._timing_data[label]["call_count"] += 1
+
+    def _exit_context(self, label: str, start_time: int, end_time: int) -> None:
+        elapsed = end_time - start_time
+        self._timing_data[label]["total_time"] += elapsed
+
+        if self._timer_stack and self._timer_stack[-1] == label:
+            self._timer_stack.pop()
+
+        self._compute_self_time()
+
+    def _compute_self_time(self) -> None:
+        for data in self._timing_data.values():
+            children_time = sum(self._timing_data[child]["total_time"] for child in data["children"] if child in self._timing_data)
+            data["self_time"] = data["total_time"] - children_time
+
+    def to_string(self, scale: str = "ms") -> str:
+        if not self._frozen:
+            raise RuntimeError("Must call freeze() before generating string representation")
+
+        scale_factors = {
+            "ns": (1, "ns"),
+            "microseconds": (1_000, "μs"),
+            "μs": (1_000, "μs"),
+            "milliseconds": (1_000_000, "ms"),
+            "ms": (1_000_000, "ms"),
+            "seconds": (1_000_000_000, "s"),
+            "s": (1_000_000_000, "s"),
+        }
+
+        if scale not in scale_factors:
+            raise ValueError(f"Invalid scale '{scale}'. Valid options: {list(scale_factors.keys())}")
+
+        scale_factor, scale_unit = scale_factors[scale]
+
+        root_entries = [label for label, data in self._timing_data.items() if data["parent"] is None]
+
+        result_lines = []
+        # for root in sorted(root_entries):
+        for root in root_entries:
+            self._format_timing_entry(root, result_lines, 0, scale_factor, scale_unit)
+
+        return "\n".join(result_lines)
+
+    def _format_timing_entry(self, label: str, result_lines: list[str], indent_level: int, scale_factor: int, scale_unit: str) -> None:
+        data = self._timing_data[label]
+        indent = "  " * indent_level
+        total_time = data["total_time"] / scale_factor
+        self_time = data["self_time"] / scale_factor
+        count = data["call_count"]
+
+        if len(data["children"]) > 0:
+            result_lines.append(f"{indent}{label}: {total_time:.2f}{scale_unit} (self: {self_time:.2f}{scale_unit}, calls: {count})")
+        else:
+            result_lines.append(f"{indent}{label}: {total_time:.2f}{scale_unit} (calls: {count})")
+
+        # for child in sorted(data["children"]):
+        for child in data["children"]:
+            if child in self._timing_data:
+                self._format_timing_entry(child, result_lines, indent_level + 1, scale_factor, scale_unit)
+
+    def plot_treemap(self, title: str = "Timing Treemap", scale: str = "ms", figsize: tuple = (12, 8)) -> None:
+        if not self._frozen:
+            raise RuntimeError("Must call freeze() before generating treemap")
+
+        scale_factors = {
+            "ns": (1, "ns"),
+            "microseconds": (1_000, "μs"),
+            "μs": (1_000, "μs"),
+            "milliseconds": (1_000_000, "ms"),
+            "ms": (1_000_000, "ms"),
+            "seconds": (1_000_000_000, "s"),
+            "s": (1_000_000_000, "s"),
+        }
+
+        if scale not in scale_factors:
+            raise ValueError(f"Invalid scale '{scale}'. Valid options: {list(scale_factors.keys())}")
+
+        scale_factor, scale_unit = scale_factors[scale]
+
+        _fig, ax = plt.subplots(figsize=figsize)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_title(title)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        total_time = sum(data["total_time"] for data in self._timing_data.values() if data["parent"] is None)
+
+        if total_time > 0:
+            y_pos = 0
+            # for label in sorted([l for l, d in self._timing_data.items() if d["parent"] is None]):
+            for label in [lbl for lbl, dta in self._timing_data.items() if dta["parent"] is None]:
+                data = self._timing_data[label]
+                height = data["total_time"] / total_time
+                self._draw_treemap_rect(ax, label, data, 0, y_pos, 1, height, scale_factor, scale_unit, 0)
+                y_pos += height
+
+        plt.tight_layout()
+        plt.show()
+
+    def _draw_treemap_rect(
+        self, ax, label: str, data: dict, x: float, y: float, width: float, height: float, scale_factor: int, scale_unit: str, depth: int
+    ) -> None:
+        colors = ["#ff9999", "#66b3ff", "#99ff99", "#ffcc99", "#ff99cc", "#c2c2f0", "#ffb3e6", "#c4e17f", "#76d7c4", "#f7dc6f"]
+        color = colors[depth % len(colors)]
+
+        rect = Rectangle((x, y), width, height, linewidth=1, edgecolor="black", facecolor=color, alpha=0.7)
+        ax.add_patch(rect)
+
+        time_value = data["total_time"] / scale_factor
+        text = f"{label}\n{time_value:.1f}{scale_unit}"
+
+        if width > 0.1 and height > 0.05:
+            ax.text(
+                x + width / 2,
+                y + height / 2,
+                text,
+                ha="center",
+                va="center",
+                fontsize=max(6, int(8 - depth)),
+                wrap=True,
+                bbox={"boxstyle": "round,pad=0.1", "facecolor": "white", "alpha": 0.8},
+            )
+
+        children = [child for child in data["children"] if child in self._timing_data]
+        if children and height > 0.05:
+            total_children_time = sum(self._timing_data[child]["total_time"] for child in children)
+
+            if total_children_time > 0:
+                child_y = y
+                child_height = height * 0.8
+                child_start_x = x + width * 0.1
+
+                # for child in sorted(children):
+                for child in children:
+                    child_data = self._timing_data[child]
+                    child_width = (width * 0.8) * (child_data["total_time"] / total_children_time)
+
+                    if child_width > 0.01:
+                        self._draw_treemap_rect(
+                            ax, child, child_data, child_start_x, child_y, child_width, child_height, scale_factor, scale_unit, depth + 1
+                        )
+                        child_start_x += child_width
