@@ -13,20 +13,32 @@ from laser_core.migration import distance
 
 def calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool = False) -> np.ndarray:
     """
-    Calculate the pairwise distances between points given their latitudes and longitudes.
+    Compute the full pairwise Haversine distance matrix between geographic locations.
 
-    Parameters:
-        latitudes (np.ndarray): A 1-dimensional array of latitudes.
-        longitudes (np.ndarray): A 1-dimensional array of longitudes with the same shape as latitudes.
-        verbose (bool, optional): If True, prints the upper left corner of the distance matrix. Default is False.
+    This function calculates the great-circle distances between all pairs of points
+    defined by the input latitude and longitude arrays. Distances are computed using
+    the Haversine formula (via the `distance()` function from laser-core.migration),
+    and the result is returned as a square, symmetric matrix of distances in kilometers.
+
+    Args:
+        latitudes (np.ndarray): A 1D array of latitudes in decimal degrees. Must match the shape of `longitudes`.
+        longitudes (np.ndarray): A 1D array of longitudes in decimal degrees. Must match `latitudes`.
+        verbose (bool, optional): If True, prints the top-left 4x4 corner of the distance matrix for inspection.
 
     Returns:
-        np.ndarray: A 2-dimensional array where the element at [i, j] represents the distance between the i-th and j-th points.
+        np.ndarray: A square matrix (n x n) where the element at [i, j] is the distance in kilometers
+                    between point `i` and point `j`.
 
     Raises:
-        AssertionError: If latitudes is not 1-dimensional or if latitudes and longitudes do not have the same shape.
-    """
+        AssertionError: If `latitudes` is not 1D or if `latitudes` and `longitudes` do not have equal shape.
 
+    Notes:
+        - Output matrix is symmetric with zeros on the diagonal.
+        - Internally uses the Haversine formula via `distance(...)`.
+        - Computation scales as O(n²); not recommended for very large n unless optimized.
+        - Input coordinates should be in decimal degrees and within valid bounds:
+            lat ∈ [-90, 90], lon ∈ [-180, 180]
+    """
     assert latitudes.ndim == 1, "Latitude array must be one-dimensional"
     assert longitudes.shape == latitudes.shape, "Latitude and longitude arrays must have the same shape"
     npatches = len(latitudes)
@@ -42,18 +54,30 @@ def calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool 
 
 def calc_capacity(population: np.uint32, nticks: np.uint32, cbr: np.float32, verbose: bool = False) -> np.uint32:
     """
-    Calculate the population capacity after a given number of ticks based on a constant birth rate (CBR).
+    Estimate the maximum population size after a given number of ticks, assuming constant exponential growth
+    driven by a crude birth rate (CBR) and no net mortality.
+
+    This function is typically used to preallocate memory for agent arrays and patch-level data in
+    simulations with population turnover. It assumes births and deaths are either absent or balanced,
+    and that population grows exponentially based on the provided CBR.
 
     Args:
-        population (np.uint32): The initial population.
-        nticks (np.uint32): The number of ticks (time steps) to simulate.
-        cbr (np.float32): The constant birth rate per 1000 people per year.
-        verbose (bool, optional): If True, prints detailed population growth information. Defaults to False.
+        population (np.uint32): Initial population size at tick 0.
+        nticks (np.uint32): Number of ticks (simulation time steps) to simulate.
+        cbr (np.float32): Crude birth rate (per 1000 people per year). For example, use 30.0 for 3%.
+        verbose (bool, optional): If True, prints estimated population growth using daily and annual methods.
 
     Returns:
-        np.uint32: The estimated population capacity after the given number of ticks.
-    """
+        np.uint32: Estimated upper bound on population size at tick = nticks.
 
+    Notes:
+        - The primary growth formula used is daily compounding:
+            population * (1 + daily_rate) ** nticks
+          where daily_rate is derived from the annual CBR.
+        - An alternate estimate using annual compounding is also printed if `verbose=True`.
+        - This is a conservative estimator used to size internal data structures, not a predictor
+          of actual population dynamics (which may be capped or stochastic).
+    """
     # We assume a constant birth rate (CBR) for the population growth
     # The formula is: P(t) = P(0) * (1 + CBR)^t
     # where P(t) is the population at time t, P(0) is the initial population, and t is the number of ticks
@@ -77,19 +101,23 @@ def calc_capacity(population: np.uint32, nticks: np.uint32, cbr: np.float32, ver
 # Want to think about the ways to seed infections.  Not all infections have a timer!
 def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
     """
-    Seed initial infections in random locations at the start of the simulation.
-    This function randomly selects individuals from the population and seeds
-    them with an infection, based on the specified number of initial infections.
+    Randomly seed initial infections for SI-style models without using timers.
+
+    This function randomly selects `ninfections` individuals from the population who are currently susceptible
+    and marks them as infected by setting their `susceptibility` to zero. It does not assign any infection timers,
+    making it suitable for simple SI or SIR models where timers are not required.
+
+    Unlike other seeding methods, this function explicitly ensures that only susceptible individuals are infected,
+    even if the total population includes recovered or previously infected agents.
 
     Args:
-        model: The simulation model containing the population and parameters.
-        ninfections (int, optional): The number of initial infections to seed.
-                                     Defaults to 100.
+        model: The simulation model, which must contain a `population` with
+               `count` and `susceptibility` attributes, and a PRNG in `model.prng`.
+        ninfections (int, optional): Number of initial infections to seed. Defaults to 100.
 
     Returns:
         None
     """
-
     # Seed initial infections in random locations at the start of the simulation
     cinfections = 0
     while cinfections < ninfections:
@@ -103,17 +131,20 @@ def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
 
 def seed_infections_randomly(model, ninfections: int = 100) -> None:
     """
-    Seed initial infections in random locations at the start of the simulation.
-    This function randomly selects individuals from the population and seeds
-    them with an infection, based on the specified number of initial infections.
+    Randomly seed initial infections across the entire population.
+
+    This function selects up to `ninfections` susceptible individuals at random
+    from the full population. It marks them as infected by:
+    - Setting their infection timer (`itimer`) to the model's mean infectious duration (`inf_mean`),
+    - Setting their susceptibility to zero.
 
     Args:
-        model: The simulation model containing the population and parameters.
-        ninfections (int, optional): The number of initial infections to seed.
-                                     Defaults to 100.
+        model: The simulation model, which must contain a `population` with
+               `susceptibility`, `itimer`, and `nodeid` arrays, and a `params` object with `inf_mean`.
+        ninfections (int, optional): The number of individuals to infect. Defaults to 100.
 
     Returns:
-        None
+        np.ndarray: The node IDs of the newly infected individuals.
     """
 
     # Seed initial infections in random locations at the start of the simulation
@@ -124,25 +155,9 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
     if len(myinds) > ninfections:
         myinds = np.random.permutation(myinds)[:ninfections]
 
-    # all_inds = np.random.permutation(len(pop.susceptibility))
-    # myinds = []
-
-    # for i in all_inds:
-    #     if pop.susceptibility[i] > 0:
-    #         myinds.append(i)
-    #         if len(myinds) == ninfections:
-    #             break
-    # myinds = np.array(myinds)
-
     pop.itimer[myinds] = params.inf_mean
     pop.susceptibility[myinds] = 0
     inf_nodeids = pop.nodeid[myinds]
-    # myinds = np.where(model.population.susceptibility > 0)[0]
-    # if len(myinds) > ninfections:
-    #     myinds = np.random.choice(myinds, ninfections, replace=False)
-    # model.population.itimer[myinds] = model.params.inf_mean
-    # model.population.susceptibility[myinds] = 0
-    # inf_nodeids = model.population.nodeid[myinds]
 
     return inf_nodeids
 
@@ -175,19 +190,22 @@ def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
 
 def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
     """
-    Set the population susceptibility level at the start of the simulation, in a specific patch.
-    This function randomly selects individuals from the patch and changes
-    their susceptibility to zero, according to the parameter susc_frac.
+    Randomly assign susceptibility levels to individuals in a specific patch at the start of the simulation.
+
+    This function sets a random fraction of individuals in the specified patch to be fully immune
+    (susceptibility = 0), based on the given `susc_frac` value. The remaining individuals retain their
+    default susceptibility.
 
     Args:
-        model: The simulation model containing the population and parameters.
-        ipatch: The patch to set susceptibility in
-        susc_frac (float, optional): The fraction of individuals to keep susceptible.
+        model: The simulation model, which must contain a `population` object with
+               `susceptibility`, `nodeid`, and `count` attributes.
+        ipatch (int): The index of the patch in which to set susceptibility.
+        susc_frac (float, optional): The fraction (0.0 to 1.0) of individuals in the patch
+                                     to remain susceptible. Defaults to 1.0 (i.e., all remain susceptible).
 
     Returns:
         None
     """
-
     # Seed initial infections in random locations at the start of the simulation
     indices = np.squeeze(np.where(model.population.nodeid == ipatch))
     patch_indices = model.prng.choice(indices, int(len(indices) * (1 - susc_frac)), replace=False)
@@ -198,18 +216,20 @@ def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1
 
 def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     """
-    Set the population susceptibility level at the start of the simulation.
-    This function randomly selects individuals from the population and changes
-    their susceptibility to zero, according to the parameter susc_frac.
+    Randomly assign susceptibility levels to individuals in the population at the start of the simulation.
+
+    This function sets a random fraction of the population to be fully immune (susceptibility = 0),
+    based on the given `susc_frac` value. The rest retain their default susceptibility (typically 1.0).
 
     Args:
-        model: The simulation model containing the population and parameters.
-        susc_frac (float, optional): The fraction of individuals to keep susceptible.
+        model: The simulation model containing the population and parameters. The model must have
+               a `population` object with a `susceptibility` attribute and a `count` attribute.
+        susc_frac (float, optional): The fraction (0.0 to 1.0) of the population to remain susceptible.
+                                     Defaults to 1.0 (i.e., no initial immunity).
 
     Returns:
         None
     """
-
     # Seed initial infections in random locations at the start of the simulation
     indices = model.prng.choice(model.population.count, int(model.population.count * (1 - susc_frac)), replace=False)
     model.population.susceptibility[indices] = 0
@@ -217,7 +237,8 @@ def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     return
 
 
-def add_at(A, indices, B):
+# Deprecated?
+def _add_at(A, indices, B):
     sorted_indices = np.argsort(indices)
     uniques, run_lengths = np.unique(indices[sorted_indices], return_counts=True)
     for i, length, end in zip(uniques, run_lengths, run_lengths.cumsum()):
