@@ -1,11 +1,11 @@
 site_name: LASER-generic # update to your project name
-site_url: https://institutefordiseasemodeling.github.io/laser-generic # update to your project URL 
+site_url: https://institutefordiseasemodeling.github.io/laser-generic # update to your project URL
 repo_name: InstituteforDiseaseModeling/laser-generic # update to your repo name
 repo_url: https://github.com/InstituteforDiseaseModeling/laser-generic # update to your repo URL
 theme:
   name: material
   custom_dir: docs/customization/overrides
-  font: 
+  font:
     text: Roboto
     code: Roboto Mono
   logo: images/idm-logo-transparent.png
@@ -31,9 +31,9 @@ theme:
       accent: light blue
 
 nav: # Navigation structure for the documentation
-  - index.md 
-  - What's New: whatsnew.md 
-  - Get Started: get-started.md 
+  - index.md
+  - What's New: whatsnew.md
+  - Get Started: get-started.md
   - Tutorials: # this creates a section in the TOC
     - notebooks/index.md # parent topics for sections must be an index.md file
     - SI Model with No Demographics: notebooks/01_SI_nobirths_logistic_growth.ipynb # parent topics for sections must be an index.md file
@@ -44,10 +44,10 @@ nav: # Navigation structure for the documentation
     - Intrinsic Periodicity of the SIR System: notebooks/06_SIR_wbirths_natural_periodicity.ipynb
     - Exploring the Critical Community Size of an SIR Model: notebooks/07_SIR_CCS.ipynb
     - The Relationship Between Spatial Coupling and Incidence Correlation in a 2-Patch Model: notebooks/08_2patch_SIR_wbirths_correlation.ipynb
-  - Glossary: glossary.md 
+  - Glossary: glossary.md
   - Contributing: contribute.md
 
-# icons, semantic markup, emojis 
+# icons, semantic markup, emojis
 markdown_extensions:
   - toc:
       toc_depth: 3
@@ -76,7 +76,7 @@ markdown_extensions:
 extra_javascript:
   - docs/customization/javascripts/mathjax.js
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
-  
+
 plugins:
   - search # search functionality
   - autorefs # automatically create linkable references
@@ -98,7 +98,7 @@ plugins:
   - mkdocstrings: # process docstrings to generate API reference
       handlers:
         python:
-          paths: [src] 
+          paths: [src]
           options:
             docstring_style: google
 
@@ -137,6 +137,6 @@ extra:
         - icon: material/emoticon-sad-outline
           name: This page could be improved
           data: 0
-          note: >- 
+          note: >-
             Thanks for your feedback! Help us improve this page by
             using our <a href="https://app.smartsheet.com/b/form/ec8dbb77809949ecab7286a5ca74a206" target="_blank" rel="noopener">feedback form</a>.
