@@ -108,7 +108,7 @@ def generate_d3_treemap_html(
     hierarchy_data = _convert_to_d3_hierarchy(timing_stats._timing_data, scale_factor)
 
     # Generate HTML content
-    html_content = _generate_html_template(hierarchy_data, title, scale_unit, width, height)
+    html_content = _generate_html_template(hierarchy_data, title, scale_unit)
 
     # Write to file
     output_path = Path(output_file)
@@ -116,7 +116,7 @@ def generate_d3_treemap_html(
     output_path.write_text(html_content, encoding="utf-8")
 
 
-def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, width: int, height: int) -> str:
+def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str) -> str:
     """Generate the complete HTML template with embedded D3.js treemap."""
 
     data_json = json.dumps(data, indent=2)
@@ -137,30 +137,36 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
         }}
 
         .container {{
-            max-width: {width + 40}px;
-            margin: 0 auto;
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 10px;
+            box-sizing: border-box;
             background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
         }}
 
         h1 {{
             text-align: center;
             color: #2c3e50;
-            margin-bottom: 10px;
+            margin: 0 0 5px 0;
+            font-size: 1.5em;
         }}
 
         .subtitle {{
             text-align: center;
             color: #7f8c8d;
-            margin-bottom: 30px;
+            margin: 0 0 10px 0;
             font-size: 14px;
         }}
 
         .treemap-container {{
-            text-align: center;
-            margin-bottom: 20px;
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 10px 0;
         }}
 
         .node {{
@@ -246,7 +252,7 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
         <div class="subtitle">Interactive treemap showing execution time hierarchy</div>
         <div class="breadcrumb" id="breadcrumb"></div>
         <div class="treemap-container">
-            <svg id="treemap" width="{width}" height="{height}"></svg>
+            <svg id="treemap"></svg>
         </div>
         <div class="stats" id="stats"></div>
         <div class="legend">
@@ -274,8 +280,18 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
     <script>
         const data = {data_json};
         const scaleUnit = "{scale_unit}";
-        const width = {width};
-        const height = {height};
+        let width, height;
+
+        function updateDimensions() {{
+            const container = document.querySelector('.treemap-container');
+            const rect = container.getBoundingClientRect();
+            width = Math.max(400, rect.width - 20);
+            height = Math.max(300, rect.height - 20);
+
+            d3.select("#treemap")
+                .attr("width", width)
+                .attr("height", height);
+        }}
 
         let currentData = data;
         let breadcrumbs = [];
@@ -304,7 +320,7 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
 
             let html = '<a onclick="navigateToRoot()">Root</a>';
             breadcrumbs.forEach((item, index) => {{
-                html += ' � <a onclick="navigateTo(' + index + ')">' + item.name + '</a>';
+                html += ' > <a onclick="navigateTo(' + index + ')">' + item.name + '</a>';
             }});
             breadcrumb.html(html);
         }}
@@ -498,7 +514,14 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
             drawTreemap(data);
         }}
 
+        // Handle window resize
+        window.addEventListener('resize', function() {{
+            updateDimensions();
+            drawTreemap(currentData);
+        }});
+
         // Initial render
+        updateDimensions();
         updateStats(data);
         drawTreemap(data);
     </script>
