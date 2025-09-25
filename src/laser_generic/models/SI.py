@@ -14,6 +14,7 @@ from laser_core.migration import row_normalizer
 from tqdm import tqdm
 
 from laser_generic.newutils import RateMap
+from laser_generic.newutils import TimingStats as ts
 from laser_generic.newutils import validate
 
 __all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "Susceptible", "Transmission", "VitalDynamics"]
@@ -318,9 +319,10 @@ class Model:
         return
 
     def run(self, label="SI Model") -> None:
-        for tick in tqdm(range(self.params.nticks), desc=f"Running Simulation: {label}"):
-            for c in self.components:
-                c.step(tick)
+        with ts.start(f"Running Simulation: {label}"):
+            for tick in tqdm(range(self.params.nticks), desc=f"Running Simulation: {label}"):
+                for c in self.components:
+                    c.step(tick)
 
         return
 
