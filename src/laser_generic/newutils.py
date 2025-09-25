@@ -199,21 +199,6 @@ def draw_vital_dynamics(birthrates: RateMap, mortality: RateMap, initial_pop: np
     return births, deaths
 
 
-def validate(pre, post):
-    def decorator(func):
-        def wrapper(self, tick: int, *args, **kwargs):
-            if pre:
-                getattr(self, pre.__name__)(tick)
-            result = func(self, tick, *args, **kwargs)
-            if post:
-                getattr(self, post.__name__)(tick)
-            return result
-
-        return wrapper
-
-    return decorator
-
-
 class _TimerContext:
     def __init__(self, timer_stats: "TimingStats", label: str):
         self._timer_stats = timer_stats
@@ -234,14 +219,12 @@ class _TimerContext:
         return
 
 
-class TimingStats:
-    _global_start_time: int = time.perf_counter_ns()
-
+class _TimingStats:
     def __init__(self):
-        # self._global_start_time = time.perf_counter_ns()
+        self._global_start_time = time.perf_counter_ns()
         self._frozen = False
-        self._timer_stack: list[str] = []
-        self._timing_data: dict[str, dict[str, Any]] = {}
+        self._timer_stack: list[str] = []  # Stack of paths, not labels
+        self._timing_data: dict[str, dict[str, Any]] = {}  # Keys are paths
         self._execution_order_counter = 0
 
         return
@@ -271,42 +254,63 @@ class TimingStats:
 
         return _TimerContext(self, label)
 
-    def _enter_context(self, label: str, start_time: int) -> None:
-        current_parent = self._timer_stack[-1] if self._timer_stack else None
-        self._timer_stack.append(label)
+    def _get_context_path(self, label: str) -> str:
+        """Build the full path for a context including its parent path."""
+        if not self._timer_stack:
+            return label
+        current_parent_path = self._timer_stack[-1]
+        return f"{current_parent_path}/{label}"
 
-        if label not in self._timing_data:
+    def _enter_context(self, label: str, start_time: int) -> None:
+        current_parent_path = self._timer_stack[-1] if self._timer_stack else None
+        context_path = self._get_context_path(label)
+        self._timer_stack.append(context_path)
+
+        if context_path not in self._timing_data:
             self._execution_order_counter += 1
-            self._timing_data[label] = {
+            self._timing_data[context_path] = {
+                "label": label,  # Store the display label separately
                 "total_time": 0,
                 "call_count": 0,
                 "children": set(),
-                "parent": current_parent,
+                "parent": current_parent_path,
                 "self_time": 0,
                 "execution_order": self._execution_order_counter,
             }
 
-        if current_parent:
-            self._timing_data[current_parent]["children"].add(label)
+        if current_parent_path:
+            self._timing_data[current_parent_path]["children"].add(context_path)
 
-        self._timing_data[label]["call_count"] += 1
+        self._timing_data[context_path]["call_count"] += 1
 
         return
 
     def _exit_context(self, label: str, start_time: int, end_time: int) -> None:
         elapsed = end_time - start_time
-        self._timing_data[label]["total_time"] += elapsed
 
-        if self._timer_stack and self._timer_stack[-1] == label:
-            self._timer_stack.pop()
+        # Find the context path for this label
+        context_path = None
+        if self._timer_stack:
+            # The current context should be at the top of the stack
+            current_path = self._timer_stack[-1]
+            if current_path.split("/")[-1] == label:  # Check if the last part matches
+                context_path = current_path
+
+        if context_path:
+            self._timing_data[context_path]["total_time"] += elapsed
+
+            if self._timer_stack and self._timer_stack[-1] == context_path:
+                self._timer_stack.pop()
 
         self._compute_self_time()
 
         return
 
     def _compute_self_time(self) -> None:
-        for data in self._timing_data.values():
-            children_time = sum(self._timing_data[child]["total_time"] for child in data["children"] if child in self._timing_data)
+        for _path, data in self._timing_data.items():
+            children_time = sum(
+                self._timing_data[child_path]["total_time"] for child_path in data["children"] if child_path in self._timing_data
+            )
             data["self_time"] = data["total_time"] - children_time
 
         return
@@ -330,19 +334,20 @@ class TimingStats:
 
         scale_factor, scale_unit = scale_factors[scale]
 
-        root_entries = [label for label, data in self._timing_data.items() if data["parent"] is None]
+        root_entries = [path for path, data in self._timing_data.items() if data["parent"] is None]
 
         # Sort root entries by execution order
-        root_entries.sort(key=lambda label: self._timing_data[label]["execution_order"])
+        root_entries.sort(key=lambda path: self._timing_data[path]["execution_order"])
 
         result_lines = []
-        for root in root_entries:
-            self._format_timing_entry(root, result_lines, 0, scale_factor, scale_unit)
+        for root_path in root_entries:
+            self._format_timing_entry(root_path, result_lines, 0, scale_factor, scale_unit)
 
         return "\n".join(result_lines)
 
-    def _format_timing_entry(self, label: str, result_lines: list[str], indent_level: int, scale_factor: int, scale_unit: str) -> None:
-        data = self._timing_data[label]
+    def _format_timing_entry(self, path: str, result_lines: list[str], indent_level: int, scale_factor: int, scale_unit: str) -> None:
+        data = self._timing_data[path]
+        label = data.get("label", path.split("/")[-1])  # Use stored label or extract from path
         indent = "  " * indent_level
         total_time = data["total_time"] / scale_factor
         self_time = data["self_time"] / scale_factor
@@ -354,10 +359,10 @@ class TimingStats:
             result_lines.append(f"{indent}{label}: {total_time:.2f}{scale_unit} (calls: {count})")
 
         # Sort children by execution order
-        sorted_children = sorted(data["children"], key=lambda child: self._timing_data[child]["execution_order"])
-        for child in sorted_children:
-            if child in self._timing_data:
-                self._format_timing_entry(child, result_lines, indent_level + 1, scale_factor, scale_unit)
+        sorted_children = sorted(data["children"], key=lambda child_path: self._timing_data[child_path]["execution_order"])
+        for child_path in sorted_children:
+            if child_path in self._timing_data:
+                self._format_timing_entry(child_path, result_lines, indent_level + 1, scale_factor, scale_unit)
 
         return
 
@@ -392,11 +397,12 @@ class TimingStats:
         if total_time > 0:
             y_pos = 0
             # Sort root entries by execution order
-            root_labels = [lbl for lbl, dta in self._timing_data.items() if dta["parent"] is None]
-            root_labels.sort(key=lambda label: self._timing_data[label]["execution_order"])
+            root_paths = [path for path, data in self._timing_data.items() if data["parent"] is None]
+            root_paths.sort(key=lambda path: self._timing_data[path]["execution_order"])
 
-            for label in root_labels:
-                data = self._timing_data[label]
+            for path in root_paths:
+                data = self._timing_data[path]
+                label = data.get("label", path.split("/")[-1])
                 height = data["total_time"] / total_time
                 self._draw_treemap_rect(ax, label, data, 0, y_pos, 1, height, scale_factor, scale_unit, 0)
                 y_pos += height
@@ -430,9 +436,9 @@ class TimingStats:
                 bbox={"boxstyle": "round,pad=0.1", "facecolor": "white", "alpha": 0.8},
             )
 
-        children = [child for child in data["children"] if child in self._timing_data]
+        children = [child_path for child_path in data["children"] if child_path in self._timing_data]
         if children and height > 0.05:
-            total_children_time = sum(self._timing_data[child]["total_time"] for child in children)
+            total_children_time = sum(self._timing_data[child_path]["total_time"] for child_path in children)
 
             if total_children_time > 0:
                 child_y = y
@@ -440,15 +446,45 @@ class TimingStats:
                 child_start_x = x + width * 0.1
 
                 # Sort children by execution order
-                sorted_children = sorted(children, key=lambda child: self._timing_data[child]["execution_order"])
-                for child in sorted_children:
-                    child_data = self._timing_data[child]
+                sorted_children = sorted(children, key=lambda child_path: self._timing_data[child_path]["execution_order"])
+                for child_path in sorted_children:
+                    child_data = self._timing_data[child_path]
+                    child_label = child_data.get("label", child_path.split("/")[-1])
                     child_width = (width * 0.8) * (child_data["total_time"] / total_children_time)
 
                     if child_width > 0.01:
                         self._draw_treemap_rect(
-                            ax, child, child_data, child_start_x, child_y, child_width, child_height, scale_factor, scale_unit, depth + 1
+                            ax,
+                            child_label,
+                            child_data,
+                            child_start_x,
+                            child_y,
+                            child_width,
+                            child_height,
+                            scale_factor,
+                            scale_unit,
+                            depth + 1,
                         )
                         child_start_x += child_width
 
         return
+
+
+TimingStats = _TimingStats()
+
+
+def validate(pre, post):
+    def decorator(func):
+        def wrapper(self, tick: int, *args, **kwargs):
+            if pre:
+                with TimingStats.start(pre.__name__):
+                    getattr(self, pre.__name__)(tick)
+            result = func(self, tick, *args, **kwargs)
+            if post:
+                with TimingStats.start(post.__name__):
+                    getattr(self, post.__name__)(tick)
+            return result
+
+        return wrapper
+
+    return decorator
