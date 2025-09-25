@@ -28,7 +28,7 @@ class Susceptibility:
             with the following:
               * population.add_scalar_property(name, dtype, default)
               * patches.add_vector_property(name, nticks, dtype)
-              * params.nticks (int) – number of simulation ticks.
+              * params.nticks (int) - number of simulation ticks.
         verbose : bool, optional
             If True, enables verbose output. Default is False.
 
@@ -95,12 +95,12 @@ class Susceptibility:
         if tick == 0:
             population = model.population
             susceptible_count = patches.susceptibility[tick, :]
-            condition = population.susceptibility[0:population.count] > 0
+            condition = population.susceptibility[0 : population.count] > 0
 
             if len(model.patches) == 1:
                 np.add(susceptible_count, np.count_nonzero(condition), out=susceptible_count)
             else:
-                nodeids = population.nodeid[0:population.count]
+                nodeids = population.nodeid[0 : population.count]
                 np.add.at(susceptible_count, nodeids[condition], np.uint32(1))
 
             patches.susceptibility_test[tick, :] = patches.susceptibility[tick, :].copy()
@@ -135,13 +135,9 @@ class Susceptibility:
         - Uses either slice-based or random-access update functions.
         """
         if iend is not None:
-            Susceptibility._nb_set_susceptibility_slice(
-                istart, iend, model.population.susceptibility, np.uint8(1)
-            )
+            Susceptibility._nb_set_susceptibility_slice(istart, iend, model.population.susceptibility, np.uint8(1))
         else:
-            Susceptibility._nb_set_susceptibility_randomaccess(
-                istart, model.population.susceptibility, np.uint8(1)
-            )
+            Susceptibility._nb_set_susceptibility_randomaccess(istart, model.population.susceptibility, np.uint8(1))
         return
 
     def plot(self, fig: Figure = None):

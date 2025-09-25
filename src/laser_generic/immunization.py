@@ -14,7 +14,8 @@ Notes
 
 """
 
-from typing import Optional, Sequence
+from typing import Optional
+
 import numpy as np
 from matplotlib.figure import Figure
 
@@ -111,11 +112,7 @@ class RoutineImmunization:
             immunize_nodeids = immunize_in_age_window(self.model, lower, upper, self.coverage, tick)
 
             # Update validation arrays if they exist and we immunized some agents
-            if (
-                hasattr(self.model.patches, "recovered_test")
-                and immunize_nodeids is not None
-                and len(immunize_nodeids) > 0
-            ):
+            if hasattr(self.model.patches, "recovered_test") and immunize_nodeids is not None and len(immunize_nodeids) > 0:
                 np.add.at(self.model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
                 np.add.at(self.model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
 
@@ -280,15 +277,9 @@ class ImmunizationCampaign:
             None
         """
         if (tick >= self.start) and ((tick - self.start) % self.period == 0) and (tick < self.end):
-            immunize_nodeids = immunize_in_age_window(
-                self.model, self.age_lower, self.age_upper, self.coverage, tick
-            )
+            immunize_nodeids = immunize_in_age_window(self.model, self.age_lower, self.age_upper, self.coverage, tick)
 
-            if (
-                hasattr(self.model.patches, "recovered_test")
-                and immunize_nodeids is not None
-                and len(immunize_nodeids) > 0
-            ):
+            if hasattr(self.model.patches, "recovered_test") and immunize_nodeids is not None and len(immunize_nodeids) > 0:
                 np.add.at(self.model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
                 np.add.at(self.model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
 
