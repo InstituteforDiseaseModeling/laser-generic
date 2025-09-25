@@ -63,7 +63,7 @@ class Default(unittest.TestCase):
         vitals = SI.VitalDynamics(model)
         model.components = [s, i, tx, vitals]
 
-        model.run()
+        model.run(f"SI Grid ({model.people.count:,}/{model.patches.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
@@ -106,7 +106,7 @@ class Default(unittest.TestCase):
         vitals = SI.VitalDynamics(model)
         model.components = [s, i, tx, vitals]
 
-        model.run()
+        model.run(f"SI Linear ({model.people.count:,}/{model.patches.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
@@ -143,7 +143,7 @@ class Default(unittest.TestCase):
             SI.Transmission(model),
         ]
 
-        model.run()
+        model.run(f"SI Constant Pop ({model.people.count:,}/{model.patches.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
