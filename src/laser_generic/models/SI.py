@@ -1,5 +1,7 @@
 """Components for the SI model."""
 
+from enum import Enum
+
 import contextily as ctx
 import geopandas as gpd
 import matplotlib.colors as mcolors
@@ -17,10 +19,21 @@ from laser_generic.newutils import validate
 __all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "Susceptible", "Transmission", "VitalDynamics"]
 
 
+class State(Enum):
+    SUSCEPTIBLE = 0
+    INFECTED = 1
+
+    def __new__(cls, value):
+        obj = object.__new__(cls)
+        obj._value_ = np.uint8(value)
+        return obj
+
+
 class Susceptible:
     def __init__(self, model):
         self.model = model
         self.model.people.add_scalar_property("nodeid", dtype=np.uint16)
+        self.model.people.add_scalar_property("state", dtype=np.uint8)
         self.model.patches.add_vector_property("S", model.params.nticks)
 
         self.model.people.nodeid[:] = np.repeat(np.arange(self.model.patches.count, dtype=np.uint16), self.model.scenario.population)
@@ -29,12 +42,19 @@ class Susceptible:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        if self.model.validating and tick < 10:
+        if self.model.validating:
             ...
 
     def postvalidate_step(self, tick: int) -> None:
-        if self.model.validating and tick < 10:
-            ...
+        if self.model.validating:
+            # Check that agents with state SUSCEPTIBLE by patch match self.model.patches.S[tick]
+            nodeids = self.model.people.nodeid
+            states = self.model.people.state
+            assert np.all(
+                self.model.patches.S[tick] == np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.patches.count)
+            ), "Susceptible census does not match susceptible counts."
+
+        return
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
@@ -71,12 +91,12 @@ class Transmission:
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
 
-        infflags = self.model.people.infected
-        susceptible = infflags == 0
+        states = self.model.people.state
+        susceptible = states == State.SUSCEPTIBLE.value
         draws = np.random.rand(self.model.people.count).astype(np.float32)
         nodeids = self.model.people.nodeid
         infections = (draws < ft[nodeids]) & susceptible
-        infflags[infections] = 1
+        states[infections] = State.INFECTED.value
         inf_by_node = np.bincount(nodeids[infections], minlength=self.model.patches.count).astype(np.uint32)
         self.model.patches.S[tick] -= inf_by_node
         self.model.patches.I[tick] += inf_by_node
@@ -99,12 +119,7 @@ class Transmission:
 class Infected:
     def __init__(self, model):
         self.model = model
-        self.model.people.add_scalar_property("infected", dtype=np.uint8)
         self.model.patches.add_vector_property("I", model.params.nticks)
-
-        # Naïve/brute force approach to seed initial infections
-        # seeds = np.random.choice(model.people.count, size=32, replace=False)
-        # model.people.infected[seeds] = 1
 
         # convenience
         nodeids = self.model.people.nodeid
@@ -117,7 +132,7 @@ class Infected:
             assert nseeds <= len(citizens), f"Node {node} has more initial infected ({nseeds}) than population ({len(citizens)})"
             if nseeds > 0:
                 indices = np.random.choice(citizens, size=nseeds, replace=False)
-                self.model.people.infected[indices] = 1
+                self.model.people.state[indices] = State.INFECTED.value
 
         self.model.patches.I[0] = self.model.scenario.I
         assert np.all(self.model.patches.S[0] + self.model.patches.I[0] == self.model.scenario.population), (
@@ -133,13 +148,10 @@ class Infected:
     def postvalidate_step(self, tick: int) -> None:
         if self.model.validating:
             nodeids = self.model.people.nodeid
-            infflag = self.model.people.infected
-            # print(
-            #     f"Tick {tick}: I {self.model.patches.I[tick]} vs. counts {np.bincount(nodeids, infflag, minlength=self.model.patches.count)}"
-            # )
-            assert np.all(self.model.patches.I[tick] == np.bincount(nodeids, infflag, minlength=self.model.patches.count)), (
-                "Infected census does not match infected counts."
-            )
+            state = self.model.people.state
+            assert np.all(
+                self.model.patches.I[tick] == np.bincount(nodeids, state == State.INFECTED.value, minlength=self.model.patches.count)
+            ), "Infected census does not match infected counts."
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
@@ -223,12 +235,12 @@ class ConstantPopVitalDynamics:
             if self.rates[tick, node] > 0:
                 citizens = np.nonzero(self.model.people.nodeid == node)[0]
                 recycled = np.random.choice(citizens, size=self.rates[tick, node], replace=False)
-                infected = self.model.people.infected[recycled].sum()
-                self.model.people.infected[recycled] = 0
-                if infected > self.model.patches.I[tick, node]:
+                cinfected = (self.model.people.state[recycled] == State.INFECTED.value).sum()
+                self.model.people.state[recycled] = State.SUSCEPTIBLE.value
+                if cinfected > self.model.patches.I[tick, node]:
                     ...
-                self.model.patches.S[tick, node] += infected
-                self.model.patches.I[tick, node] -= infected
+                self.model.patches.S[tick, node] += cinfected
+                self.model.patches.I[tick, node] -= cinfected
 
         return
 
@@ -305,8 +317,8 @@ class Model:
 
         return
 
-    def run(self):
-        for tick in tqdm(range(self.params.nticks), desc="Running Simulation"):
+    def run(self, label="SI Model") -> None:
+        for tick in tqdm(range(self.params.nticks), desc=f"Running Simulation: {label}"):
             for c in self.components:
                 c.step(tick)
 
