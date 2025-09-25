@@ -175,12 +175,11 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
         }}
 
         .node-text {{
-            fill: #2c3e50;
+            fill: black;
             font-size: 12px;
             font-weight: bold;
             text-anchor: middle;
             pointer-events: none;
-            text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
         }}
 
         .tooltip {{
@@ -278,10 +277,6 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
         const width = {width};
         const height = {height};
 
-        // Color scheme for different depths
-        const colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12', '#9b59b6',
-                       '#1abc9c', '#34495e', '#f1c40f', '#e67e22', '#95a5a6'];
-
         let currentData = data;
         let breadcrumbs = [];
 
@@ -290,8 +285,11 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
         const breadcrumb = d3.select("#breadcrumb");
         const stats = d3.select("#stats");
 
+        // Depth-based color scale for nested treemap
+        const colorScale = d3.scaleSequential([8, 0], d3.interpolateMagma);
+
         function getColor(d) {{
-            return colors[d.depth % colors.length];
+            return colorScale(d.depth);
         }}
 
         function formatValue(value) {{
@@ -337,24 +335,50 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
             svg.selectAll("*").remove();
 
             const root = d3.hierarchy(data)
-                .sum(d => d.children ? 0 : d.value)  // Only leaf nodes contribute to size
+                .sum(d => d.self_value || 0)  // Use self_value to avoid double-counting
                 .sort((a, b) => (a.data.execution_order || 0) - (b.data.execution_order || 0));
 
             d3.treemap()
                 .size([width, height])
-                .padding(2)
+                .paddingOuter(3)
+                .paddingTop(19)
+                .paddingInner(1)
                 (root);
 
-            const leaf = svg.selectAll("g")
-                .data(root.leaves())
+            // Add drop shadow filter for depth perception
+            const defs = svg.append("defs");
+            const filter = defs.append("filter")
+                .attr("id", "drop-shadow")
+                .attr("height", "130%");
+
+            filter.append("feGaussianBlur")
+                .attr("in", "SourceAlpha")
+                .attr("stdDeviation", 2);
+
+            filter.append("feOffset")
+                .attr("dx", 2)
+                .attr("dy", 2)
+                .attr("result", "offset");
+
+            const feMerge = filter.append("feMerge");
+            feMerge.append("feMergeNode")
+                .attr("in", "offset");
+            feMerge.append("feMergeNode")
+                .attr("in", "SourceGraphic");
+
+            // Render all nodes including parents to show nesting
+            const node = svg.selectAll("g")
+                .data(root.descendants())  // Show all nodes including parents
                 .join("g")
                 .attr("transform", d => `translate(${{d.x0}},${{d.y0}})`);
 
-            leaf.append("rect")
+            node.append("rect")
                 .attr("class", "node")
                 .attr("width", d => d.x1 - d.x0)
                 .attr("height", d => d.y1 - d.y0)
                 .attr("fill", d => getColor(d))
+                .attr("fill-opacity", d => d.children ? 0.6 : 1)
+                .style("filter", "url(#drop-shadow)")
                 .on("mouseover", function(event, d) {{
                     const selfValue = d.data.self_value || 0;
                     tooltip
@@ -385,25 +409,38 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str, w
                     }}
                 }});
 
-            leaf.append("text")
+            // Add labels for parent nodes (in top padding area)
+            node.filter(d => d.children)
+                .append("text")
+                .attr("class", "node-text")
+                .attr("x", 4)
+                .attr("y", 13)
+                .style("font-size", "11px")
+                .style("font-weight", "bold")
+                .style("fill", "black")
+                .style("text-anchor", "start")
+                .text(d => d.data.name);
+
+            // Add labels for leaf nodes (centered)
+            node.filter(d => !d.children)
+                .append("text")
                 .attr("class", "node-text")
                 .attr("x", d => (d.x1 - d.x0) / 2)
                 .attr("y", d => (d.y1 - d.y0) / 2)
                 .attr("dy", "0.35em")
+                .style("text-anchor", "middle")
+                .style("fill", "black")
+                .style("font-weight", "bold")
                 .text(d => {{
                     const width = d.x1 - d.x0;
                     const height = d.y1 - d.y0;
                     if (width < 60 || height < 30) return "";
-
-                    let name = d.data.name;
-                    if (name.length > 12) {{
-                        name = name.substring(0, 12) + "...";
-                    }}
-                    return name;
+                    return d.data.name;
                 }})
                 .append("tspan")
                 .attr("x", d => (d.x1 - d.x0) / 2)
                 .attr("dy", "1.2em")
+                .style("fill-opacity", 0.8)
                 .text(d => {{
                     const width = d.x1 - d.x0;
                     const height = d.y1 - d.y0;
