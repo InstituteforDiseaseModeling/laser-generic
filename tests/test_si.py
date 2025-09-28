@@ -3,6 +3,7 @@ from laser_generic.newutils import TimingStats as ts  # noqa: I001
 import sys
 import unittest
 from argparse import ArgumentParser
+from pathlib import Path
 
 import contextily as ctx
 import numpy as np
@@ -52,9 +53,9 @@ class Default(unittest.TestCase):
             scenario["I"] = 10
 
             crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
-            birthrate_map = RateMap.from_patches(crude_birthrate, nsteps=365)
+            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
             crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, npatches=scenario.shape[0], nsteps=365)
+            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=scenario.shape[0], nsteps=365)
             births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
 
             params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
@@ -68,11 +69,11 @@ class Default(unittest.TestCase):
                 vitals = SI.VitalDynamics(model)
                 model.components = [s, i, tx, vitals]
 
-            model.run(f"SI Grid ({model.people.count:,}/{model.patches.count:,})")
+            model.run(f"SI Grid ({model.people.count:,}/{model.nodes.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
-            print(model.patches.describe("Patches"))
+            print(model.nodes.describe("Nodes"))
 
         if PLOTTING:
             ibm = np.random.choice(len(base_maps))
@@ -97,9 +98,9 @@ class Default(unittest.TestCase):
             scenario["I"] = 10
 
             crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
-            birthrate_map = RateMap.from_patches(crude_birthrate, nsteps=365)
+            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
             crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, npatches=scenario.shape[0], nsteps=365)
+            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=scenario.shape[0], nsteps=365)
             births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
 
             params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
@@ -113,11 +114,11 @@ class Default(unittest.TestCase):
                 vitals = SI.VitalDynamics(model)
                 model.components = [s, i, tx, vitals]
 
-            model.run(f"SI Linear ({model.people.count:,}/{model.patches.count:,})")
+            model.run(f"SI Linear ({model.people.count:,}/{model.nodes.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
-            print(model.patches.describe("Patches"))
+            print(model.nodes.describe("Nodes"))
 
         if PLOTTING:
             ibm = np.random.choice(len(base_maps))
@@ -134,12 +135,12 @@ class Default(unittest.TestCase):
             # Seattle, WA = 47°36'35"N 122°19'59"W (47.609722, -122.333056)
             latitude = 47 + (36 + (35 / 60)) / 60
             longitude = -(122 + (19 + (59 / 60)) / 60)
-            scenario = grid(M=1, N=1, grid_size=10, population_fn=lambda x, y: pop, origin_x=latitude, origin_y=longitude)
+            scenario = grid(M=1, N=1, grid_size=10, population_fn=lambda x, y: pop, origin_x=longitude, origin_y=latitude)
             scenario["S"] = scenario.population - init_inf
             scenario["I"] = init_inf
             parameters = PropertySet({"seed": 2, "nticks": 730, "verbose": True, "beta": 0.04, "cbr": 400})
-            birthrates = RateMap.from_scalar(parameters.cbr / 365, nsteps=parameters.nticks, npatches=1)
-            mortality = RateMap.from_scalar(0.0, nsteps=parameters.nticks, npatches=1)
+            birthrates = RateMap.from_scalar(parameters.cbr / 365, nsteps=parameters.nticks, nnodes=1)
+            mortality = RateMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1)
             births, deaths = draw_vital_dynamics(birthrates, mortality, scenario.population)
             model = SI.Model(scenario, parameters, births=births, deaths=deaths, skip_capacity=True)
             model.validating = True
@@ -152,11 +153,11 @@ class Default(unittest.TestCase):
                     SI.Transmission(model),
                 ]
 
-            model.run(f"SI Constant Pop ({model.people.count:,}/{model.patches.count:,})")
+            model.run(f"SI Constant Pop ({model.people.count:,}/{model.nodes.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
-            print(model.patches.describe("Patches"))
+            print(model.nodes.describe("Nodes"))
 
         if PLOTTING:
             ibm = np.random.choice(len(base_maps))
@@ -174,6 +175,11 @@ if __name__ == "__main__":
     parser.add_argument("-m", type=int, default=5, help="Number of grid rows (M)")
     parser.add_argument("-n", type=int, default=5, help="Number of grid columns (N)")
     parser.add_argument("-p", type=int, default=10, help="Number of linear nodes (N)")
+
+    parser.add_argument("-g", "--grid", action="store_true", help="Run grid test")
+    parser.add_argument("-l", "--linear", action="store_true", help="Run linear test")
+    parser.add_argument("-c", "--constant", action="store_true", help="Run constant population test")
+
     parser.add_argument("unittest", nargs="*")  # Catch all for unittest args
 
     args = parser.parse_args()
@@ -184,8 +190,21 @@ if __name__ == "__main__":
     EN = args.n
     PEE = args.p
 
-    sys.argv[1:] = args.unittest  # Pass remaining args to unittest
-    unittest.main(exit=False)
+    if not (args.grid or args.linear or args.constant):  # Run everything
+        sys.argv[1:] = args.unittest  # Pass remaining args to unittest
+        unittest.main(exit=False)
+
+    else:  # Run selected tests only
+        tc = Default()
+
+        if args.grid:
+            tc.test_grid()
+
+        if args.linear:
+            tc.test_linear()
+
+        if args.constant:
+            tc.test_constant_pop()
 
     ts.freeze()
 
@@ -193,5 +212,6 @@ if __name__ == "__main__":
     print("-" * 30)
     print(ts.to_string(scale="ms"))
 
-    generate_d3_treemap_html(ts, "timing_treemap_standard.html", title="Workflow Execution Treemap", scale="ms", width=1200, height=800)
-    print("✓ Created: timing_treemap_standard.html")
+    treemap = Path.cwd() / "timing_treemap.html"
+    generate_d3_treemap_html(ts, treemap, title="Workflow Execution Treemap", scale="ms", width=1200, height=800)
+    print(f"✓ Created: '{treemap}'")
