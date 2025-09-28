@@ -9,8 +9,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from laser_generic.newutils import TimingStats
 
-def _convert_to_d3_hierarchy(timing_data: dict[str, dict[str, Any]], scale_factor: int = 1_000_000) -> dict[str, Any]:
+
+def _convert_to_d3_hierarchy(timing_stats: TimingStats, scale_factor: int = 1_000_000) -> dict[str, Any]:
     """
     Convert TimingStats data to D3.js hierarchical format.
 
@@ -22,54 +24,27 @@ def _convert_to_d3_hierarchy(timing_data: dict[str, dict[str, Any]], scale_facto
         Dictionary in D3 hierarchy format with name, value, and children
     """
 
-    def build_node(label: str) -> dict[str, Any]:
-        data = timing_data[label]
+    def build_node(tc: Any, depth: int) -> dict[str, Any]:
+        total_time = tc.elapsed / scale_factor
+        mean_time = tc.elapsed / tc.ncalls / scale_factor
+        exclusive_time = tc.exclusive / scale_factor
         node = {
-            "name": label,
-            "value": data["total_time"] / scale_factor,
-            "self_value": data["self_time"] / scale_factor,
-            "call_count": data["call_count"],
-            "execution_order": data["execution_order"],
+            "name": tc.label,
+            "value": total_time,
+            "mean": mean_time,
+            "exclusive": exclusive_time,
+            "call_count": tc.ncalls,
+            "depth": depth,
         }
 
-        if data["children"]:
-            # Sort children by execution order
-            sorted_children = sorted(data["children"], key=lambda child: timing_data[child]["execution_order"])
-            node["children"] = [build_node(child) for child in sorted_children if child in timing_data]
+        if tc.children:
+            node["children"] = [build_node(child, depth + 1) for child in tc.children.values()]
 
         return node
 
-    # Find root nodes (those without parents)
-    root_nodes = [label for label, data in timing_data.items() if data["parent"] is None and label != "__global__"]
+    root = build_node(timing_stats.root, 1)
 
-    if not root_nodes:
-        # If no explicit root nodes, create a wrapper with global data
-        global_data = timing_data.get("__global__", {})
-        return {
-            "name": "Total Execution",
-            "value": global_data.get("total_time", 0) / scale_factor,
-            "self_value": global_data.get("self_time", 0) / scale_factor,
-            "call_count": global_data.get("call_count", 1),
-            "execution_order": 0,
-            "children": [],
-        }
-
-    # Sort root nodes by execution order
-    root_nodes.sort(key=lambda label: timing_data[label]["execution_order"])
-
-    if len(root_nodes) == 1:
-        return build_node(root_nodes[0])
-    else:
-        # Multiple root nodes - create wrapper
-        total_time = sum(timing_data[root]["total_time"] for root in root_nodes)
-        return {
-            "name": "Total Execution",
-            "value": total_time / scale_factor,
-            "self_value": 0,
-            "call_count": 1,
-            "execution_order": 0,
-            "children": [build_node(root) for root in root_nodes],
-        }
+    return root
 
 
 def generate_d3_treemap_html(
@@ -86,17 +61,19 @@ def generate_d3_treemap_html(
         width: Width of the treemap in pixels
         height: Height of the treemap in pixels
     """
-    if not timing_stats._frozen:
+    if not timing_stats.frozen:
         raise RuntimeError("TimingStats must be frozen before generating treemap")
 
     scale_factors = {
         "ns": (1, "ns"),
-        "microseconds": (1_000, "µs"),
+        "nanoseconds": (1, "ns"),
+        "us": (1_000, "µs"),
         "µs": (1_000, "µs"),
-        "milliseconds": (1_000_000, "ms"),
+        "microseconds": (1_000, "µs"),
         "ms": (1_000_000, "ms"),
-        "seconds": (1_000_000_000, "s"),
+        "milliseconds": (1_000_000, "ms"),
         "s": (1_000_000_000, "s"),
+        "seconds": (1_000_000_000, "s"),
     }
 
     if scale not in scale_factors:
@@ -105,7 +82,7 @@ def generate_d3_treemap_html(
     scale_factor, scale_unit = scale_factors[scale]
 
     # Convert timing data to D3 format
-    hierarchy_data = _convert_to_d3_hierarchy(timing_stats._timing_data, scale_factor)
+    hierarchy_data = _convert_to_d3_hierarchy(timing_stats, scale_factor)
 
     # Generate HTML content
     html_content = _generate_html_template(hierarchy_data, title, scale_unit)
@@ -114,6 +91,8 @@ def generate_d3_treemap_html(
     output_path = Path(output_file)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html_content, encoding="utf-8")
+
+    return
 
 
 def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str) -> str:
@@ -326,8 +305,8 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str) -
         }}
 
         function updateStats(data) {{
-            const totalValue = data.value;
-            const callCount = data.call_count;
+            const totalValue = data.value; // total time
+            const callCount = data.call_count;  // total calls
             const nodeCount = countNodes(data);
 
             stats.html(`
@@ -351,8 +330,8 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str) -
             svg.selectAll("*").remove();
 
             const root = d3.hierarchy(data)
-                .sum(d => d.self_value || 0)  // Use self_value to avoid double-counting
-                .sort((a, b) => (a.data.execution_order || 0) - (b.data.execution_order || 0));
+                .sum(d => d.value || 0);
+                // .sort((a, b) => (a.data.execution_order || 0) - (b.data.execution_order || 0));
 
             d3.treemap()
                 .size([width, height])
@@ -396,7 +375,7 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str) -
                 .attr("fill-opacity", d => d.children ? 0.6 : 1)
                 .style("filter", "url(#drop-shadow)")
                 .on("mouseover", function(event, d) {{
-                    const selfValue = d.data.self_value || 0;
+                    const selfValue = d.data.exclusive || 0;
                     tooltip
                         .style("display", "block")
                         .style("left", (event.pageX + 10) + "px")
@@ -406,6 +385,7 @@ def _generate_html_template(data: dict[str, Any], title: str, scale_unit: str) -
                             Total Time: ${{formatValue(d.data.value)}}<br/>
                             Self Time: ${{formatValue(selfValue)}}<br/>
                             Calls: ${{d.data.call_count}}<br/>
+                            Mean Time: ${{formatValue(d.data.mean)}}<br/>
                             Depth: ${{d.depth}}
                         `);
                 }})
