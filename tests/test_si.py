@@ -13,7 +13,6 @@ import laser_generic.models.SI as SI
 from laser_generic.newutils import RateMap
 from laser_generic.newutils import draw_vital_dynamics
 from laser_generic.newutils import grid
-from laser_generic.newutils import linear
 from laser_generic.tstreemap import generate_d3_treemap_html
 
 PLOTTING = False
@@ -42,7 +41,7 @@ class Default(unittest.TestCase):
             grd = grid(
                 M=EM,
                 N=EN,
-                grid_size=10,
+                node_size_km=10,
                 population_fn=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
                 # population_fn=lambda x, y: int(np.random.exponential(50_000)),
                 origin_x=-120.601388889,
@@ -86,10 +85,11 @@ class Default(unittest.TestCase):
     def test_linear(self):
         with ts.start("test_linear"):
             # Brothers, OR = 43°48'47"N 120°36'05"W (43.8130555556, -120.601388889)
-            lin = linear(
+            lin = grid(
+                M=1,
                 N=PEE,
                 node_size_km=10,
-                population_fn=lambda idx: int(np.random.uniform(10_000, 1_000_000)),
+                population_fn=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
                 origin_x=-120.601388889,
                 origin_y=43.8130555556,
             )
