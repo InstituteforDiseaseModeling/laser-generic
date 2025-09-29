@@ -334,6 +334,7 @@ class Transmission:
         plt.title(f"Incidence - Node {itwo}")  # ({self.names[itwo]})")
         plt.plot(self.model.patches.incidence[:, itwo])
 
+        yield
         return
 
 

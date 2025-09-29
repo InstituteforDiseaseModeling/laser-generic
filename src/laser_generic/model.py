@@ -308,8 +308,11 @@ class Model:
 
         if not pdf:
             for instance in self.instances:
-                for _plot in instance.plot():
-                    plt.show()
+                try:
+                    for _plot in instance.plot():
+                        plt.show()
+                except Exception as ex:
+                    print( f"Exception iterating on plot function of instance: {ex}" )
 
         else:
             click.echo("Generating PDF output…")
@@ -361,19 +364,32 @@ class Model:
 
         yield
 
+        if hasattr(self.population, "dob"):
+            _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
+            _fig.suptitle("Distribution of Day of Birth for Initial Population")
+
+            count = self.patches.populations[0, :].sum()  # just the initial population
+            dobs = self.population.dob[0:count]
+            plt.hist(dobs, bins=100)
+            plt.xlabel("Day of Birth")
+
+            yield
+
         _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
-        _fig.suptitle("Distribution of Day of Birth for Initial Population")
 
-        count = self.patches.populations[0, :].sum()  # just the initial population
-        dobs = self.population.dob[0:count]
-        plt.hist(dobs, bins=100)
-        plt.xlabel("Day of Birth")
+        #metrics = pd.DataFrame(self.metrics, columns=["tick"] + [type(phase).__name__ for phase in self.phases])
 
-        yield
+        # Build proper column names for both census and phase timings
+        names = []
+        for census in self.censuses:
+            names.append(type(census).__name__ + "_census")
+        for phase in self.phases:
+            names.append(type(phase).__name__)
 
-        _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
-
-        metrics = pd.DataFrame(self.metrics, columns=["tick"] + [type(phase).__name__ for phase in self.phases])
+        metrics = pd.DataFrame(
+            self.metrics,
+            columns=["tick"] + names
+        )
         plot_columns = metrics.columns[1:]
         sum_columns = metrics[plot_columns].sum()
 

@@ -126,6 +126,7 @@ class RoutineImmunization:
         Returns:
             None
         """
+        yield
         return
 
 
@@ -293,4 +294,5 @@ class ImmunizationCampaign:
         Returns:
             None
         """
+        yield
         return

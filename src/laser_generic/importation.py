@@ -98,6 +98,7 @@ class Infect_Random_Agents:
         Returns:
             None
         """
+        yield
         return
 
 
@@ -185,4 +186,5 @@ class Infect_Agents_In_Patch:
         Returns:
             None
         """
+        yield
         return
