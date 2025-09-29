@@ -20,7 +20,7 @@ from laser_generic.newutils import validate
 
 class State(Enum):
     SUSCEPTIBLE = 0
-    INFECTED = 1
+    INFECTIOUS = 1
     DECEASED = -1
 
     def __new__(cls, value):
@@ -34,14 +34,17 @@ class Susceptible:
         self.model = model
         self.model.people.add_scalar_property("nodeid", dtype=np.uint16)
         self.model.people.add_scalar_property("state", dtype=np.int8, default=State.SUSCEPTIBLE.value)
-        self.model.nodes.add_vector_property("S", model.params.nticks + 1, dtype=np.uint32)
+        self.model.nodes.add_vector_property("S", model.params.nticks + 1, dtype=np.int32)
 
         self.model.people.nodeid[:] = np.repeat(np.arange(self.model.nodes.count, dtype=np.uint16), self.model.scenario.population)
         self.model.nodes.S[0] = self.model.scenario.S
 
         return
 
-    def prevalidate_step(self, tick: int) -> None: ...
+    def prevalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.S[tick] >= 0), "Susceptible counts must be non-negative"
+
+        return
 
     def postvalidate_step(self, tick: int) -> None:
         # Check that agents with state SUSCEPTIBLE by patch match self.model.nodes.S[tick]
@@ -52,7 +55,7 @@ class Susceptible:
             == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
         ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
         assert np.all(self.model.nodes.S[tick + 1] == self.model.nodes.S[tick]), (
-            "Susceptible counts should not change outside of Transmission and VitalDynamics."
+            "Susceptible counts should not change in Susceptible.step()."
         )
 
         return
@@ -84,11 +87,12 @@ class Susceptible:
         return
 
 
-class Infected:
+class Infectious:
     def __init__(self, model):
         self.model = model
         self.model.people.add_scalar_property("itimer", dtype=np.uint8)
-        self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.uint32)
+        self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.int32)
+        self.model.nodes.add_vector_property("recovered", model.params.nticks + 1, dtype=np.uint32)
 
         self.infectious_duration_fn = model.infectious_duration_distribution
 
@@ -97,14 +101,15 @@ class Infected:
         populations = self.model.scenario.population.values
 
         for node in range(self.model.nodes.count):
-            citizens = np.nonzero(nodeids == node)[0]
-            assert len(citizens) == populations[node], f"Found {len(citizens)} citizens in node {node} but expected {populations[node]}"
+            i_citizens = np.nonzero(nodeids == node)[0]
+            assert len(i_citizens) == populations[node], f"Found {len(i_citizens)} citizens in node {node} but expected {populations[node]}"
             nseeds = self.model.scenario.I[node]
-            assert nseeds <= len(citizens), f"Node {node} has more initial infected ({nseeds}) than population ({len(citizens)})"
+            assert nseeds <= len(i_citizens), f"Node {node} has more initial infectious ({nseeds}) than population ({len(i_citizens)})"
             if nseeds > 0:
-                indices = np.random.choice(citizens, size=nseeds, replace=False)
-                self.model.people.state[indices] = State.INFECTED.value
-                self.model.people.itimer[indices] = self.infectious_duration_fn(nseeds)
+                i_infectious = np.random.choice(i_citizens, size=nseeds, replace=False)
+                self.model.people.state[i_infectious] = State.INFECTIOUS.value
+                self.model.people.itimer[i_infectious] = self.infectious_duration_fn(nseeds)
+                assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
 
         self.model.nodes.I[0] = self.model.scenario.I
         assert np.all(self.model.nodes.S[0] + self.model.nodes.I[0] == self.model.scenario.population), (
@@ -113,20 +118,36 @@ class Infected:
 
         return
 
-    def prevalidate_step(self, tick: int) -> None: ...
+    def prevalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.I[tick] >= 0), "Infected counts must be non-negative"
+        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
+        assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
+        i_non_zero = np.nonzero(self.model.people.itimer > 0)[0]
+        assert np.all(self.model.people.state[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+
+        return
 
     def postvalidate_step(self, tick: int) -> None:
-        nodeids = self.model.people.nodeid
+        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
+
+        states = self.model.people.state
         itimers = self.model.people.itimer
-        # All infected people should have itimer > 0
-        assert np.all(itimers[self.model.people.state == State.INFECTED.value] > 0), "Infected individuals should have itimer > 0"
-        # nodes.I should match count of infected by node
-        assert np.all(self.model.nodes.I[tick] == np.bincount(nodeids, itimers > 0, minlength=self.model.nodes.count)), (
-            "Infected census does not match infected counts."
+
+        i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
+        assert np.all(itimers[i_infectious] > 0), "Infected individuals should have itimer > 0"
+        i_non_zero = np.nonzero(itimers > 0)[0]
+        assert np.all(states[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+
+        nodeids = self.model.people.nodeid
+        # nodes.I should match count of infectious by node
+        assert np.all(
+            self.model.nodes.I[tick + 1] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
+        ), "Infected census does not match infectious counts (by state)."
+        assert np.all(self.model.nodes.I[tick + 1] == np.bincount(nodeids, itimers > 0, minlength=self.model.nodes.count)), (
+            "Infected census does not match infectious counts (by itimer)."
         )
-        assert np.all(self.model.nodes.I[tick + 1] == self.model.nodes.I[tick]), (
-            "Infected counts should not change outside of Transmission and VitalDynamics."
-        )
+
+        return
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
@@ -135,20 +156,22 @@ class Infected:
         Args:
             tick (int): The current tick of the simulation.
         """
-        # Propagate the number of infected individuals in each patch
+        # Propagate the number of infectious individuals in each patch
         # state(t+1) = state(t) + ∆state(t), initialize state(t+1) with state(t)
         self.model.nodes.I[tick + 1] = self.model.nodes.I[tick]
 
-        infectious = self.model.people.itimer > 0
-        self.model.people.itimer[infectious] -= 1
-        recovered = infectious & (self.model.people.itimer == 0)
-        self.model.people.state[recovered] = State.SUSCEPTIBLE.value
+        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
+        self.model.people.itimer[i_infectious] -= 1
+        i_recovered = i_infectious[np.nonzero(self.model.people.itimer[i_infectious] == 0)[0]]
+        self.model.people.state[i_recovered] = State.SUSCEPTIBLE.value
 
         # Update patch counts
-        recovered_by_node = np.bincount(self.model.people.nodeid[recovered], minlength=self.model.nodes.count).astype(np.uint32)
+        recovered_by_node = np.bincount(self.model.people.nodeid[i_recovered], minlength=self.model.nodes.count).astype(np.uint32)
         # state(t+1) = state(t) + ∆state(t)
         self.model.nodes.S[tick + 1] += recovered_by_node
         self.model.nodes.I[tick + 1] -= recovered_by_node
+        # Record today's ∆
+        self.model.nodes.recovered[tick] = recovered_by_node
 
         return
 
@@ -180,6 +203,16 @@ class Transmission:
 
         return
 
+    def prevalidate_step(self, tick: int) -> None: ...
+
+    def postvalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.incidence[tick] >= 0), "Incidence counts must be non-negative"
+        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
+        assert np.all(self.model.people.itimer[i_infectious] > 0), "Infectious individuals should have itimer > 0"
+
+        return
+
+    @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         ft = self.model.nodes.forces[tick]
         if np.all((self.model.nodes.S[tick] + self.model.nodes.I[tick]) == 0):
@@ -190,16 +223,15 @@ class Transmission:
         ft -= transfer.sum(axis=1)
 
         itimers = self.model.people.itimer
-        # susceptible = itimers == 0
         states = self.model.people.state
         susceptible = states == State.SUSCEPTIBLE.value
         draws = np.random.rand(self.model.people.count).astype(np.float32)
         nodeids = self.model.people.nodeid
-        infections = (draws < ft[nodeids]) & susceptible
-        itimers[infections] = self.infectious_duration_fn(infections.sum())
-        self.model.people.state[infections] = State.INFECTED.value
+        i_infections = np.nonzero((draws < ft[nodeids]) & susceptible)[0]
+        itimers[i_infections] = self.infectious_duration_fn(len(i_infections))
+        states[i_infections] = State.INFECTIOUS.value
 
-        inf_by_node = np.bincount(nodeids[infections], minlength=self.model.nodes.count).astype(np.uint32)
+        inf_by_node = np.bincount(nodeids[i_infections], minlength=self.model.nodes.count).astype(np.uint32)
         # state(t+1) = state(t) + ∆state(t)
         self.model.nodes.S[tick + 1] -= inf_by_node
         self.model.nodes.I[tick + 1] += inf_by_node
@@ -236,6 +268,8 @@ class VitalDynamics:
         return
 
     def postvalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
+
         nbirths = self.model.births[tick].sum()
         assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
         istart = self._cpeople
@@ -264,8 +298,8 @@ class VitalDynamics:
             # If there are deaths in this node at this tick...
             if (ndeaths := self.model.deaths[tick, node]) > 0:
                 # Find indices of non-deceased people in this node
-                citizens = np.nonzero((self.model.people.nodeid == node) & (self.model.people.state != State.DECEASED.value))[0]
-                npop = len(citizens)
+                i_citizens = np.nonzero((self.model.people.nodeid == node) & (self.model.people.state != State.DECEASED.value))[0]
+                npop = len(i_citizens)
                 if npop < ndeaths:
                     print(
                         f"Warning: Node {node} has {npop} citizens but {ndeaths} deaths requested at tick {tick}. Capping deaths to {npop}."
@@ -273,11 +307,17 @@ class VitalDynamics:
                     ndeaths = npop
                 # Sample deaths from the population
                 if ndeaths > 0:
-                    to_remove = np.random.choice(citizens, size=ndeaths, replace=False)
-                    self.model.people.state[to_remove] = State.DECEASED.value
+                    i_to_remove = np.random.choice(i_citizens, size=ndeaths, replace=False)
+                    nsus_deaths = np.sum(self.model.people.state[i_to_remove] == State.SUSCEPTIBLE.value)
+
+                    i_infectious = i_to_remove[np.nonzero(self.model.people.state[i_to_remove] == State.INFECTIOUS.value)[0]]
+                    self.model.people.itimer[i_infectious] = 0
+                    ninf_deaths = len(i_infectious)
+
+                    self.model.people.state[i_to_remove] = State.DECEASED.value
+
                     # Update patch counts
-                    ninf_deaths = np.sum(self.model.people.itimer[to_remove] > 0)
-                    nsus_deaths = ndeaths - ninf_deaths
+                    assert nsus_deaths + ninf_deaths == ndeaths, "Death state count mismatch"
                     # state(t+1) = state(t) + ∆state(t)
                     self.model.nodes.S[tick + 1, node] -= nsus_deaths
                     self.model.nodes.I[tick + 1, node] -= ninf_deaths
@@ -291,6 +331,7 @@ class VitalDynamics:
             nodeids[:] = np.repeat(np.arange(self.model.nodes.count, dtype=np.uint16), self.model.births[tick])
             # State.SUSCEPTIBLE.value is the default
             # self.model.people.state[istart:iend] = State.SUSCEPTIBLE.value
+            # self.model.people.itimer[istart:iend] = 0
             # state(t+1) = state(t) + ∆state(t)
             self.model.nodes.S[tick + 1] += self.model.births[tick]
             # Record today's ∆

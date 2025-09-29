@@ -4,7 +4,7 @@ import geopandas as gpd
 import numpy as np
 from shapely.geometry import Polygon
 
-__all__ = ["RateMap", "TimingStats", "draw_vital_dynamics", "grid", "linear"]
+__all__ = ["RateMap", "TimingStats", "draw_vital_dynamics", "grid"]
 
 
 class RateMap:
@@ -75,7 +75,7 @@ class RateMap:
         return self._nsteps
 
 
-def grid(M=5, N=5, grid_size=10, population_fn=None, origin_x=0, origin_y=0):
+def grid(M=5, N=5, node_size_km=10, population_fn=None, origin_x=0, origin_y=0):
     """
     Create an MxN grid of cells anchored at (0, 0) with populations and geometries.
 
@@ -95,18 +95,18 @@ def grid(M=5, N=5, grid_size=10, population_fn=None, origin_x=0, origin_y=0):
         def population_fn(x: int, y: int) -> int:
             return int(np.random.uniform(1000, 100000))
 
-    # Convert grid_size from kilometers to degrees (approximate)
+    # Convert node_size_km from kilometers to degrees (approximate)
     km_per_degree = 111.320
-    grid_size_deg = grid_size / km_per_degree
+    node_size_deg = node_size_km / km_per_degree
 
     cells = []
     nodeid = 0
     for i in range(M):
         for j in range(N):
-            x0 = origin_x + j * grid_size_deg
-            y0 = origin_y + i * grid_size_deg
-            x1 = x0 + grid_size_deg
-            y1 = y0 + grid_size_deg
+            x0 = origin_x + j * node_size_deg
+            y0 = origin_y + i * node_size_deg
+            x1 = x0 + node_size_deg
+            y1 = y0 + node_size_deg
             poly = Polygon(
                 [
                     (x0, y0),  # NW
@@ -118,53 +118,6 @@ def grid(M=5, N=5, grid_size=10, population_fn=None, origin_x=0, origin_y=0):
             )
             cells.append({"nodeid": nodeid, "population": population_fn(j, i), "geometry": poly})
             nodeid += 1
-
-    gdf = gpd.GeoDataFrame(cells, columns=["nodeid", "population", "geometry"], crs="EPSG:4326")
-
-    return gdf
-
-
-def linear(N=10, node_size_km=10, population_fn=None, origin_x=0, origin_y=0):
-    """
-    Create a linear set of population nodes as rectangular cells.
-
-    Args:
-        N (int): Number of nodes.
-        node_size_km (float): Size of each node in kilometers (width).
-        population_fn (callable): Function taking node index and returning population.
-        origin_x (float): Longitude of the starting node (westmost).
-        origin_y (float): Latitude of the starting node (southmost).
-
-    Returns:
-        GeoDataFrame: Columns are nodeid, population, geometry.
-    """
-    if population_fn is None:
-
-        def population_fn(idx: int) -> int:
-            return int(np.random.uniform(1000, 100000))
-
-    # Convert node size from km to degrees (approximate)
-    # meters_per_degree = 111_320
-    # node_size_deg = (node_size_km * 1000) / meters_per_degree
-    km_per_degree = 111.320
-    node_size_deg = node_size_km / km_per_degree
-
-    cells = []
-    for idx in range(N):
-        x0 = origin_x + idx * node_size_deg
-        y0 = origin_y
-        x1 = x0 + node_size_deg
-        y1 = y0 + node_size_deg
-        poly = Polygon(
-            [
-                (x0, y0),  # SW
-                (x1, y0),  # SE
-                (x1, y1),  # NE
-                (x0, y1),  # NW
-                (x0, y0),  # Close polygon
-            ]
-        )
-        cells.append({"nodeid": idx, "population": population_fn(idx), "geometry": poly})
 
     gdf = gpd.GeoDataFrame(cells, columns=["nodeid", "population", "geometry"], crs="EPSG:4326")
 

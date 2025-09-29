@@ -14,7 +14,6 @@ import laser_generic.models.SIS as SIS
 from laser_generic.newutils import RateMap
 from laser_generic.newutils import draw_vital_dynamics
 from laser_generic.newutils import grid
-from laser_generic.newutils import linear
 from laser_generic.tstreemap import generate_d3_treemap_html
 
 PLOTTING = False
@@ -22,6 +21,7 @@ VERBOSE = False
 EM = 10
 EN = 10
 PEE = 10
+VALIDATING = False
 
 base_maps = [
     ctx.providers.Esri.NatGeoWorldMap,
@@ -43,7 +43,7 @@ class Default(unittest.TestCase):
             grd = grid(
                 M=EM,
                 N=EN,
-                grid_size=10,
+                node_size_km=10,
                 population_fn=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
                 # population_fn=lambda x, y: int(np.random.exponential(50_000)),
                 origin_x=-119.204167,
@@ -72,10 +72,12 @@ class Default(unittest.TestCase):
                 )
 
                 s = SIS.Susceptible(model)
-                i = SIS.Infected(model)
+                i = SIS.Infectious(model)
                 tx = SIS.Transmission(model)
                 vitals = SIS.VitalDynamics(model)
                 model.components = [s, i, tx, vitals]
+
+                model.validating = VALIDATING
 
             model.run(f"SIS Grid ({model.people.count:,}/{model.nodes.count:,})")
 
@@ -95,10 +97,11 @@ class Default(unittest.TestCase):
     def test_linear(self):
         with ts.start("test_linear"):
             # Black Rock Desert, NV = 40°47'13"N 119°12'15"W (40.786944, -119.204167)
-            lin = linear(
+            lin = grid(
+                M=1,
                 N=PEE,
                 node_size_km=10,
-                population_fn=lambda idx: int(np.random.uniform(10_000, 1_000_000)),
+                population_fn=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
                 origin_x=-119.204167,
                 origin_y=40.786944,
             )
@@ -125,10 +128,12 @@ class Default(unittest.TestCase):
                 )
 
                 s = SIS.Susceptible(model)
-                i = SIS.Infected(model)
+                i = SIS.Infectious(model)
                 tx = SIS.Transmission(model)
                 vitals = SIS.VitalDynamics(model)
                 model.components = [s, i, tx, vitals]
+
+                model.validating = VALIDATING
 
             model.run(f"SIS Linear ({model.people.count:,}/{model.nodes.count:,})")
 
@@ -152,6 +157,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", type=int, default=5, help="Number of grid rows (M)")
     parser.add_argument("-n", type=int, default=5, help="Number of grid columns (N)")
     parser.add_argument("-p", type=int, default=10, help="Number of linear nodes (N)")
+    parser.add_argument("--validating", action="store_true", help="Enable validating mode")
 
     parser.add_argument("-g", "--grid", action="store_true", help="Run grid test")
     parser.add_argument("-l", "--linear", action="store_true", help="Run linear test")
@@ -162,10 +168,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
     PLOTTING = args.plot
     VERBOSE = args.verbose
+    VALIDATING = args.validating
 
     EM = args.m
     EN = args.n
     PEE = args.p
+
+    args.grid = True
+
+    print(f"Using arguments {args=}")
 
     if not (args.grid or args.linear or args.constant):  # Run everything
         sys.argv[1:] = args.unittest  # Pass remaining args to unittest
