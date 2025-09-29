@@ -163,7 +163,7 @@ class Births:
             timing.append(int(delta.total_seconds() * 1_000_000))
         self._metrics.append(timing)
 
-        model.patches.populations[tick + 1, :] += todays_births
+        model.patches.populations[tick + 1, :] += np.uint32(todays_births)
 
         return
 

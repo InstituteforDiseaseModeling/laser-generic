@@ -391,7 +391,8 @@ class TransmissionSIR(Transmission):
         condition = population.susceptibility[0 : population.count] == 0
 
         if len(patches) == 1:
-            np.add(contagion, np.sum(condition), out=contagion)
+            # np.add(contagion, np.sum(condition), out=contagion)
+            np.add(contagion, np.array(np.sum(condition), dtype=contagion.dtype), out=contagion)
         else:
             nodeids = population.nodeid[0 : population.count]
             np.add.at(contagion, nodeids[condition], 1)
@@ -414,6 +415,7 @@ class TransmissionSIR(Transmission):
         Transmission.nb_transmission_update_noexposed(
             population.susceptibility,
             population.nodeid,
+            population.state,
             forces,
             population.itimer,
             population.count,
