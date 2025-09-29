@@ -2,7 +2,7 @@
     include-markdown "../README.md"
 %}
 
-## Learn more 
+## Learn more
 
 <div class="grid cards" markdown>
 

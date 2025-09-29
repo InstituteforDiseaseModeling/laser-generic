@@ -1,6 +1,6 @@
 # Get Started
 
-LASER-generic is an implementation of the LASER agent-based modeling framework for modeling generic diseases, such as measles. 
+LASER-generic is an implementation of the LASER agent-based modeling framework for modeling generic diseases, such as measles.
 
 ## Installation
 
@@ -18,4 +18,4 @@ To use the project:
 
 ## Tutorials
 
-Begin with the first tutorial [SI Model with No Demographics](tutorials/01_nobirths_logistic_growth.ipynb) for a very simple implementation of the LASER-generic model. 
+Begin with the first tutorial [SI Model with No Demographics](tutorials/01_nobirths_logistic_growth.ipynb) for a very simple implementation of the LASER-generic model.

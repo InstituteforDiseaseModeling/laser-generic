@@ -13,11 +13,11 @@ include .readthedocs.yml
 include pytest.ini
 include tox.ini
 
-include AUTHORS.rst
-include CHANGELOG.rst
-include CONTRIBUTING.rst
+include AUTHORS.md
+include CHANGELOG.md
+include CONTRIBUTING.md
 include LICENSE
-include README.rst
+include README.md
 
 recursive-exclude notebooks *.ipynb
 global-exclude *.py[cod] __pycache__/* *.so *.dylib

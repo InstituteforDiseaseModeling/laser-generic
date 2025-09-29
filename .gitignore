@@ -68,7 +68,7 @@ output/*.html
 output/*/index.html
 
 # mkdocs build files
-site/* 
+site/*
 
 # Mypy Cache
 .mypy_cache/
