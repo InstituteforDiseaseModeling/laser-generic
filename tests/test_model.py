@@ -245,8 +245,6 @@ def test_births_only_maintain_population_stability():
     populations = model.patches.populations[:, 0]
     assert np.all(populations == pop), "Population changed under Births_ConstantPop when it shouldn't"
 
-    
-
 
 @pytest.mark.modeltest
 def test_biweekly_scalar_modulates_transmission():
@@ -544,18 +542,18 @@ def test_targeted_importation_hits_correct_patch():
     model = Model(scenario, params)
     importation = Infect_Agents_In_Patch(model, verbose=params.verbose)  # Inject into patch 1
     model.components = [Births_ConstantPop, Susceptibility, Exposure, Infection, Transmission, importation]
-    #seed_infections_in_patch(model, ipatch=1, ninfections=1)
+    # seed_infections_in_patch(model, ipatch=1, ninfections=1)
     model.run()
 
     cases_patch0 = model.patches.cases_test[:, 0]
     cases_patch1 = model.patches.cases_test[:, 1]
 
-    #assert np.sum(cases_patch1) > 0, "Patch 1 should receive infections"
-    #assert np.sum(cases_patch0) == 0, "Patch 0 should remain uninfected"
+    # assert np.sum(cases_patch1) > 0, "Patch 1 should receive infections"
+    # assert np.sum(cases_patch0) == 0, "Patch 0 should remain uninfected"
     if not (np.sum(cases_patch1) > 0):
         print("🚨 Patch 1 cases:\n", cases_patch1)
         print("🚨 Total infections in Patch 1:", np.sum(cases_patch1))
-        assert False, "Patch 1 should receive infections"
+        pytest.fail("Patch 1 should receive infections")
 
     if not (np.sum(cases_patch0) == 0):
         print("🚨 Patch 0 cases:\n", cases_patch0)
@@ -563,9 +561,9 @@ def test_targeted_importation_hits_correct_patch():
         print("🚨 Full incidence matrix:\n", model.patches.incidence)
         print("🚨 Parameters:\n", params)
         print("🚨 Population state summary:")
-        print("  nodeid counts:", np.bincount(model.population.nodeid[:model.population.count]))
-        print("  infected states:", np.sum(model.population.state[:model.population.count] == 2))
-        assert False, "Patch 0 should remain uninfected"
+        print("  nodeid counts:", np.bincount(model.population.nodeid[: model.population.count]))
+        print("  infected states:", np.sum(model.population.state[: model.population.count] == 2))
+        pytest.fail("Patch 0 should remain uninfected")
 
 
 @pytest.mark.modeltest
@@ -606,7 +604,7 @@ def test_transmission_sir_behaves_like_transmission():
 
     # Optional: ensure they're similar (within ~20%)
     diff = np.abs(cases1 - cases2)
-    #assert np.max(diff) < 0.2 * pop, "Outputs of both transmissions should be similar"
+    # assert np.max(diff) < 0.2 * pop, "Outputs of both transmissions should be similar"
 
     if np.max(diff) >= 0.2 * pop:
         import matplotlib.pyplot as plt
@@ -627,4 +625,4 @@ def test_transmission_sir_behaves_like_transmission():
         plt.tight_layout()
         plt.savefig("test_transmission_comparison.png")  # Save for inspection
 
-        assert False, "Outputs of both transmissions differ significantly. See 'test_transmission_comparison.png'"
+        pytest.fail("Outputs of both transmissions differ significantly. See 'test_transmission_comparison.png'")
