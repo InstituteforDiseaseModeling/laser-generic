@@ -20,8 +20,8 @@ from matplotlib.figure import Figure
 
 class Births:
     """
-    A component to handle the birth events in a model. Requires a model with a `population` attribute 
-    that has a `dob` attribute. It calculates the number of births based on the model's parameters and 
+    A component to handle the birth events in a model. Requires a model with a `population` attribute
+    that has a `dob` attribute. It calculates the number of births based on the model's parameters and
     updates the population accordingly. It also provides methods to plot birth statistics.
 
     Attributes:
