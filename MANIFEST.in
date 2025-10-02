@@ -24,3 +24,9 @@ global-exclude *.py[cod] __pycache__/* *.so *.dylib
 
 exclude convert_clean.sh
 prune data
+
+exclude mkdocs.yml
+recursive-exclude docs *
+exclude tox.ini
+exclude .pre-commit-config.yaml
+exclude tests/*.gz
