@@ -194,7 +194,7 @@ class ImmunizationCampaign:
     On eligible ticks, all agents with age in [age_lower, age_upper) are considered
     and immunized with probability `coverage`. Susceptibles become immune
     (`population.susceptibility[idx] = 0`). This aligns with the campaign-style
-    immunization component described in the `laser-generic` docs:contentReference[oaicite:2]{index=2}.
+    immunization component described in the `laser-generic` docs.
     """
 
     def __init__(
