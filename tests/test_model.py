@@ -1,286 +1,630 @@
-import itertools
-
 import numpy as np
 import pandas as pd
 import pytest
 from laser_core import PropertySet
-from scipy.optimize import curve_fit
-from scipy.optimize import fsolve
 
+from laser_generic import Births
 from laser_generic import Births_ConstantPop
+from laser_generic import Births_ConstantPop_VariableBirthRate
+from laser_generic import Exposure
+from laser_generic import ImmunizationCampaign
 from laser_generic import Model
+from laser_generic import RoutineImmunization
 from laser_generic import Susceptibility
-from laser_generic import Transmission
+from laser_generic.importation import Infect_Agents_In_Patch
+from laser_generic.importation import Infect_Random_Agents
 from laser_generic.infection import Infection
 from laser_generic.infection import Infection_SIS
+from laser_generic.transmission import Transmission
+from laser_generic.transmission import TransmissionSIR
+from laser_generic.utils import get_default_parameters
+from laser_generic.utils import seed_infections_in_patch
 from laser_generic.utils import seed_infections_randomly
 from laser_generic.utils import seed_infections_randomly_SI
-from laser_generic.utils import set_initial_susceptibility_randomly
 
 
-def SI_logistic(t, beta, size, t0):
-    return size / (1 + (size - 1) * np.exp(-beta * (t - t0)))
+def assert_model_sanity(model):
+    S_counts = model.patches.susceptibility_test[1:, 0]  # drop tick 0
+    I_counts = model.patches.cases_test[1:, 0]  # drop tick 0
+    N_counts = model.patches.populations[-1:, 0]  # already len == nticks
+    inc = model.patches.incidence[:, 0]  # already len == nticks
+
+    assert np.sum(inc) > 0, "No transmission occurred"
+    assert np.any(S_counts < S_counts[0]), "Susceptibles never decreased"
+    assert np.all(S_counts >= 0), "Negative susceptible count"
+    assert np.all(S_counts <= N_counts), "Susceptibles exceed population"
+
+    I_derived = np.cumsum(inc) + model.patches.cases_test[0, 0]
+    assert np.allclose(I_counts, I_derived, atol=1e-5), "Cases not consistent with incidence"
 
 
-def SI_logistic_cbr(t, beta, popsize, cbr, t0):
-    mu = (1 + cbr / 1000) ** (1 / 365) - 1
-    x = 1 - mu / beta
-    return popsize * x / (1 + (popsize * x - 1) * np.exp(-beta * x * (t - t0)))
-
-
-def SIS_logistic(t, beta, popsize, gamma, t0):
-    x = 1 - gamma / beta
-    return popsize * x / (1 + (popsize * x - 1) * np.exp(-beta * x * (t - t0)))
-
-
-def KM_limit(z, R0, S0, I0):
-    if R0 * S0 < 1:
-        return 0
-    else:
-        return z - S0 * (1 - np.exp(-R0 * (z + I0)))
-
-
-@pytest.mark.skip("long running test")
 @pytest.mark.modeltest
-def test_si_model_nobirths():
-    """
-    Test the SI model without births.
-
-    This test simulates an SI (Susceptible-Infected) model for a population of 100,000.
-    The number of cases is fitted to a logistic function, and the fitted beta values are compared
-    to the original beta values to ensure they are within 5% of each other.
-
-    Steps:
-    1. Initialize parameters and scenario.
-    2. Run the model for each combination of seed and beta.
-    3. Fit the number of cases to a logistic function.
-    4. Assert that the fitted beta values to the original beta values.
-
-    Asserts:
-    - The relative difference between the original and fitted beta values is less than 5%.
-
-    """
-    nticks = 730
-    t = np.arange(730)
+def test_si_model_nobirths_flow():
+    nticks = 180
     pop = 1e5
+    scenario = pd.DataFrame(data=[["homenode", pop, "0,0"]], columns=["name", "population", "location"])
+    parameters = PropertySet({"seed": 42, "nticks": nticks, "verbose": False, "beta": 0.03})
 
-    seeds = list(range(10))
-    betas = [0.01 * i for i in range(1, 11)]
-    scenario = pd.DataFrame(data=[["homenode", pop, "47°36′35″N 122°19′59″W"]], columns=["name", "population", "location"])
-    for seed, beta in zip(seeds, betas):
-        parameters = PropertySet({"seed": seed, "nticks": nticks, "verbose": True, "beta": beta})
-        model = Model(scenario, parameters)
-        model.components = [
-            Susceptibility,
-            Transmission,
-        ]
-        seed_infections_randomly_SI(model, ninfections=1)
-        model.run()
-        cases = [model.patches.cases[i][0] for i in range(nticks)]
-        popt, pcov = curve_fit(SI_logistic, t, cases, p0=[0.05, 1.1e5, 1])
+    model = Model(scenario, parameters)
+    model.components = [Susceptibility, Transmission]
+    seed_infections_randomly_SI(model, ninfections=1)
+    model.run()
 
-        output = []
-        output.append(
-            pd.DataFrame.from_dict(
-                {
-                    "seed": seed,
-                    "beta": beta,
-                    "cases": [np.array(cases)],
-                    "fitted_beta": popt[0],
-                    "fitted_size": popt[1],
-                    "fitted_t0": popt[2],
-                }
-            )
-        )
-
-    assert np.all(np.abs((output["beta"] - output["fitted_beta"]) / output["beta"]) < 0.05)
+    assert_model_sanity(model)
+    assert model.patches.cases_test[-1, 0] > model.patches.cases_test[0, 0], "Infection count should increase"
 
 
-@pytest.mark.skip("long running test")
 @pytest.mark.modeltest
-def test_si_model_wbirths():
-    """
-    Test the SI model with births.
-
-    This test initializes a scenario with a population of 1 million.
-    The number of cases is fitted to a logistic function, and the fitted beta values are compared
-    to the original beta and crude birth rates (cbr) values to ensure they are within 5% of each other.
-
-    The test asserts that the fitted beta and cbr values are within 5% of the original values.
-
-    Steps:
-    1. Initialize parameters and scenario.
-    2. Run the model for each combination of seed, beta, and cbr.
-    3. Fit the number of cases to a logistic function.
-    4. Assert that the fitted beta values to the original beta values.
-
-    Raises:
-    AssertionError: If the fitted beta or cbr values deviate more than 5% from the original values.
-    """
-    seeds = [42 + i for i in range(10)]
-    pop = 1e6
-    nticks = 3650
-    betas = [0.002 + 0.005 * i for i in range(1, 11)]
-    cbrs = np.random.randint(10, 120, 10)
+def test_sir_nobirths_short():
+    pop = 1e5
+    nticks = 365
+    beta = 0.06
+    gamma = 1 / 20
     scenario = pd.DataFrame(data=[["homenode", pop]], columns=["name", "population"])
+    parameters = PropertySet({"seed": 1, "nticks": nticks, "verbose": False, "beta": beta, "inf_mean": 1 / gamma})
 
-    output = []
-    for seed, beta, cbr in zip(seeds, betas, cbrs):
-        parameters = PropertySet({"seed": seed, "nticks": nticks, "verbose": True, "beta": beta, "cbr": cbr})
-        model = Model(scenario, parameters)
-        model.components = [
-            Births_ConstantPop,
-            Susceptibility,
-            Transmission,
-        ]
-        seed_infections_randomly_SI(model, ninfections=3)
-        model.run()
-        cases = [model.patches.cases[i][0] for i in range(nticks)]
-        popt, pcov = curve_fit(
-            SI_logistic_cbr,
-            np.arange(nticks),
-            cases,
-            p0=[beta * (1 + 0.1 * np.random.normal()), pop, cbr * (1 + 0.1 * np.random.normal()), 1],
-            bounds=([0, pop - 1, 0, -100], [1, pop + 1, 600, 100]),
-        )
-        output.append(
-            pd.DataFrame.from_dict(
-                {
-                    "seed": seed,
-                    "beta": beta,
-                    "cbr": cbr,
-                    "cases": [np.array(cases)],
-                    "fitted_beta": popt[0],
-                    "fitted_size": popt[1],
-                    "fitted_cbr": popt[2],
-                    "fitted_t0": popt[3],
-                }
-            )
-        )
+    model = Model(scenario, parameters)
+    model.components = [Susceptibility, Infection, Transmission]
+    seed_infections_randomly(model, ninfections=50)
+    model.run()
 
-    assert np.all(np.abs((output["beta"] - output["fitted_beta"]) / output["beta"]) < 0.05)
-    assert np.all(np.abs((output["cbr"] - output["fitted_cbr"]) / output["cbr"]) < 0.05)
+    assert_model_sanity(model)
+    peak_I = np.max(model.patches.cases_test[:, 0])
+    final_I = model.patches.cases_test[-1, 0]
+    assert final_I < peak_I, "SIR model should recover"
 
 
-@pytest.mark.skip("long running test")
 @pytest.mark.modeltest
-def test_sir_nobirths():
-    """
-    Test the SIR model without births.
-
-    This test simulates the SIR model over a specified number of ticks, with a range of beta and gamma values,
-    and verifies that the fitted parameters are within acceptable bounds of the original parameters.
-
-    The test performs the following steps:
-    1. Initialize parameters and scenario.
-    2. Run the model for each combination of seed, beta, and gamma.
-    3. Assert that the relative error between the original and fitted beta values is less than 5%.
-    4. Assert that the relative error between the original and fitted gamma values is less than 10%.
-
-    Raises:
-        AssertionError: If the relative error between the original and fitted parameters exceeds the specified bounds.
-    """
-    nticks = 3000
-    t = np.arange(nticks)
-    betarange = [0.03, 0.1]
-    gammarange = [1 / 200, 1 / 50]
-    seeds = list(range(10))
-    pop = 3e5
-    betas = np.random.uniform(betarange[0], betarange[1], 10)
-    gammas = np.random.uniform(gammarange[0], gammarange[1], 10)
-    output = pd.DataFrame(columns=["seed", "beta", "gamma", "cases", "fitted_beta", "fitted_gamma", "fitted_t0"])
+def test_si_model_with_births_short():
+    pop = 1e5
+    nticks = 365 * 2
+    beta = 0.02
+    cbr = 0.03
     scenario = pd.DataFrame(data=[["homenode", pop]], columns=["name", "population"])
+    parameters = PropertySet({"seed": 123, "nticks": nticks, "verbose": False, "beta": beta, "cbr": cbr})
 
-    for seed, beta, gamma in zip(seeds, betas, gammas):
-        parameters = PropertySet({"seed": seed, "nticks": nticks, "verbose": True, "beta": beta, "inf_mean": 1 / gamma})
-        model = Model(scenario, parameters)
-        model.components = [
-            Infection_SIS,
-            Susceptibility,
-            Transmission,
-        ]
-        seed_infections_randomly(model, ninfections=3)
-        model.run()
-        cases = [model.patches.cases[i][0] for i in range(nticks)]
-        popt, pcov = curve_fit(
-            SIS_logistic,
-            t,
-            cases,
-            p0=[np.mean(betarange), pop, np.mean(gammarange), 1],
-            bounds=([betarange[0] / 2, pop - 1, gammarange[0] / 2, -300], [betarange[1] * 2, pop + 1, gammarange[1] * 2, 300]),
-        )
+    model = Model(scenario, parameters)
+    model.components = [Births_ConstantPop, Susceptibility, Transmission]
+    seed_infections_randomly_SI(model, ninfections=10)
+    model.run()
 
-        output.append(
-            pd.DataFrame.from_dict(
-                {
-                    "seed": seed,
-                    "beta": beta,
-                    "gamma": gamma,
-                    "cases": [np.array(cases)],
-                    "fitted_beta": popt[0],
-                    "fitted_gamma": popt[2],
-                    "fitted_t0": popt[3],
-                }
-            )
-        )
-
-    assert np.all(np.abs((output["beta"] - output["fitted_beta"]) / output["beta"]) < 0.05)
-    assert np.all(np.abs((output["gamma"] - output["fitted_gamma"]) / output["gamma"]) < 0.1)
+    assert_model_sanity(model)
+    assert model.patches.cases_test[-1, 0] > 0, "Infections should persist with demographic turnover"
 
 
-@pytest.mark.skip("long running test")
 @pytest.mark.modeltest
-def test_sir_nobirths_outbreak():
-    """
-    Test the SIR model without births during an outbreak scenario.
+def test_sei_model_with_births_short():
+    pop = 1e5
+    nticks = 365 * 2
+    beta = 0.05
+    cbr = 0.03
+    scenario = pd.DataFrame(data=[["homenode", pop]], columns=["name", "population"])
+    parameters = get_default_parameters() | {
+        "seed": 123,
+        "nticks": nticks,
+        "verbose": False,
+        "beta": beta,
+        "cbr": cbr,
+        "inf_mean": 5,
+    }
 
-    This test simulates an SIR (Susceptible-Infectious-Recovered) model without births
-    to evaluate the expected and observed number of infections and susceptible individuals
-    at the end of the outbreak. The test uses a range of basic reproduction numbers (R0)
-    and initial susceptible fractions (S0) to generate different scenarios.
+    model = Model(scenario, parameters)
+    model.components = [Births_ConstantPop, Susceptibility, Infection, Transmission]
+    seed_infections_randomly_SI(model, ninfections=10)
+    model.run()
 
-    The test performs the following steps:
-    1. Initialize population size, infection mean duration, and initial number of infections.
-    2. Calculate the expected final number of infections (I_inf_exp) and susceptibles (S_inf_exp)
-       using the Kermack-McKendrick limit.
-    3. Assert that the expected and observed values are close within a tolerance of 0.05.
+    assert_model_sanity(model)
+    assert model.patches.cases_test[-1, 0] > 0, "Infections should persist with demographic turnover"
 
-    Raises:
-        AssertionError: If the expected and observed values for infections or susceptibles
-                        are not within the specified tolerance.
-    """
-    population = 1e5
-    inf_mean = 20
-    init_inf = 20
 
-    R0s = np.concatenate((np.linspace(0.2, 1.0, 5), np.linspace(1.5, 10.0, 25)))
-    S0s = [1.0, 0.8, 0.6, 0.4, 0.2]
-    output = pd.DataFrame(list(itertools.product(R0s, S0s)), columns=["R0", "S0"])
-    output["I_inf_exp"] = [
-        fsolve(KM_limit, 0.5 * (R0 * S0 >= 1), args=(R0, S0, init_inf / population))[0] for R0, S0 in zip(output["R0"], output["S0"])
+@pytest.mark.modeltest
+def test_sis_model_short():
+    pop = 1e5
+    nticks = 500
+    beta = 0.05
+    inf_mean = 10
+    scenario = pd.DataFrame(data=[["homenode", pop]], columns=["name", "population"])
+    parameters = PropertySet({"seed": 99, "nticks": nticks, "verbose": False, "beta": beta, "inf_mean": inf_mean})
+
+    model = Model(scenario, parameters)
+    model.components = [Susceptibility, Infection_SIS, Transmission]
+    seed_infections_randomly(model, ninfections=50)
+    model.run()
+
+    assert_model_sanity(model)
+    I_counts = model.patches.cases_test[:, 0]
+    assert np.any(I_counts[1:] > I_counts[0]), "Infections should initially rise"
+    assert I_counts[-1] > 0, "SIS should maintain nonzero infections"
+
+
+@pytest.mark.modeltest
+def test_routine_immunization_blocks_spread():
+    pop = 1e5
+    nticks = 365 * 2
+    parameters = get_default_parameters() | {
+        "seed": 321,
+        "nticks": nticks,
+        "beta": 0.05,
+        "cbr": 0.03,
+        "inf_mean": 5,
+    }
+    scenario = pd.DataFrame(data=[["homenode", pop]], columns=["name", "population"])
+    model = Model(scenario, parameters)
+    model.components = [
+        Births_ConstantPop,
+        Susceptibility,
+        Exposure,
+        Infection,
+        Transmission,
+        lambda m, v: RoutineImmunization(m, period=365, coverage=0.9, age=365, verbose=v),
     ]
-    output["S_inf_exp"] = output["S0"] - output["I_inf_exp"]
-    output["I_inf_obs"] = np.nan
-    output["S_inf_obs"] = np.nan
+    seed_infections_randomly_SI(model, ninfections=10)
+    model.run()
 
-    for index, row in output.iterrows():
-        scenario = pd.DataFrame(data=[["homenode", population]], columns=["name", "population"])
-        parameters = PropertySet({"seed": 2, "nticks": 1460, "verbose": True, "inf_mean": inf_mean, "beta": row["R0"] / inf_mean})
+    assert_model_sanity(model)
+    assert model.patches.cases_test[-1, 0] < 0.5 * pop, "Immunization should suppress large outbreaks"
 
-        model = Model(scenario, parameters)
-        model.components = [
-            Susceptibility,
-            Transmission,
-            Infection,
-        ]
-        set_initial_susceptibility_randomly(model, row["S0"])
-        seed_infections_randomly(model, ninfections=init_inf)
+
+@pytest.mark.modeltest
+def test_mobility_spreads_infection_across_nodes():
+    """
+    Test that infections spread from one patch to another via mobility network.
+    """
+    pop = 50000
+    nticks = 180
+    beta = 0.05
+
+    # Two patches, connected by a simple symmetric mobility matrix
+    scenario = pd.DataFrame(
+        {
+            "name": ["node0", "node1"],
+            "population": [pop, pop],
+            "longitude": [0.0, 1.0],
+            "latitude": [0.0, 0.0],
+        }
+    )
+
+    parameters = get_default_parameters() | {"seed": 42, "nticks": nticks, "verbose": False, "beta": beta, "inf_mean": 5, "inf_sigma": 2}
+
+    model = Model(scenario, parameters)
+
+    # Define uniform bidirectional mobility between the two nodes
+    mobility_matrix = np.array([[0.95, 0.05], [0.05, 0.95]])
+    model.patches.network = mobility_matrix
+
+    model.components = [
+        Susceptibility,
+        Exposure,
+        Infection,
+        Transmission,
+    ]
+
+    # Infect node 0 only
+    seed_infections_in_patch(model, ninfections=10, ipatch=0)
+    model.run()
+
+    assert_model_sanity(model)
+
+    # Confirm node 1 has some non-zero infections by end
+    I_node1 = model.patches.cases_test[:, 1]
+    assert I_node1[-1] > 0, "Infection should spread to node 1 via mobility network"
+
+
+@pytest.mark.modeltest
+def test_births_only_maintain_population_stability():
+    """
+    Confirm that Births_ConstantPop maintains stable population when transmission is disabled.
+    """
+    pop = 1e5
+    nticks = 365 * 3  # 3 years
+    cbr = 0.03  # Crude birth rate
+
+    parameters = get_default_parameters() | {
+        "seed": 888,
+        "nticks": nticks,
+        "beta": 0.0,  # No transmission
+        "cbr": cbr,
+        "verbose": False,
+    }
+
+    scenario = pd.DataFrame(
+        {
+            "name": ["home"],
+            "population": [pop],
+        }
+    )
+
+    model = Model(scenario, parameters)
+    model.components = [
+        Births_ConstantPop,
+        Susceptibility,
+    ]
+
+    model.run()
+
+    populations = model.patches.populations[:, 0]
+    assert np.all(populations == pop), "Population changed under Births_ConstantPop when it shouldn't"
+
+    
+
+
+@pytest.mark.modeltest
+def test_biweekly_scalar_modulates_transmission():
+    """
+    Ensure that biweekly_beta_scalar modulates transmission rate as expected.
+    """
+    from copy import deepcopy
+
+    pop = 1e5
+    nticks = 364  # One year with 26 biweekly periods
+    base_beta = 0.05
+
+    # Start with all 1.0
+    base_params = get_default_parameters() | {
+        "seed": 999,
+        "nticks": nticks,
+        "beta": base_beta,
+        "inf_mean": 5,
+        "biweekly_beta_scalar": [1.0] * 26,
+        "verbose": False,
+    }
+
+    # Perturbed version with lower transmission in first half of year
+    low_transmission = deepcopy(base_params)
+    low_transmission["biweekly_beta_scalar"][:13] = [0.5] * 13
+
+    scenario = pd.DataFrame(
+        {
+            "name": ["home"],
+            "population": [pop],
+        }
+    )
+
+    # Baseline model
+    model1 = Model(scenario, base_params)
+    model1.components = [Susceptibility, Exposure, Infection, Transmission]
+    seed_infections_randomly_SI(model1, ninfections=10)
+    model1.run()
+    assert_model_sanity(model1)
+
+    # Perturbed model
+    model2 = Model(scenario, low_transmission)
+    model2.components = [Susceptibility, Exposure, Infection, Transmission]
+    seed_infections_randomly_SI(model2, ninfections=10)
+    model2.run()
+    assert_model_sanity(model2)
+
+    # Compare cumulative infections
+    total1 = model1.patches.cases_test[-1, 0]
+    total2 = model2.patches.cases_test[-1, 0]
+
+    assert total2 < total1, "Reduced beta scalar should lower cumulative infections"
+
+
+@pytest.mark.modeltest
+def test_births_base_runs_minimally():
+    """
+    Ensure the base Births class integrates without crashing.
+    Does not assert on population dynamics, only integration.
+    """
+    pop = 1000
+    nticks = 10
+
+    scenario = pd.DataFrame(
+        {
+            "name": ["home"],
+            "population": [pop],
+        }
+    )
+
+    params = get_default_parameters() | {
+        "nticks": nticks,
+        "seed": 42,
+        "verbose": False,
+    }
+
+    model = Model(scenario, params)
+    model.components = [
+        Births,
+        Susceptibility,
+    ]
+
+    try:
         model.run()
+    except Exception as e:
+        pytest.fail(f"Births base class failed during run: {e}")
 
-        output.loc[index, "I_inf_obs"] = (
-            np.sum(model.patches.incidence) + init_inf
-        ) / population  # incidence doesn't count the imported infections
-        output.loc[index, "S_inf_obs"] = model.patches.susceptibility[-1] / population
 
-    assert (np.isclose(output["S_inf_exp"], output["S_inf_obs"], atol=0.05)).all()
-    assert (np.isclose(output["I_inf_exp"], output["I_inf_obs"], atol=0.05)).all()
+@pytest.mark.modeltest
+def test_births_variable_birthrate_maintains_population():
+    """
+    Ensure that Births_ConstantPop_VariableBirthRate maintains population size over time.
+    """
+    pop = 10000
+    nticks = 100
+    scenario = pd.DataFrame(
+        {
+            "name": ["home"],
+            "population": [pop],
+        }
+    )
+
+    params = get_default_parameters() | {
+        "nticks": nticks,
+        "seed": 123,
+        "verbose": False,
+        "cbr": {
+            "rates": [0.02],  # constant birth rate
+            "timesteps": [0],  # start at tick 0
+        },
+    }
+
+    model = Model(scenario, params)
+    model.components = [
+        Births_ConstantPop_VariableBirthRate,
+        Susceptibility,
+    ]
+
+    model.run()
+
+    final_pop = model.patches.populations[-1, 0]
+    pop_diff = abs(final_pop - pop)
+
+    # Allow minor fluctuations
+    assert pop_diff < pop * 0.01, f"Population drifted too far: {pop_diff}"
+
+
+@pytest.mark.modeltest
+def test_routine_immunization_blocks_spread_compare():
+    """
+    Routine immunization at high coverage should suppress outbreak spread.
+    """
+    pop = 100_000
+    nticks = 365 * 5
+    beta = 0.05
+    cbr = 0.03
+
+    scenario = pd.DataFrame({"name": ["home"], "population": [pop]})
+    base_params = get_default_parameters() | {
+        "nticks": nticks,
+        "seed": 777,
+        "beta": beta,
+        "cbr": cbr,
+        "inf_mean": 5,
+    }
+
+    # Without immunization
+    model1 = Model(scenario, base_params)
+    model1.components = [
+        Births_ConstantPop,
+        Susceptibility,
+        Exposure,
+        Infection,
+        Transmission,
+    ]
+    seed_infections_randomly_SI(model1, ninfections=10)
+    model1.run()
+    total_cases1 = model1.patches.cases_test[-1, 0]
+
+    # With routine immunization
+    model2 = Model(scenario, base_params)
+    model2.components = [
+        Births_ConstantPop,
+        Susceptibility,
+        Exposure,
+        Infection,
+        Transmission,
+        lambda m, v: RoutineImmunization(m, period=365, coverage=0.9, age=365, verbose=v),
+    ]
+    seed_infections_randomly_SI(model2, ninfections=10)
+    model2.run()
+    total_cases2 = model2.patches.cases_test[-1, 0]
+
+    assert total_cases2 < total_cases1 * 0.5, "Routine immunization should reduce infections"
+
+
+@pytest.mark.modeltest
+def test_immunization_campaign_temporarily_blocks_spread():
+    """
+    ImmunizationCampaign should reduce infections around the campaign time.
+    """
+    pop = 100_000
+    nticks = 365 * 2
+    scenario = pd.DataFrame({"name": ["home"], "population": [pop]})
+
+    base_params = get_default_parameters() | {
+        "nticks": nticks,
+        "seed": 888,
+        "beta": 0.05,
+        "cbr": 0.03,
+        "inf_mean": 5,
+    }
+
+    # Without campaign
+    model1 = Model(scenario, base_params)
+    model1.components = [
+        Births_ConstantPop,
+        Susceptibility,
+        Exposure,
+        Infection,
+        Transmission,
+    ]
+    seed_infections_randomly_SI(model1, ninfections=10)
+    model1.run()
+    cases1 = model1.patches.cases_test[:, 0]
+
+    # With campaign
+    model2 = Model(scenario, base_params)
+    campaign = ImmunizationCampaign(
+        model2,
+        period=1,  # Apply every day during campaign
+        coverage=0.9,
+        age_lower=0,
+        age_upper=365 * 5,  # Ages 0 to 5 years
+        start=100,
+        end=120,
+        verbose=base_params.verbose,
+    )
+    model2.components = [Births_ConstantPop, Susceptibility, Exposure, Infection, Transmission, campaign]
+    seed_infections_randomly_SI(model2, ninfections=10)
+    model2.run()
+    cases2 = model2.patches.cases_test[:, 0]
+
+    # We expect fewer cases during the campaign period
+    assert np.mean(cases2[100:121]) < np.mean(cases1[100:121]), "Campaign should reduce infections during its window"
+
+
+@pytest.mark.modeltest
+def test_importation_keeps_infection_alive():
+    """
+    Infect_Random_Agents should maintain infections over long timescales.
+    """
+    pop = 100_000
+    nticks = 365 * 5
+    scenario = pd.DataFrame({"name": ["home"], "population": [pop]})
+
+    base_params = get_default_parameters() | {
+        "nticks": nticks,
+        "seed": 444,
+        "beta": 0.04,
+        "cbr": 0.03,
+        "inf_mean": 5,
+        "importation_period": 30,  # One new case every 30 days
+        "importation_count": 1,
+        "importation_start": 0,
+        "importation_end": nticks,
+        "verbose": False,
+    }
+
+    model = Model(scenario, base_params)
+    model.components = [
+        Births_ConstantPop,
+        Susceptibility,
+        Exposure,
+        Infection,
+        Transmission,
+        Infect_Random_Agents,
+    ]
+    seed_infections_randomly_SI(model, ninfections=1)
+    model.run()
+
+    final_I = model.patches.cases_test[-1, 0]
+    assert final_I > 0, "Importation should maintain infections"
+
+
+@pytest.mark.modeltest
+def test_targeted_importation_hits_correct_patch():
+    """
+    Infect_Agents_In_Patch should import cases only into the specified patch.
+    """
+    nticks = 365
+    pop = 100_000
+    scenario = pd.DataFrame(
+        {
+            "name": ["patch0", "patch1"],
+            "nodeid": [0, 1],
+            "population": [pop, pop],
+        }
+    )
+
+    params = get_default_parameters() | {
+        "nticks": nticks,
+        "seed": 222,
+        "beta": 0.05,
+        "cbr": 0.03,
+        "inf_mean": 5,
+        "importation_period": 30,
+        "importation_count": 5,
+        "importation_start": 0,
+        "importation_end": nticks,
+        "importation_target": 1,
+        "verbose": False,
+    }
+
+    model = Model(scenario, params)
+    importation = Infect_Agents_In_Patch(model, verbose=params.verbose)  # Inject into patch 1
+    model.components = [Births_ConstantPop, Susceptibility, Exposure, Infection, Transmission, importation]
+    #seed_infections_in_patch(model, ipatch=1, ninfections=1)
+    model.run()
+
+    cases_patch0 = model.patches.cases_test[:, 0]
+    cases_patch1 = model.patches.cases_test[:, 1]
+
+    #assert np.sum(cases_patch1) > 0, "Patch 1 should receive infections"
+    #assert np.sum(cases_patch0) == 0, "Patch 0 should remain uninfected"
+    if not (np.sum(cases_patch1) > 0):
+        print("🚨 Patch 1 cases:\n", cases_patch1)
+        print("🚨 Total infections in Patch 1:", np.sum(cases_patch1))
+        assert False, "Patch 1 should receive infections"
+
+    if not (np.sum(cases_patch0) == 0):
+        print("🚨 Patch 0 cases:\n", cases_patch0)
+        print("🚨 Total infections in Patch 0:", np.sum(cases_patch0))
+        print("🚨 Full incidence matrix:\n", model.patches.incidence)
+        print("🚨 Parameters:\n", params)
+        print("🚨 Population state summary:")
+        print("  nodeid counts:", np.bincount(model.population.nodeid[:model.population.count]))
+        print("  infected states:", np.sum(model.population.state[:model.population.count] == 2))
+        assert False, "Patch 0 should remain uninfected"
+
+
+@pytest.mark.modeltest
+def test_transmission_sir_behaves_like_transmission():
+    """
+    TransmissionSIR should behave similarly to the standard Transmission class.
+
+    This test currently fails in the last phase. Neither model1 nor model2 curves seem to make sense.
+    """
+    pop = 100_000
+    nticks = 365
+    scenario = pd.DataFrame({"name": ["home"], "population": [pop]})
+
+    params = get_default_parameters() | {
+        "nticks": nticks,
+        "seed": 777,
+        "beta": 0.04,
+        "inf_mean": 5,
+        "verbose": False,
+    }
+
+    # Standard Transmission
+    model1 = Model(scenario, params)
+    model1.components = [Susceptibility, Infection, Transmission]
+    seed_infections_randomly(model1, ninfections=5)
+    model1.run()
+    cases1 = model1.patches.cases_test[:, 0]
+
+    # TransmissionSIR
+    model2 = Model(scenario, params)
+    model2.components = [Susceptibility, Infection, TransmissionSIR]
+    seed_infections_randomly(model2, ninfections=5)
+    model2.run()
+    cases2 = model2.patches.cases_test[:, 0]
+
+    assert np.any(cases1 > cases1[0]), "Standard transmission should spread"
+    assert np.any(cases2 > cases2[0]), "TransmissionSIR should spread"
+
+    # Optional: ensure they're similar (within ~20%)
+    diff = np.abs(cases1 - cases2)
+    #assert np.max(diff) < 0.2 * pop, "Outputs of both transmissions should be similar"
+
+    if np.max(diff) >= 0.2 * pop:
+        import matplotlib.pyplot as plt
+
+        print("Max difference:", np.max(diff))
+        print("Final case count (standard):", cases1[-1])
+        print("Final case count (SIR):", cases2[-1])
+        print("Cumulative difference:", np.sum(diff))
+
+        plt.figure(figsize=(10, 6))
+        plt.plot(cases1, label="Standard Transmission")
+        plt.plot(cases2, label="TransmissionSIR", linestyle="--")
+        plt.title("Comparison of Transmission vs TransmissionSIR")
+        plt.xlabel("Tick")
+        plt.ylabel("Cases")
+        plt.legend()
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig("test_transmission_comparison.png")  # Save for inspection
+
+        assert False, "Outputs of both transmissions differ significantly. See 'test_transmission_comparison.png'"
