@@ -29,7 +29,7 @@ class RoutineImmunization:
     `coverage` and made immune (by setting `population.susceptibility[idx] = 0`).
 
     This component follows the general component style in `laser-generic` and can
-    be added to `Model.components`. See package docs for the component pattern:contentReference[oaicite:1]{index=1}.
+    be added to `Model.components`. See package documentation for details on the component pattern.
     """
 
     def __init__(
