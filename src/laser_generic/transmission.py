@@ -1,27 +1,6 @@
 """
 This module defines the Transmission class, which models the transmission of measles in a population.
 
-Classes:
-
-    Transmission: A class to model the transmission dynamics of measles within a population.
-
-Functions:
-
-    Transmission.__init__(self, model, verbose: bool = False) -> None:
-
-        Initializes the Transmission object with the given model and verbosity.
-
-    Transmission.__call__(self, model, tick) -> None:
-
-        Executes the transmission dynamics for a given model and tick.
-
-    Transmission.nb_transmission_update(susceptibilities, nodeids, forces, etimers, count, exp_shape, exp_scale, incidence):
-
-        A Numba-compiled static method to update the transmission dynamics in parallel.
-
-    Transmission.plot(self, fig: Figure = None):
-
-        Plots the cases and incidence for the two largest patches in the model.
 """
 
 import numba as nb
@@ -40,19 +19,17 @@ class Transmission:
         Initializes the transmission object.
 
         Args:
-
             model: The model object that contains the patches and parameters.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
-
             model: The model object passed during initialization.
 
         The model's patches are extended with the following properties:
 
-            - 'cases': A vector property with length equal to the number of ticks, dtype is uint32.
-            - 'forces': A scalar property with dtype float32.
-            - 'incidence': A vector property with length equal to the number of ticks, dtype is uint32.
+        - `cases`: A vector property with length equal to the number of ticks, dtype is uint32.
+        - `forces`: A scalar property with dtype float32.
+        - `incidence`: A vector property with length equal to the number of ticks, dtype is uint32.
         """
 
         self.model = model
@@ -97,12 +74,10 @@ class Transmission:
         updates the infected state of the population.
 
         Parameters:
-
             model (object): The model object containing the population, patches, and parameters.
             tick (int): The current time step in the simulation.
 
         Returns:
-
             None
 
         """
@@ -296,14 +271,12 @@ class Transmission:
         just as easily choose to do this over in Infection class instead.
 
         Args:
-
             model: The simulation model containing the population data.
             tick: The current tick or time step in the simulation (unused in this function).
             istart: The starting index of the newborns in the population array.
             iend: The ending index of the newborns in the population array.
 
         Returns:
-
             None
         """
 
@@ -319,19 +292,17 @@ class Transmission:
 
         This function creates a figure with four subplots:
 
-            - Cases for the largest patch
-            - Incidence for the largest patch
-            - Cases for the second largest patch
-            - Incidence for the second largest patch
+        - Cases for the largest patch
+        - Incidence for the largest patch
+        - Cases for the second largest patch
+        - Incidence for the second largest patch
 
         If no figure is provided, a new figure is created with a size of 12x9 inches and a DPI of 128.
 
         Parameters:
-
             fig (Figure, optional): A Matplotlib Figure object to plot on. If None, a new figure is created.
 
         Yields:
-
             None
         """
 
@@ -376,12 +347,10 @@ class TransmissionSIR(Transmission):
         updates the infected state of the population.
 
         Parameters:
-
             model (object): The model object containing the population, patches, and parameters.
             tick (int): The current time step in the simulation.
 
         Returns:
-
             None
         """
         patches = model.patches

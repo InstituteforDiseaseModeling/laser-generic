@@ -1,27 +1,6 @@
 """
 This module defines the Exposure class, which models the transition between being infected and become infectious.
 
-Classes:
-    Exposure: A class to handle exposed state updates, initialization, and plotting of exposed data.
-
-Functions:
-    Exposure.__init__(self, model, verbose: bool = False) -> None:
-        Initializes the Exposure class with a given model and verbosity option.
-
-    Exposure.__call__(self, model, tick) -> None:
-        Updates the exposed status of the population at each tick.
-
-    Exposure.nb_exposure_update(count, itimers):
-        A static method that updates the exposed timers for the population using Numba for performance.
-
-    Exposure.on_birth(self, model, _tick, istart, iend) -> None:
-        Resets the exposed timer for newborns in the population.
-
-    Exposure.nb_set_etimers(istart, iend, itimers, value) -> None:
-        A static method that sets the exposure timers for a range of individuals in the population using Numba for performance.
-
-    Exposure.plot(self, fig: Figure = None):
-        Plots the exposed data by age using Matplotlib.
 """
 
 import numba as nb
@@ -40,16 +19,13 @@ class Exposure:
         Initialize an Exposed instance.
 
         Args:
-
             model: The model object that contains the population.
             verbose (bool, optional): If True, enables verbose output. Defaults to False.
 
         Attributes:
-
             model: The model object that contains the population.
 
         Side Effects:
-
             Adds a scalar property "etimer" to the model's population with dtype np.uint16 and default value 0.
             Calls the nb_set_etimers method to initialize the itimer values for the population.
         """
@@ -91,12 +67,10 @@ class Exposure:
         Updates the exposed timers for the population in the model.
 
         Args:
-
             model: The model containing the population data.
             tick: The current tick or time step in the simulation.
 
         Returns:
-
             None
         """
         flow = np.zeros(len(model.patches), dtype=np.uint32)
@@ -180,14 +154,12 @@ class Exposure:
         This function sets the exposure timer for newborns to zero, indicating that they are not exposed.
 
         Args:
-
             model: The simulation model containing the population data.
             tick: The current tick or time step in the simulation (unused in this function).
             istart: The starting index of the newborns in the population array.
             iend: The ending index of the newborns in the population array.
 
         Returns:
-
             None
         """
 
@@ -225,11 +197,9 @@ class Exposure:
         and overlays a bar chart showing the number of exposed individuals in each age group.
 
         Parameters:
-
             fig (Figure, optional): A Matplotlib Figure object to plot on. If None, a new figure is created.
 
         Yields:
-
             None: This function uses a generator to yield control back to the caller.
         """
 

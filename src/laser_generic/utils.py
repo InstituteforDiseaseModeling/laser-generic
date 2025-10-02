@@ -1,24 +1,6 @@
 """
 This module provides utility functions for the laser-measles project.
 
-Functions:
-    calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool = False) -> np.ndarray:
-        Calculate the pairwise distances between points given their latitudes and longitudes.
-
-    calc_capacity(population: np.uint32, nticks: np.uint32, cbr: np.float32, verbose: bool = False) -> np.uint32:
-        Calculate the population capacity after a given number of ticks based on a constant birth rate.
-
-    seed_infections_randomly(model, ninfections: int = 100) -> None:
-        Seed initial infections in random locations at the start of the simulation.
-
-    seed_infections_in_patch(model, ipatch: int, ninfections: int = 100) -> None:
-        Seed initial infections in a specific location at the start of the simulation.
-
-    set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
-        Set the population susceptibility level at the start of the simulation.
-
-    set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
-        Set the population susceptibility level at the start of the simulation in a specific patch.
 """
 
 from math import ceil
@@ -34,17 +16,14 @@ def calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool 
     Calculate the pairwise distances between points given their latitudes and longitudes.
 
     Parameters:
-
         latitudes (np.ndarray): A 1-dimensional array of latitudes.
         longitudes (np.ndarray): A 1-dimensional array of longitudes with the same shape as latitudes.
         verbose (bool, optional): If True, prints the upper left corner of the distance matrix. Default is False.
 
     Returns:
-
         np.ndarray: A 2-dimensional array where the element at [i, j] represents the distance between the i-th and j-th points.
 
     Raises:
-
         AssertionError: If latitudes is not 1-dimensional or if latitudes and longitudes do not have the same shape.
     """
 
@@ -66,14 +45,12 @@ def calc_capacity(population: np.uint32, nticks: np.uint32, cbr: np.float32, ver
     Calculate the population capacity after a given number of ticks based on a constant birth rate (CBR).
 
     Args:
-
         population (np.uint32): The initial population.
         nticks (np.uint32): The number of ticks (time steps) to simulate.
         cbr (np.float32): The constant birth rate per 1000 people per year.
         verbose (bool, optional): If True, prints detailed population growth information. Defaults to False.
 
     Returns:
-
         np.uint32: The estimated population capacity after the given number of ticks.
     """
 
@@ -105,13 +82,11 @@ def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
     them with an infection, based on the specified number of initial infections.
 
     Args:
-
         model: The simulation model containing the population and parameters.
         ninfections (int, optional): The number of initial infections to seed.
                                      Defaults to 100.
 
     Returns:
-
         None
     """
 
@@ -133,13 +108,11 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
     them with an infection, based on the specified number of initial infections.
 
     Args:
-
         model: The simulation model containing the population and parameters.
         ninfections (int, optional): The number of initial infections to seed.
                                      Defaults to 100.
 
     Returns:
-
         None
     """
 
@@ -182,13 +155,11 @@ def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
     the desired number of initial infections is reached.
 
     Args:
-
         model: The simulation model containing the population and parameters.
         ipatch (int): The identifier of the patch where infections should be seeded.
         ninfections (int, optional): The number of initial infections to seed. Defaults to 100.
 
     Returns:
-
         None
     """
 
@@ -209,13 +180,11 @@ def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1
     their susceptibility to zero, according to the parameter susc_frac.
 
     Args:
-
         model: The simulation model containing the population and parameters.
         ipatch: The patch to set susceptibility in
         susc_frac (float, optional): The fraction of individuals to keep susceptible.
 
     Returns:
-
         None
     """
 
@@ -234,12 +203,10 @@ def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     their susceptibility to zero, according to the parameter susc_frac.
 
     Args:
-
         model: The simulation model containing the population and parameters.
         susc_frac (float, optional): The fraction of individuals to keep susceptible.
 
     Returns:
-
         None
     """
 
