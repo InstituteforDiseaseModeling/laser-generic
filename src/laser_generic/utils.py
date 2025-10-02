@@ -17,7 +17,7 @@ def calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool 
 
     This function calculates the great-circle distances between all pairs of points
     defined by the input latitude and longitude arrays. Distances are computed using
-    the Haversine formula (via the `distance()` function from laser-core.migration),
+    the Haversine formula (via the `distance()` function from laser_core.migration),
     and the result is returned as a square, symmetric matrix of distances in kilometers.
 
     Args:
