@@ -1,12 +1,20 @@
 """
-This module defines Immunization classes, which provide methods to import cases into a population during simulation.
+Immunization components for LASER models.
 
-To do:
-    Right now, neither intervention deploys to nodes, only globally.  Would like to add targeting by patch,
-    coverage by patch, and so on.
-    RI coverage is constant over time, should have some ways to vary this.
-    RI coverage basically looks like a campaign with the age window = target_age +/- period/2.
+These components introduce immunity into the agent population during a simulation.
+
+Notes
+-----
+- Deployment is currently global (all patches). Future extensions may include:
+  * targeting by patch or lists of patches,
+  * patch-varying coverage,
+  * time-varying routine immunization (RI) coverage.
+- The routine immunization window centers on the target age with width ≈ period,
+  i.e., [age - period/2, age + period/2).
+
 """
+
+from typing import Optional
 
 import numpy as np
 from matplotlib.figure import Figure
@@ -14,146 +22,277 @@ from matplotlib.figure import Figure
 
 class RoutineImmunization:
     """
-    A component to update the immunity status of a population in a model via routine immunization.
+    A LASER component that updates immunity via routine immunization (RI).
+
+    At eligible ticks, agents whose age (in ticks) falls within an RI window
+    centered at `age` with half-width `period // 2` are sampled with probability
+    `coverage` and made immune (by setting `population.susceptibility[idx] = 0`).
+
+    This component follows the general component style in `laser-generic` and can
+    be added to `Model.components`. See package documentation for details on the component pattern.
     """
 
-    def __init__(self, model, period, coverage, age, start=0, end=-1, verbose: bool = False) -> None:
+    def __init__(
+        self,
+        model,
+        period: int,
+        coverage: float,
+        age: int,
+        start: int = 0,
+        end: int = -1,
+        verbose: bool = False,
+    ) -> None:
         """
         Initialize a RoutineImmunization instance.
 
         Args:
-            model: The model object that contains the population.
-            period: How frequently to survey the population and immunize children around the target age.
-            coverage: The proportion of the population to immunize at each event.
-            age: The target age for immunization.
-            intervention_start (int, optional): The tick at which to start the immunization events.
-            intervention_end (int, optional): The tick at which to end the immunization events.
-            verbose (bool, optional): If True, enables verbose output. Defaults to False.
+            model (object): LASER `Model` with `population`, `patches`, and `params`.
+                `params.nticks` must be defined.
+            period (int): Number of ticks between RI events. Must be >= 1.
+            coverage (float): Per-event immunization probability in [0.0, 1.0].
+            age (int): Target age (in ticks) around which to immunize.
+            start (int, optional): First tick (inclusive) to run RI. Default 0.
+            end (int, optional): Last tick (exclusive) to run RI. If -1, defaults
+                to `model.params.nticks`. Default -1.
+            verbose (bool, optional): Enable verbose logging. Default False.
 
         Attributes:
-            model: The model object that contains the population.
+            model (object): The LASER model instance.
+            period (int): Ticks between RI events.
+            coverage (float): Immunization probability at each event.
+            age (int): Target age in ticks.
+            start (int): First RI tick (inclusive).
+            end (int): Last RI tick (exclusive).
+            verbose (bool): Verbosity flag.
 
-        Side Effects:
-            None
+        Raises:
+            ValueError: If `period < 1`, `coverage` not in [0, 1], or `age < 0`.
         """
+        if period < 1:
+            raise ValueError("period must be >= 1")
+        if not (0.0 <= coverage <= 1.0):
+            raise ValueError("coverage must be within [0.0, 1.0]")
+        if age < 0:
+            raise ValueError("age must be >= 0")
+
         self.model = model
-        self.period = period
-        self.coverage = coverage
-        self.age = age
-        self.start = start
-        self.end = end if end != -1 else model.params.nticks
-        self.verbose = verbose
+        self.period = int(period)
+        self.coverage = float(coverage)
+        self.age = int(age)
+        self.start = int(start)
+        self.end = int(model.params.nticks if end == -1 else end)
+        self.verbose = bool(verbose)
 
-        return
-
-    def __call__(self, model, tick) -> None:
+    def __call__(self, model, tick: int) -> None:
         """
-        Updates the immunity status for the population in the model.
+        Apply routine immunization at the given tick, if eligible.
+
+        An event fires when:
+            tick >= start
+            and ((tick - start) % period == 0)
+            and tick < end
+
+        On each event:
+            - Agents with age in [age - period//2, age + period//2) are considered.
+            - A Binomial draw with probability `coverage` selects agents to immunize.
+            - Selected agents have `susceptibility` set to 0 (immune).
+            - If present, test arrays on `model.patches` are updated for validation.
 
         Args:
-            model: The model containing the population data.
-            tick: The current tick or time step in the simulation.
+            model (object): LASER model (unused; provided for signature parity).
+            tick (int): Current simulation tick.
 
         Returns:
             None
         """
         if (tick >= self.start) and ((tick - self.start) % self.period == 0) and (tick < self.end):
-            # Immunize random agents
             half_window = int(self.period // 2)
-            lower = int(self.age - half_window)
+            lower = max(0, int(self.age - half_window))
             upper = int(self.age + half_window)
-            immunize_nodeids = immunize_in_age_window(model, lower, upper, self.coverage, tick)
-            if (hasattr(model.patches, "recovered_test")) and (immunize_nodeids is not None) and (len(immunize_nodeids) > 0):
-                np.add.at(model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
-                np.add.at(model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
+            immunize_nodeids = immunize_in_age_window(self.model, lower, upper, self.coverage, tick)
+
+            # Update validation arrays if they exist and we immunized some agents
+            if hasattr(self.model.patches, "recovered_test") and immunize_nodeids is not None and len(immunize_nodeids) > 0:
+                np.add.at(self.model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
+                np.add.at(self.model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
+
+    def plot(self, fig: Optional[Figure] = None) -> None:
+        """
+        Placeholder for RI visualization.
+
+        Args:
+            fig (Figure, optional): A Matplotlib Figure to draw into.
+
+        Returns:
+            None
+        """
+        yield
         return
 
-    def plot(self, fig: Figure = None):
-        """
-        Nothing yet
-        """
-        return
 
+def immunize_in_age_window(model, lower: int, upper: int, coverage: float, tick: int) -> Optional[np.ndarray]:
+    """
+    Immunize susceptible agents whose age is in [lower, upper).
 
-def immunize_in_age_window(model, lower, upper, coverage, tick):
+    This function updates agent-level susceptibility and returns the corresponding
+    node IDs for accounting or test-array updates.
+
+    Args:
+        model (object): LASER `Model` containing `population` with fields:
+            - dob (array[int]): Agent date-of-birth ticks.
+            - susceptibility (array[int|bool]): 1/True if susceptible, 0/False if immune.
+            - nodeid (array[int]): Patch index per agent.
+        lower (int): Inclusive lower bound on age (in ticks). Clamped to >= 0.
+        upper (int): Exclusive upper bound on age (in ticks). Must be >= lower.
+        coverage (float): Probability in [0, 1] to immunize each eligible susceptible.
+        tick (int): Current simulation tick.
+
+    Returns:
+        np.ndarray | None: Array of `nodeid` for immunized agents, or None if none.
+
+    Raises:
+        ValueError: If `upper < lower` or `coverage` not in [0, 1].
+    """
+    if upper < lower:
+        raise ValueError("upper must be >= lower")
+    if not (0.0 <= coverage <= 1.0):
+        raise ValueError("coverage must be within [0.0, 1.0]")
+
     pop = model.population
 
-    # Find agents whose age is within a window centered on self.age and width = self.period/2
+    # Ages in ticks
     ages = tick - pop.dob
-    in_window = (ages >= lower) & (ages < upper)
-    # For now, immunization doesn't impact exposed or infected agents
-    myinds = np.flatnonzero(pop.susceptibility & in_window)
-    if len(myinds) == 0:
+
+    # Eligible: in window AND currently susceptible
+    in_window = (ages >= max(0, lower)) & (ages < upper)
+    # Cast susceptibility to boolean in case it's int array (0/1)
+    susceptible = np.asarray(pop.susceptibility).astype(bool)
+    eligible_idx = np.flatnonzero(susceptible & in_window)
+
+    if eligible_idx.size == 0:
         return None
 
-    n_immunize = np.random.binomial(len(myinds), coverage)
-    if n_immunize > 0:
-        np.random.shuffle(myinds)
-        myinds = myinds[:n_immunize]
-        pop.susceptibility[myinds] = 0
-        inf_nodeids = pop.nodeid[myinds]
-        return inf_nodeids
-
-    else:
+    # Binomial draw on the eligible set size
+    n_immunize = np.random.binomial(eligible_idx.size, coverage)
+    if n_immunize == 0:
         return None
+
+    # Sample without replacement
+    chosen = eligible_idx.copy()
+    np.random.shuffle(chosen)
+    chosen = chosen[:n_immunize]
+
+    # Apply immunity
+    pop.susceptibility[chosen] = 0  # mark as immune
+    return pop.nodeid[chosen]
 
 
 class ImmunizationCampaign:
     """
-    A component to update the immunity status of a population in a model via routine immunization.
+    A LASER component that applies an immunization campaign over an age band.
+
+    On eligible ticks, all agents with age in [age_lower, age_upper) are considered
+    and immunized with probability `coverage`. Susceptibles become immune
+    (`population.susceptibility[idx] = 0`). This aligns with the campaign-style
+    immunization component described in the `laser-generic` docs.
     """
 
-    def __init__(self, model, period, coverage, age_lower, age_upper, start=0, end=-1, verbose: bool = False) -> None:
+    def __init__(
+        self,
+        model,
+        period: int,
+        coverage: float,
+        age_lower: int,
+        age_upper: int,
+        start: int = 0,
+        end: int = -1,
+        verbose: bool = False,
+    ) -> None:
         """
         Initialize an ImmunizationCampaign instance.
 
         Args:
-            model: The model object that contains the population.
-            period: How frequently to survey the population and immunize children around the target age.
-            coverage: The proportion of the population to immunize at each event.
-            age: The target age for immunization.
-            intervention_start (int, optional): The tick at which to start the immunization events.
-            intervention_end (int, optional): The tick at which to end the immunization events.
-            verbose (bool, optional): If True, enables verbose output. Defaults to False.
+            model (object): LASER `Model` with `population`, `patches`, and `params`.
+                `params.nticks` must be defined.
+            period (int): Number of ticks between campaign events. Must be >= 1.
+            coverage (float): Per-event immunization probability in [0.0, 1.0].
+            age_lower (int): Inclusive lower bound of target age band (ticks).
+            age_upper (int): Exclusive upper bound of target age band (ticks). Must be > age_lower.
+            start (int, optional): First tick (inclusive) to run campaigns. Default 0.
+            end (int, optional): Last tick (exclusive) to run campaigns. If -1, defaults
+                to `model.params.nticks`. Default -1.
+            verbose (bool, optional): Enable verbose logging. Default False.
 
         Attributes:
-            model: The model object that contains the population.
+            model (object): The LASER model instance.
+            period (int): Ticks between campaign events.
+            coverage (float): Immunization probability at each event.
+            age_lower (int): Inclusive lower age (ticks).
+            age_upper (int): Exclusive upper age (ticks).
+            start (int): First campaign tick (inclusive).
+            end (int): Last campaign tick (exclusive).
+            verbose (bool): Verbosity flag.
 
-        Side Effects:
-            None
+        Raises:
+            ValueError: If inputs are out of range (e.g., period < 1, coverage not in [0, 1],
+                        age bounds invalid).
         """
+        if period < 1:
+            raise ValueError("period must be >= 1")
+        if not (0.0 <= coverage <= 1.0):
+            raise ValueError("coverage must be within [0.0, 1.0]")
+        if age_lower < 0:
+            raise ValueError("age_lower must be >= 0")
+        if age_upper <= age_lower:
+            raise ValueError("age_upper must be > age_lower")
+
         self.model = model
-        self.period = period
-        self.coverage = coverage
-        self.age_lower = age_lower
-        self.age_upper = age_upper
-        self.start = start
-        self.end = end if end != -1 else model.params.nticks
-        self.verbose = verbose
+        self.period = int(period)
+        self.coverage = float(coverage)
+        self.age_lower = int(age_lower)
+        self.age_upper = int(age_upper)
+        self.start = int(start)
+        self.end = int(model.params.nticks if end == -1 else end)
+        self.verbose = bool(verbose)
 
-        return
-
-    def __call__(self, model, tick) -> None:
+    def __call__(self, model, tick: int) -> None:
         """
-        Updates the immunity status for the population in the model.
+        Apply the immunization campaign at the given tick, if eligible.
+
+        Triggers when:
+            tick >= start
+            and ((tick - start) % period == 0)
+            and tick < end
+
+        On each event:
+            - Agents with age in [age_lower, age_upper) are considered.
+            - A Binomial draw with probability `coverage` selects agents to immunize.
+            - Selected agents have `susceptibility` set to 0 (immune).
+            - If present, test arrays on `model.patches` are updated for validation.
 
         Args:
-            model: The model containing the population data.
-            tick: The current tick or time step in the simulation.
+            model (object): LASER model (unused; provided for signature parity).
+            tick (int): Current simulation tick.
 
         Returns:
             None
         """
         if (tick >= self.start) and ((tick - self.start) % self.period == 0) and (tick < self.end):
-            # Immunize random agents
-            immunize_nodeids = immunize_in_age_window(model, self.age_lower, self.age_upper, self.coverage, tick)
-            if (hasattr(model.patches, "recovered_test")) and (immunize_nodeids is not None) and (len(immunize_nodeids) > 0):
-                np.add.at(model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
-                np.add.at(model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
-        return
+            immunize_nodeids = immunize_in_age_window(self.model, self.age_lower, self.age_upper, self.coverage, tick)
 
-    def plot(self, fig: Figure = None):
+            if hasattr(self.model.patches, "recovered_test") and immunize_nodeids is not None and len(immunize_nodeids) > 0:
+                np.add.at(self.model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
+                np.add.at(self.model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
+
+    def plot(self, fig: Optional[Figure] = None) -> None:
         """
-        Nothing yet
+        Placeholder for campaign visualization.
+
+        Args:
+            fig (Figure, optional): A Matplotlib Figure to draw into.
+
+        Returns:
+            None
         """
+        yield
         return

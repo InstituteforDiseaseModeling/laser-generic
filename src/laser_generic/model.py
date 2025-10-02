@@ -1,24 +1,19 @@
 """
-This module defines a `Model` class for simulating classic "generic" disease models (SI, SIS, SIR, SEIR, ...),
-with options for simple demographics (births, deaths, aging) and single or multiple patches with flexible connection structure.
-
+This module defines a `Model` class for simulating classic "generic" compartmental
+disease models (SI, SIS, SIR, SEIR, ...). The model supports simple demographics
+(e.g., births, deaths, aging) and can simulate either a single population patch
+or multiple patches with an arbitrary connection structure.
 
 **Imports:**
-
 - datetime: For handling date and time operations.
 - click: For command-line interface utilities.
 - numpy as np: For numerical operations.
-- pandas as pd: For data manipulation and analysis.
-- laser_core.demographics: For demographic data handling.
-- laser_core.laserframe: For handling laser frame data structures.
-- laser_core.migration: For migration modeling.
-- laser_core.propertyset: For handling property sets.
-- laser_core.random: For random number generation.
-- matplotlib.pyplot as plt: For plotting.
-- matplotlib.backends.backend_pdf: For PDF generation.
-- matplotlib.figure: For figure handling.
-- tqdm: For progress bar visualization.
-
+- pandas as pd: For data handling and tabular reports.
+- laser_core.laserframe: Provides the LaserFrame class for structured data arrays.
+- laser_core.propertyset: Provides the PropertySet class for simulation parameters.
+- laser_core.random: Provides random number generator seeding utilities.
+- matplotlib: For plotting results.
+- tqdm: For progress bar visualization during runs.
 """
 
 from datetime import datetime
@@ -40,22 +35,51 @@ from laser_generic import Births_ConstantPop
 
 class Model:
     """
-    A class to represent a simulation model.
+    A LASER simulation model for generic disease dynamics.
+
+    The `Model` manages:
+      - Patch-level populations and their attributes.
+      - Agent-level population initialization.
+      - Integration of components (e.g., Births, Infection, Immunization).
+      - Execution of simulation ticks via `run()`.
+      - Recording of metrics and plotting/visualization utilities.
+
+    Typical usage:
+    ```python
+    scenario = pd.DataFrame({"population": [1000, 500], "latitude": [...], "longitude": [...]})
+    params = PropertySet({"nticks": 100, "seed": 123, "verbose": True})
+    model = Model(scenario, params)
+    model.components = [Births, Infection, ImmunizationCampaign]
+    model.run()
+    model.visualize(pdf=True)
+    ```
     """
 
     def __init__(self, scenario: pd.DataFrame, parameters: PropertySet, name: str = "generic") -> None:
         """
-        Initialize the disease model with the given scenario and parameters.
+        Initialize the model with a scenario and simulation parameters.
 
-        Args:
-            scenario (pd.DataFrame): A DataFrame containing the metapopulation patch data, including population, latitude, and longitude.
-            parameters (PropertySet): A set of parameters for the model and simulations.
-            name (str, optional): The name of the model. Defaults to "generic".
+        Parameters
+        ----------
+        scenario : pd.DataFrame
+            Patch-level data. Must include at least:
+            - `population`: initial population per patch.
+            - `latitude`: latitude coordinate.
+            - `longitude`: longitude coordinate.
+            May also include optional columns like `geometry`.
+        parameters : PropertySet
+            Simulation parameters. Must include:
+            - `nticks` (int): number of simulation ticks.
+            - `seed` (int, optional): RNG seed.
+            - `verbose` (bool, optional): enable verbose logging.
+        name : str, optional
+            Name of the model. Default is "generic".
 
-        Returns:
-            None
+        Side Effects
+        ------------
+        - Seeds the random number generator.
+        - Initializes patches and population.
         """
-
         self.tinit = datetime.now(tz=None)  # noqa: DTZ005
         click.echo(f"{self.tinit}: Creating the {name} model…")
         self.scenario = scenario
@@ -66,13 +90,13 @@ class Model:
 
         click.echo(f"Initializing the {name} model with {len(scenario)} patches…")
 
-        self.initialize_patches(scenario, parameters)
-        self.initialize_population(scenario, parameters)
+        self._initialize_patches(scenario, parameters)
+        self._initialize_population(scenario, parameters)
         # self.initialize_network(scenario, parameters)
 
         return
 
-    def initialize_patches(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
+    def _initialize_patches(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
         # We need some patches with population data ...
         npatches = len(scenario)
         self.patches = LaserFrame(npatches, initial_count=0)
@@ -89,7 +113,7 @@ class Model:
 
         return
 
-    def initialize_population(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
+    def _initialize_population(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
         # Initialize the model population
         # Is there a better pattern than checking for cbr in parameters?  Many modelers might use "mu", for example.
         # Would rather check E.g., if there is a birth component, but that might come later.
@@ -130,46 +154,42 @@ class Model:
 
         return
 
-    def initialize_network(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
-        # Come back to network setup.  Shouldn't need for N=1 networks, and shouldn't default to gravity
-        # distances = calc_distances(scenario.latitude.values, scenario.longitude.values, parameters.verbose)
-        # network = gravity(
-        #     scenario.population.values,
-        #     distances,
-        #     parameters.k,
-        #     parameters.a,
-        #     parameters.b,
-        #     parameters.c,
-        # )
-        # network = row_normalizer(network, parameters.max_frac)
-        # self.patches.add_vector_property("network", length=npatches, dtype=np.float32)
-        # self.patches.network[:, :] = network
+    def _initialize_network(self, scenario: pd.DataFrame, parameters: PropertySet) -> None:
+        raise RuntimeError("_initialize_network not yet implemented.")
         return
 
     @property
     def components(self) -> list:
         """
-        Retrieve the list of model components.
+        Retrieve the list of model components currently configured.
 
-        Returns:
-            list: A list containing the components.
+        Returns
+        -------
+        list
+            List of component classes used in the model.
         """
-
         return self._components
 
     @components.setter
     def components(self, components: list) -> None:
         """
-        Sets up the components of the model and initializes instances and phases.
+        Configure the model components.
 
-        This function takes a list of component types, creates an instance of each, and adds each callable component to the phase list.
-        It also registers any components with an `on_birth` function with the `Births` component.
+        For each provided component class:
+          - Instantiate it with `(self, self.params.verbose)`.
+          - Register it in `self.instances`.
+          - If the instance is callable, add it to `self.phases`.
+          - If it has a `census` method, add it to `self.censuses`.
 
-        Args:
-            components (list): A list of component classes to be initialized and integrated into the model.
+        Special handling:
+          - If a `Births` or `Births_ConstantPop` instance is present,
+            any other component with an `on_birth` method is registered
+            as a births initializer.
 
-        Returns:
-            None
+        Parameters
+        ----------
+        components : list
+            List of component classes (not instances).
         """
 
         self._components = components
@@ -193,16 +213,17 @@ class Model:
 
     def __call__(self, model, tick: int) -> None:
         """
-        Updates the population of patches for the next tick. Copies the previous
-        population data to the next tick to be updated, optionally, by a Birth and/or
-        Mortality component.
+        Advance patch populations one tick forward.
 
-        Args:
-            model: The model containing the patches and their populations.
-            tick (int): The current time step or tick.
+        Copies population counts from tick `t` to tick `t+1`.
+        Components such as births or mortality may then update these values.
 
-        Returns:
-            None
+        Parameters
+        ----------
+        model : Model
+            The current model instance.
+        tick : int
+            Current tick index.
         """
 
         model.patches.populations[tick + 1, :] = model.patches.populations[tick, :]
@@ -210,23 +231,26 @@ class Model:
 
     def run(self) -> None:
         """
-        Execute the model for a specified number of ticks, recording the time taken for each phase.
+        Execute the model simulation.
 
-        This method initializes the start time, iterates over the number of ticks specified in the model parameters,
-        and for each tick, it executes each phase of the model while recording the time taken for each phase.
+        For each tick (0..nticks-1):
+          - Run all censuses (recording metrics).
+          - Run all phases (update components).
+          - Record execution times per census/phase.
 
-        The metrics for each tick are stored in a list. After completing all ticks, it records the finish time and,
-        if verbose mode is enabled, prints a summary of the timing metrics.
+        After completion:
+          - Records `self.metrics`, `self.tstart`, and `self.tfinish`.
+          - Prints a timing summary if verbose mode is enabled.
 
-        Attributes:
-            tstart (datetime): The start time of the model execution.
-            tfinish (datetime): The finish time of the model execution.
-            metrics (list): A list of timing metrics for each tick and phase.
-
-        Returns:
-            None
+        Attributes Set
+        --------------
+        tstart : datetime
+            Start time of execution.
+        tfinish : datetime
+            End time of execution.
+        metrics : list
+            List of timing metrics (per tick, per phase).
         """
-
         self.tstart = datetime.now(tz=None)  # noqa: DTZ005
         click.echo(f"{self.tstart}: Running the {self.name} model for {self.params.nticks} ticks…")
 
@@ -267,19 +291,28 @@ class Model:
 
     def visualize(self, pdf: bool = True) -> None:
         """
-        Visualize each compoonent instances either by displaying plots or saving them to a PDF file.
+        Generate visualizations for all components.
 
-        Parameters:
-            pdf (bool): If True, save the plots to a PDF file. If False, display the plots interactively. Default is True.
+        Parameters
+        ----------
+        pdf : bool, optional
+            If True (default), save plots to a PDF file named
+            "<model name> <timestamp>.pdf".
+            If False, display plots interactively with `plt.show()`.
 
-        Returns:
-            None
+        Side Effects
+        ------------
+        - Saves a PDF file when `pdf=True`.
+        - Calls `plt.show()` when `pdf=False`.
         """
 
         if not pdf:
             for instance in self.instances:
-                for _plot in instance.plot():
-                    plt.show()
+                try:
+                    for _plot in instance.plot():
+                        plt.show()
+                except Exception as ex:
+                    print(f"Exception iterating on plot function of instance: {ex}")
 
         else:
             click.echo("Generating PDF output…")
@@ -296,19 +329,23 @@ class Model:
 
     def plot(self, fig: Figure = None):
         """
-        Plots various visualizations related to the scenario and population data.
+        Yield three plots for model visualization:
 
-        Parameters:
-            fig (Figure, optional): A matplotlib Figure object to use for plotting. If None, a new figure will be created.
+        1. A scatter plot of scenario patches by location and population.
+        2. A histogram of day-of-birth values for the initial population.
+           (requires that `population.dob` exists, e.g. via a Births component).
+        3. A pie chart of cumulative update phase timings.
 
-        Yields:
-            None: This function uses a generator to yield control back to the caller after each plot is created.
+        Parameters
+        ----------
+        fig : Figure, optional
+            An existing matplotlib Figure. If None, a new figure is created.
 
-        The function generates three plots:
-
-        1. A scatter plot of the scenario patches and populations.
-        2. A histogram of the distribution of the day of birth for the initial population.
-        3. A pie chart showing the distribution of update phase times.
+        Yields
+        ------
+        None
+            Each `yield` produces one plot, so iterating this generator
+            produces three figures sequentially.
         """
 
         _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
@@ -327,19 +364,29 @@ class Model:
 
         yield
 
+        if hasattr(self.population, "dob"):
+            _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
+            _fig.suptitle("Distribution of Day of Birth for Initial Population")
+
+            count = self.patches.populations[0, :].sum()  # just the initial population
+            dobs = self.population.dob[0:count]
+            plt.hist(dobs, bins=100)
+            plt.xlabel("Day of Birth")
+
+            yield
+
         _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
-        _fig.suptitle("Distribution of Day of Birth for Initial Population")
 
-        count = self.patches.populations[0, :].sum()  # just the initial population
-        dobs = self.population.dob[0:count]
-        plt.hist(dobs, bins=100)
-        plt.xlabel("Day of Birth")
+        # metrics = pd.DataFrame(self.metrics, columns=["tick"] + [type(phase).__name__ for phase in self.phases])
 
-        yield
+        # Build proper column names for both census and phase timings
+        names = []
+        for census in self.censuses:
+            names.append(type(census).__name__ + "_census")
+        for phase in self.phases:
+            names.append(type(phase).__name__)
 
-        _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
-
-        metrics = pd.DataFrame(self.metrics, columns=["tick"] + [type(phase).__name__ for phase in self.phases])
+        metrics = pd.DataFrame(self.metrics, columns=["tick", *names])
         plot_columns = metrics.columns[1:]
         sum_columns = metrics[plot_columns].sum()
 

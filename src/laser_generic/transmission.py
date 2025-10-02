@@ -11,27 +11,31 @@ from matplotlib.figure import Figure
 
 class Transmission:
     """
-    A component to model the transmission of disease in a population.
+    A LASER-generic component that models inter-agent disease transmission within and between patches.
+
+    This component calculates the force of infection at each time step using:
+    - Agent state (infectious status)
+    - Node-level infectious prevalence
+    - Network-based movement between patches
+    - Time-varying transmission modifiers (e.g., seasonality or biweekly scaling)
+
+    It supports multiple transmission dynamics depending on the structure of the population (e.g., SI, SEIR).
     """
 
     def __init__(self, model, verbose: bool = False) -> None:
         """
-        Initializes the transmission object.
+        Initialize the Transmission component and register per-patch properties.
+
+        Adds the following properties:
+        - `cases`: Total cumulative infections per patch per time step
+        - `forces`: Force of infection for each patch (float32)
+        - `incidence`: New infections per patch per time step
+        - `doi`: Date of infection for each individual (set on infection)
 
         Args:
-            model: The model object that contains the patches and parameters.
-            verbose (bool, optional): If True, enables verbose output. Defaults to False.
-
-        Attributes:
-            model: The model object passed during initialization.
-
-        The model's patches are extended with the following properties:
-
-        - `cases`: A vector property with length equal to the number of ticks, dtype is uint32.
-        - `forces`: A scalar property with dtype float32.
-        - `incidence`: A vector property with length equal to the number of ticks, dtype is uint32.
+            model: A LASER Model instance, which must expose `.patches`, `.population`, and `.params`.
+            verbose (bool, optional): If True, prints debug info during initialization (currently unused).
         """
-
         self.model = model
 
         model.patches.add_vector_property("cases", length=model.params.nticks, dtype=np.uint32)
@@ -42,6 +46,17 @@ class Transmission:
         return
 
     def census(self, model, tick) -> None:
+        """
+        Snapshot infectious counts into `cases_test` at tick `t` and propagate to tick `t+1`.
+
+        This method:
+        - Initializes `cases_test[t]` using individual infection status
+        - Copies `cases_test[t]` into `cases_test[t+1]` to maintain continuity
+
+        Args:
+            model: The LASER model instance.
+            tick (int): Current simulation tick.
+        """
         patches = model.patches
         if tick == 0:
             population = model.population
@@ -65,21 +80,21 @@ class Transmission:
 
     def __call__(self, model, tick) -> None:
         """
-        Simulate the transmission of measles for a given model at a specific tick.
+        Compute and apply transmission dynamics for the current tick.
 
-        This method updates the state of the model by simulating the spread of disease
-        through the population and patches. It calculates the contagion, handles the
-        migration of infections between patches, and updates the forces of infection
-        based on the effective transmission rate and seasonality factors. Finally, it
-        updates the infected state of the population.
+        This function:
+        - Computes node-level contagion (infectious density)
+        - Modifies contagion using a network matrix if present
+        - Applies time-varying scalars (seasonality, biweekly modifiers) to beta
+        - Calculates force of infection per patch
+        - Samples new infections using Numba-accelerated kernels depending on model structure
 
-        Parameters:
-            model (object): The model object containing the population, patches, and parameters.
-            tick (int): The current time step in the simulation.
+        Notes:
+            The appropriate infection update kernel is selected based on the presence of `etimer` or `itimer`.
 
-        Returns:
-            None
-
+        Args:
+            model: The LASER model instance.
+            tick (int): Current simulation tick.
         """
         patches = model.patches
         population = model.population
@@ -112,7 +127,7 @@ class Transmission:
         #       Second, maybe there's a way to overload the update function so we don't have to switch on the population attributes.
 
         if hasattr(population, "etimer"):
-            Transmission.nb_transmission_update_exposed(
+            Transmission._nb_transmission_update_exposed(
                 population.susceptibility,
                 population.nodeid,
                 population.state,
@@ -126,7 +141,7 @@ class Transmission:
                 tick,
             )
         elif hasattr(population, "itimer"):
-            Transmission.nb_transmission_update_noexposed(
+            Transmission._nb_transmission_update_noexposed(
                 population.susceptibility,
                 population.nodeid,
                 population.state,
@@ -139,7 +154,7 @@ class Transmission:
                 tick,
             )
         else:
-            Transmission.nb_transmission_update_SI(
+            Transmission._nb_transmission_update_SI(
                 population.susceptibility,
                 population.nodeid,
                 population.state,
@@ -177,7 +192,7 @@ class Transmission:
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_exposed(
+    def _nb_transmission_update_exposed(
         susceptibilities, nodeids, state, forces, etimers, count, exp_shape, exp_scale, incidence, doi, tick
     ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
@@ -208,7 +223,7 @@ class Transmission:
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_noexposed(
+    def _nb_transmission_update_noexposed(
         susceptibilities, nodeids, state, forces, itimers, count, inf_mean, incidence, doi, tick
     ):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
@@ -242,7 +257,7 @@ class Transmission:
         nogil=True,
         cache=True,
     )
-    def nb_transmission_update_SI(susceptibilities, nodeids, state, forces, count, incidence, doi, tick):  # pragma: no cover
+    def _nb_transmission_update_SI(susceptibilities, nodeids, state, forces, count, incidence, doi, tick):  # pragma: no cover
         """Numba compiled function to stochastically transmit infection to agents in parallel."""
         max_node_id = np.max(nodeids)
         thread_incidences = np.zeros((nb.config.NUMBA_DEFAULT_NUM_THREADS, max_node_id + 1), dtype=np.uint32)
@@ -265,19 +280,15 @@ class Transmission:
 
     def on_birth(self, model, _tick, istart, iend) -> None:
         """
-        This function sets the date of infection for newborns to zero.
-        Appears here because transmission is where I have decided to add the "doi" property,
-        and I think it thus makes sense to also have the on-birth initializer here.  Could
-        just as easily choose to do this over in Infection class instead.
+        Initialize `doi` (date of infection) for newborns.
+
+        This birth handler sets the date-of-infection field to zero for all new individuals.
 
         Args:
-            model: The simulation model containing the population data.
-            tick: The current tick or time step in the simulation (unused in this function).
-            istart: The starting index of the newborns in the population array.
-            iend: The ending index of the newborns in the population array.
-
-        Returns:
-            None
+            model: The LASER model.
+            _tick: The current tick (unused).
+            istart (int): Start index of new agents.
+            iend (int): End index of new agents (exclusive). If None, assumes single agent at `istart`.
         """
 
         if iend is not None:
@@ -288,21 +299,17 @@ class Transmission:
 
     def plot(self, fig: Figure = None):
         """
-        Plots the cases and incidence for the two largest patches in the model.
+        Generate a 2x2 subplot figure showing cases and incidence over time.
 
-        This function creates a figure with four subplots:
+        For the two most populous patches, this creates:
+        - Line plot of `cases` over time
+        - Line plot of `incidence` over time
 
-        - Cases for the largest patch
-        - Incidence for the largest patch
-        - Cases for the second largest patch
-        - Incidence for the second largest patch
+        Args:
+            fig (matplotlib.figure.Figure, optional): An existing figure object to draw on.
+                If None, a new figure is created.
 
-        If no figure is provided, a new figure is created with a size of 12x9 inches and a DPI of 128.
-
-        Parameters:
-            fig (Figure, optional): A Matplotlib Figure object to plot on. If None, a new figure is created.
-
-        Yields:
+        Returns:
             None
         """
 
@@ -333,22 +340,33 @@ class Transmission:
 
 class TransmissionSIR(Transmission):
     """
-    A component to model the transmission of disease in a population using the SIR model.
+    Specialized transmission component for SIR models (no latent/exposed state).
+
+    This subclass of `Transmission` models disease transmission in a Susceptible-Infected-Recovered (SIR)
+    framework. It uses simplified logic assuming no explicit Exposed phase (i.e., no `etimer`).
+    Infection dynamics are based on agent infectiousness, network structure (if any), and a constant recovery rate.
+
+    This class is typically paired with `Infection` (not `Exposure`) components.
     """
 
     def __call__(self, model, tick) -> None:
         """
-        Simulate the transmission of measles for a given model at a specific tick using the SIR model.
+        Perform a transmission step for an SIR model at a specific simulation tick.
 
-        This method updates the state of the model by simulating the spread of disease
-        through the population and patches. It calculates the contagion, handles the
-        migration of infections between patches, and updates the forces of infection
-        based on the effective transmission rate and seasonality factors. Finally, it
-        updates the infected state of the population.
+        This method:
+        - Computes the number of infectious individuals (based on susceptibility == 0)
+        - Updates `cases[tick]` with current infectious counts
+        - Applies network-based infection transfer between patches (if applicable)
+        - Computes force of infection (FoI) per patch using β and population
+        - Stochastically infects agents using Numba-accelerated update
 
-        Parameters:
-            model (object): The model object containing the population, patches, and parameters.
-            tick (int): The current time step in the simulation.
+        This version assumes a simplified SIR model with:
+        - No exposed state (`etimer`)
+        - Infected agents are those with non-zero `itimer`
+
+        Args:
+            model: The LASER model instance, containing `.patches`, `.population`, and `.params`.
+            tick (int): Current timestep in the simulation.
 
         Returns:
             None
@@ -360,8 +378,7 @@ class TransmissionSIR(Transmission):
         condition = population.susceptibility[0 : population.count] == 0
 
         if len(patches) == 1:
-            # np.add(contagion, np.sum(condition), out=contagion)
-            np.add(contagion, np.array(np.sum(condition), dtype=contagion.dtype), out=contagion)
+            np.add(contagion, np.sum(condition), out=contagion)
         else:
             nodeids = population.nodeid[0 : population.count]
             np.add.at(contagion, nodeids[condition], 1)
@@ -381,7 +398,7 @@ class TransmissionSIR(Transmission):
         np.expm1(forces, out=forces)
         np.negative(forces, out=forces)
 
-        Transmission.nb_transmission_update_noexposed(
+        Transmission._nb_transmission_update_noexposed(
             population.susceptibility,
             population.nodeid,
             population.state,

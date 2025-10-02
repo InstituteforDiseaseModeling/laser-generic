@@ -141,7 +141,7 @@ class Births:
             timing.append(int(delta.total_seconds() * 1_000_000))
         self._metrics.append(timing)
 
-        model.patches.populations[tick + 1, :] += np.uint32(todays_births)
+        model.patches.populations[tick + 1, :] += todays_births
 
         return
 
@@ -188,28 +188,44 @@ class Births:
 
 class Births_ConstantPop:
     """
-    A component to handle the birth events in a model with constant population - that is, births == deaths.
+    Handles births in models with a constant population size (births == deaths).
 
-    Attributes:
-        model: The model instance containing population and parameters.
-        verbose (bool): Flag to enable verbose output. Default is False.
-        initializers (list): List of initializers to be called on birth events.
-        metrics (DataFrame): DataFrame to holding timing metrics for initializers.
+    This component ensures that the total population remains constant over time by
+    generating daily birth counts that exactly match the expected mortality under a
+    given crude birth rate (CBR). Each birth results in the creation of a new agent
+    with a default susceptible state and a birth timestamp.
+
+    Key responsibilities:
+      - Stochastic generation of new births per patch and time step.
+      - Initialization of new agents with appropriate state and properties.
+      - Invocation of registered birth-time initializers.
+      - Real-time updates to reporting channels (e.g. SEIR counts).
+
+    The component assumes that deaths are handled implicitly by replacing expired agents
+    with newly born agents.
+
+    Expected parameters:
+        - `cbr`: Crude birth rate per 1000 people per year (float).
+        - `nticks`: Number of time steps in the simulation (int).
     """
 
     def __init__(self, model, verbose: bool = False):
         """
-        Initialize the Births component.
+        Initialize the Births_ConstantPop component.
 
-        Parameters:
-            model (object): The model object which must have a `population` attribute.
-            verbose (bool, optional): If True, enables verbose output. Defaults to False.
+        Args:
+            model: A Model instance with attributes:
+                - `params.cbr`: Annual crude birth rate.
+                - `params.nticks`: Number of time steps.
+                - `population`: An agent population object.
+                - `patches`: A patch manager with population counts.
+                - `prng`: A random number generator supporting `.poisson` and `.exponential`.
+
+            verbose: Enable detailed logging if True.
 
         Raises:
-            AssertionError: If the model does not have a `population` attribute.
-            AssertionError: If the model's population does not have a `dob` attribute.
+            AssertionError: If the model lacks a `population` or `dob` attribute.
         """
-
         assert getattr(model, "population", None) is not None, "Births requires the model to have a `population` attribute"
 
         self.model = model
@@ -260,18 +276,20 @@ class Births_ConstantPop:
 
     def __call__(self, model, tick) -> None:
         """
-        Adds new agents to each patch based on expected daily births calculated from CBR. Calls each of the registered initializers for the newborns.
+        Execute births for a given time step.
+
+        For each patch:
+            - Determine the number of new agents to birth using a Poisson draw.
+            - Assign each agent a birth date and susceptible state.
+            - Update SEIR reporting channels to reflect changes.
+            - Run all registered `on_birth` initializers.
 
         Args:
-            model: The simulation model containing patches, population, and parameters.
-            tick: The current time step in the simulation.
+            model: The simulation model.
+            tick: Current simulation tick (int).
 
         Returns:
             None
-
-        This method performs the following steps:
-
-        1. Draw a random set of indices, or size size "number of births"  from the population,
         """
 
         # When we get to having birth rate per node, will need to be more clever here, but with constant birth rate across nodes,
@@ -319,15 +337,20 @@ class Births_ConstantPop:
 
     def plot(self, fig: Figure = None):
         """
-        Plots the births in the top 5 most populous patches and a pie chart of birth initializer times.
+        Visualize birth activity and initializer performance.
 
-        Parameters:
-            fig (Figure, optional): A matplotlib Figure object. If None, a new figure will be created. Defaults to None.
+        Generates two plots:
+            1. Line plot: Population and birth counts for top 5 most populous patches.
+            2. Pie chart: Cumulative time spent in each `on_birth` initializer.
+
+        This method is a generator; call `next()` twice to display both plots.
+
+        Args:
+            fig (Figure, optional): A matplotlib Figure to reuse. Defaults to new figure.
 
         Yields:
-            None: This function yields twice to allow for intermediate plotting steps.
+            None (plot visuals are side effects).
         """
-
         _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
         _fig.suptitle("Births in Top 5 Most Populous Patches")
 
@@ -360,70 +383,76 @@ class Births_ConstantPop:
 
 class Births_ConstantPop_VariableBirthRate(Births_ConstantPop):
     """
-    A component to handle birth events in a model with constant population but variable birth rates over time.  .
+    Birth process with time-varying crude birth rate (CBR) while maintaining constant population.
 
-    This class extends Births_ConstantPop to allow for a variable birth rate over time (cbr).
+    This component extends `Births_ConstantPop` by allowing the birth rate to vary over time,
+    based on a schedule of crude birth rates (CBRs) defined in the model parameters.
+
+    Unlike a traditional demographic model, this assumes a constant total population size by
+    balancing births and deaths. The birth rate schedule determines the number of daily births
+    (and therefore deaths) at each timestep.
+
+    Attributes:
+        model: The simulation model, which must contain population and patch data.
     """
 
     def __init__(self, model, verbose: bool = False):
         """
         Initialize the Births_ConstantPop_VariableBirthRate component.
 
-        Parameters:
-            model (object): The model object which must have a `population` attribute.
-            verbose (bool, optional): If True, enables verbose output. Defaults to False.
+        Args:
+            model: A `Model` object with `population`, `patches`, and `params` attributes.
+                `params.cbr` must be a dictionary with:
+                    - "rates": list or array of CBR values (per 1000 people per year).
+                    - "timesteps": list or array of corresponding time ticks when rates change.
+            verbose: If True, print verbose status updates. Defaults to False.
 
         Raises:
-            AssertionError: If the model does not have a `population` attribute.
+            AssertionError: If the model lacks a `population` attribute.
+            ValueError: If `params.cbr` is missing or malformed.
         """
         assert getattr(model, "population", None) is not None, "Births requires the model to have a `population` attribute"
 
         self.model = model
-
         model.population.add_scalar_property("dob", dtype=np.int32)
 
-        # Expect model.params.cbr to be a dict with keys "rates" and "timesteps"
+        # Validate and parse birth rate schedule
         cbr_param = model.params.cbr
         if not (isinstance(cbr_param, dict) and "rates" in cbr_param and "timesteps" in cbr_param):
             raise ValueError("model.params.cbr must be a dict with keys 'rates' and 'timesteps'")
 
         rates = np.asarray(cbr_param["rates"], dtype=float)
         timesteps = np.asarray(cbr_param["timesteps"], dtype=int)
-
         if len(rates) != len(timesteps):
             raise ValueError("'rates' and 'timesteps' must have the same length")
 
         nticks = model.params.nticks
         cbr = np.empty(nticks, dtype=float)
 
-        # Handle before first timestep
+        # Fill in CBR for all ticks via linear interpolation
         if timesteps[0] > 0:
             cbr[: timesteps[0]] = rates[0]
-
-        # Interpolate between timesteps
         for i in range(len(timesteps) - 1):
             start, end = timesteps[i], timesteps[i + 1]
             cbr[start:end] = np.linspace(rates[i], rates[i + 1], end - start, endpoint=False)
-
-        # Handle after last timestep
         if timesteps[-1] < nticks:
             cbr[timesteps[-1] :] = rates[-1]
 
-        # Calculate daily mortality rate for each tick
+        # Convert annual crude birth rates to daily per-person mortality rates
         daily_mortality_rate = (1 + cbr / 1000) ** (1 / 365) - 1
 
-        # Assign random ages to initial population (using first day's rate)
+        # Assign initial agent ages based on expected lifespan under first day's mortality rate
         mu0 = daily_mortality_rate[0]
-        model.population.dob[0 : model.population.count] = -1 * model.prng.exponential(1 / mu0, model.population.count).astype(np.int32)
+        model.population.dob[: model.population.count] = -1 * model.prng.exponential(1 / mu0, model.population.count).astype(np.int32)
 
-        model.patches.add_vector_property("births", length=model.params.nticks, dtype=np.uint32)
-        # For each tick, calculate births for each patch using the time-varying cbr
-        # Vectorized sampling for all ticks and patches at once
-        mu_t = daily_mortality_rate[:, np.newaxis]  # shape (nticks, 1)
-        lam = model.patches.populations[0, :][np.newaxis, :] * mu_t  # shape (nticks, n_patches)
+        # Add a per-tick birth report channel
+        model.patches.add_vector_property("births", length=nticks, dtype=np.uint32)
+
+        # Sample births for each patch and tick using a Poisson process
+        mu_t = daily_mortality_rate[:, np.newaxis]  # (nticks, 1)
+        lam = model.patches.populations[0, :][np.newaxis, :] * mu_t  # (nticks, n_patches)
         model.patches.births[:, :] = model.prng.poisson(lam=lam)
 
         self._initializers = []
         self._metrics = []
-
         return
