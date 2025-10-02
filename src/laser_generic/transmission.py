@@ -401,6 +401,7 @@ class TransmissionSIR(Transmission):
         Transmission._nb_transmission_update_noexposed(
             population.susceptibility,
             population.nodeid,
+            population.state,
             forces,
             population.itimer,
             population.count,

@@ -27,6 +27,7 @@ def assert_model_sanity(model):
     S_counts = model.patches.susceptibility_test[1:, 0]  # drop tick 0
     I_counts = model.patches.cases_test[1:, 0]  # drop tick 0
     N_counts = model.patches.populations[-1:, 0]  # already len == nticks
+    #N_counts = model.patches.populations[:, 0]  # already len == nticks
     inc = model.patches.incidence[:, 0]  # already len == nticks
 
     assert np.sum(inc) > 0, "No transmission occurred"

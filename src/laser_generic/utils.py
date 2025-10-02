@@ -64,7 +64,7 @@ def calc_capacity(population: np.uint32, nticks: np.uint32, cbr: np.float32, ver
     Args:
         population (np.uint32): Initial population size at tick 0.
         nticks (np.uint32): Number of ticks (simulation time steps) to simulate.
-        cbr (np.float32): Crude birth rate (per 1000 people per year). For example, use 30.0 for 3%.
+        cbr (np.float32): Crude birth rate (per 1000 people per year).
         verbose (bool, optional): If True, prints estimated population growth using daily and annual methods.
 
     Returns:
@@ -235,14 +235,6 @@ def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
     model.population.susceptibility[indices] = 0
 
     return
-
-
-# Deprecated?
-def _add_at(A, indices, B):
-    sorted_indices = np.argsort(indices)
-    uniques, run_lengths = np.unique(indices[sorted_indices], return_counts=True)
-    for i, length, end in zip(uniques, run_lengths, run_lengths.cumsum()):
-        A[i] += B[sorted_indices[end - length : end]].sum(axis=0)
 
 
 def get_default_parameters() -> PropertySet:
