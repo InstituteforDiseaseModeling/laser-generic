@@ -312,7 +312,7 @@ class Model:
                     for _plot in instance.plot():
                         plt.show()
                 except Exception as ex:
-                    print( f"Exception iterating on plot function of instance: {ex}" )
+                    print(f"Exception iterating on plot function of instance: {ex}")
 
         else:
             click.echo("Generating PDF output…")
@@ -377,7 +377,7 @@ class Model:
 
         _fig = plt.figure(figsize=(12, 9), dpi=128) if fig is None else fig
 
-        #metrics = pd.DataFrame(self.metrics, columns=["tick"] + [type(phase).__name__ for phase in self.phases])
+        # metrics = pd.DataFrame(self.metrics, columns=["tick"] + [type(phase).__name__ for phase in self.phases])
 
         # Build proper column names for both census and phase timings
         names = []
@@ -386,10 +386,7 @@ class Model:
         for phase in self.phases:
             names.append(type(phase).__name__)
 
-        metrics = pd.DataFrame(
-            self.metrics,
-            columns=["tick"] + names
-        )
+        metrics = pd.DataFrame(self.metrics, columns=["tick", *names])
         plot_columns = metrics.columns[1:]
         sum_columns = metrics[plot_columns].sum()
 
