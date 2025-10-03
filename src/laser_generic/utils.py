@@ -129,7 +129,7 @@ def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
     return
 
 
-def seed_infections_randomly(model, ninfections: int = 100) -> None:
+def seed_infections_randomly(model, ninfections: int = 100) -> np.ndarray:
     """
     Randomly seed initial infections across the entire population.
 
