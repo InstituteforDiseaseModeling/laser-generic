@@ -126,7 +126,7 @@ def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
     return
 
 
-def seed_infections_randomly(model, ninfections: int = 100) -> None:
+def seed_infections_randomly(model, ninfections: int = 100) -> np.ndarray:
     """
     Seed initial infections in random locations at the start of the simulation.
     This function randomly selects individuals from the population and seeds
