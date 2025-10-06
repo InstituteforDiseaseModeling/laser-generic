@@ -41,7 +41,7 @@ def assert_model_sanity(model):
 @pytest.mark.modeltest
 def test_si_model_nobirths_flow():
     nticks = 180
-    pop = 1e5
+    pop = int(1e5)
     scenario = pd.DataFrame(data=[["homenode", pop, "0,0"]], columns=["name", "population", "location"])
     parameters = PropertySet({"seed": 42, "nticks": nticks, "verbose": False, "beta": 0.03})
 
@@ -57,7 +57,7 @@ def test_si_model_nobirths_flow():
 @pytest.mark.modeltest
 @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
 def test_sir_nobirths_short():
-    pop = 1e5
+    pop = int(1e5)
     nticks = 365
     beta = 0.06
     gamma = 1 / 20
@@ -78,7 +78,7 @@ def test_sir_nobirths_short():
 @pytest.mark.modeltest
 @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
 def test_si_model_with_births_short():
-    pop = 1e5
+    pop = int(1e5)
     nticks = 365 * 2
     beta = 0.02
     cbr = 0.03
@@ -97,7 +97,7 @@ def test_si_model_with_births_short():
 @pytest.mark.modeltest
 @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
 def test_sei_model_with_births_short():
-    pop = 1e5
+    pop = int(1e5)
     nticks = 365 * 2
     beta = 0.05
     cbr = 0.03
@@ -123,7 +123,7 @@ def test_sei_model_with_births_short():
 @pytest.mark.modeltest
 @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
 def test_sis_model_short():
-    pop = 1e5
+    pop = int(1e5)
     nticks = 500
     beta = 0.05
     inf_mean = 10
@@ -144,7 +144,7 @@ def test_sis_model_short():
 @pytest.mark.modeltest
 @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
 def test_routine_immunization_blocks_spread():
-    pop = 1e5
+    pop = int(1e5)
     nticks = 365 * 2
     parameters = get_default_parameters() | {
         "seed": 321,
@@ -222,7 +222,7 @@ def test_births_only_maintain_population_stability():
     """
     Confirm that Births_ConstantPop maintains stable population when transmission is disabled.
     """
-    pop = 1e5
+    pop = int(1e5)
     nticks = 365 * 3  # 3 years
     cbr = 0.03  # Crude birth rate
 
@@ -261,7 +261,7 @@ def test_biweekly_scalar_modulates_transmission():
     """
     from copy import deepcopy
 
-    pop = 1e5
+    pop = int(1e5)
     nticks = 364  # One year with 26 biweekly periods
     base_beta = 0.05
 
