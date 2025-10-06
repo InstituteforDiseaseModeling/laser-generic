@@ -26,7 +26,7 @@
 🔹 Key Classes and Utilities (from laser-core)
 =============================================
 
-- **LaserFrame** – custom dataframe for populations, with ``.add_scalar_property()`` and ``.add_vector_property()``.
+- **LaserFrame** – custom dataframe for populations, with `.add_scalar_property()` and `.add_vector_property()`.
 - **PropertySet** – dictionary-like structure for managing model properties.
 - **SortedQueue** – high-performance event queue.
 - **Demographics utilities** – initialize births, deaths, and population pyramids.
