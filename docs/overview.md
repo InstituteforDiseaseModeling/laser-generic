@@ -2,7 +2,7 @@
 ===================================
 
 - **LASER (Lightweight Agent Spatial modeling for ERadication)** is a framework for building
-  **agent-based infectious disease models** with an emphasis on spatial modeling and heterogeneity 
+  **agent-based infectious disease models** with an emphasis on spatial modeling and heterogeneity
   and efficient computation at scale.
 
   Populations are represented as a mutable dataframe, where rows are individuals (agents)
