@@ -98,7 +98,8 @@ class Susceptibility:
             condition = population.susceptibility[0 : population.count] > 0
 
             if len(model.patches) == 1:
-                np.add(susceptible_count, np.count_nonzero(condition), out=susceptible_count)
+                value = np.uint32(np.count_nonzero(condition))  # Explicit cast
+                np.add(susceptible_count, value, out=susceptible_count)
             else:
                 nodeids = population.nodeid[0 : population.count]
                 np.add.at(susceptible_count, nodeids[condition], np.uint32(1))
