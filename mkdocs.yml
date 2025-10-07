@@ -32,6 +32,8 @@ theme:
 
 nav: # Navigation structure for the documentation
   - index.md
+  - Architecture & Concepts: overview.md
+  - Hello World: hw.md
   - What's new: whatsnew.md
   - Get started: get-started.md
   - Tutorials: # this creates a section in the TOC

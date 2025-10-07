@@ -69,7 +69,8 @@ class Transmission:
                 condition = population.susceptibility[0 : population.count] == 0  # just look at the active agent indices
 
             if len(patches) == 1:
-                np.add(contagion, np.count_nonzero(condition), out=contagion)  # add.at takes a lot of time when n_infections is large
+                value = np.uint32(np.count_nonzero(condition))  # Explicit cast
+                np.add(contagion, value, out=contagion)  # add.at takes a lot of time when n_infections is large
             else:
                 nodeids = population.nodeid[0 : population.count]  # just look at the active agent indices
                 np.add.at(contagion, nodeids[condition], np.uint32(1))  # increment by the number of active agents with non-zero itimer
