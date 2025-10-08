@@ -47,7 +47,6 @@ def stable_transmission_model():
         "nticks": nticks,
         "beta": 0.3,
         "inf_mean": 7,
-        # "cbr": 0.03,
         "verbose": False,
     }
     scenario = pd.DataFrame({"name": ["home"], "population": [pop]})
