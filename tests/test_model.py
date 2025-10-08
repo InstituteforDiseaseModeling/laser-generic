@@ -37,6 +37,7 @@ def assert_model_sanity(model):
     I_derived = np.cumsum(inc) + model.patches.cases_test[0, 0]
     assert np.allclose(I_counts, I_derived, atol=1e-5), "Cases not consistent with incidence"
 
+
 @pytest.fixture
 def stable_transmission_model():
     pop = int(1e5)
@@ -46,7 +47,7 @@ def stable_transmission_model():
         "nticks": nticks,
         "beta": 0.3,
         "inf_mean": 7,
-        #"cbr": 0.03,
+        # "cbr": 0.03,
         "verbose": False,
     }
     scenario = pd.DataFrame({"name": ["home"], "population": [pop]})
@@ -58,9 +59,10 @@ def stable_transmission_model():
         Infection,
         Transmission,
     ]
-    #seed_infections_randomly_SI(model, ninfections=50)
+    # seed_infections_randomly_SI(model, ninfections=50)
     seed_infections_in_patch(model, ninfections=50, ipatch=0)
     return model
+
 
 @pytest.mark.modeltest
 def test_si_model_nobirths_flow():
@@ -100,7 +102,9 @@ def test_sir_nobirths_short():
 
 
 @pytest.mark.modeltest
-@pytest.mark.xfail(reason="Known issue not yet fixed: AttributeError: 'LaserFrame' object has no attribute 'etimer'. Issue #24.", strict=True)
+@pytest.mark.xfail(
+    reason="Known issue not yet fixed: AttributeError: 'LaserFrame' object has no attribute 'etimer'. Issue #24.", strict=True
+)
 def test_si_model_with_births_short():
     pop = int(1e5)
     nticks = 365 * 2
@@ -119,7 +123,9 @@ def test_si_model_with_births_short():
 
 
 @pytest.mark.modeltest
-@pytest.mark.xfail(reason="Known issue not yet fixed: AttributeError: 'LaserFrame' object has no attribute 'etimer'. Issue #24.", strict=True)
+@pytest.mark.xfail(
+    reason="Known issue not yet fixed: AttributeError: 'LaserFrame' object has no attribute 'etimer'. Issue #24.", strict=True
+)
 def test_sei_model_with_births_short():
     pop = int(1e5)
     nticks = 365 * 2
@@ -241,7 +247,9 @@ def test_mobility_spreads_infection_across_nodes():
 
 
 @pytest.mark.modeltest
-@pytest.mark.xfail(reason="Known issue not yet fixed: AttributeError: 'LaserFrame' object has no attribute 'etimer'. Issue #24.", strict=True)
+@pytest.mark.xfail(
+    reason="Known issue not yet fixed: AttributeError: 'LaserFrame' object has no attribute 'etimer'. Issue #24.", strict=True
+)
 def test_births_only_maintain_population_stability():
     """
     Confirm that Births_ConstantPop maintains stable population when transmission is disabled.
@@ -366,7 +374,9 @@ def test_births_base_runs_minimally():
 
 
 @pytest.mark.modeltest
-@pytest.mark.xfail(reason="Known issue not yet fixed: AttributeError: 'LaserFrame' object has no attribute 'etimer'. Issue #24.", strict=True)
+@pytest.mark.xfail(
+    reason="Known issue not yet fixed: AttributeError: 'LaserFrame' object has no attribute 'etimer'. Issue #24.", strict=True
+)
 def test_births_variable_birthrate_maintains_population():
     """
     Ensure that Births_ConstantPop_VariableBirthRate maintains population size over time.
@@ -466,13 +476,14 @@ def test_immunization_campaign_temporarily_blocks_spread(stable_transmission_mod
 
     # Add campaign to a copy of the model
     from copy import deepcopy
+
     model2 = deepcopy(stable_transmission_model)
     campaign = ImmunizationCampaign(
         model2,
-        period=1,             # Apply daily
-        coverage=0.9,         # High coverage
+        period=1,  # Apply daily
+        coverage=0.9,  # High coverage
         age_lower=0,
-        age_upper=5 * 365,    # Target ages 0–5 years
+        age_upper=5 * 365,  # Target ages 0-5 years
         start=100,
         end=120,
         verbose=model2.params.verbose,
@@ -488,7 +499,8 @@ def test_immunization_campaign_temporarily_blocks_spread(stable_transmission_mod
 
     assert mean_cases_with_campaign < mean_cases_no_campaign, "Campaign should reduce infections during its window"
 
-#@pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
+
+# @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
 def skip_test_immunization_campaign_temporarily_blocks_spread():
     """
     ImmunizationCampaign should reduce infections around the campaign time.
@@ -555,7 +567,7 @@ def test_importation_keeps_infection_alive():
         "beta": 0.35,
         "inf_mean": 5,
         "cbr": 0.03,
-        "importation_period": 15,     # More frequent than original test
+        "importation_period": 15,  # More frequent than original test
         "importation_count": 10,
         "importation_start": 10,
         "importation_end": nticks,
@@ -579,14 +591,12 @@ def test_importation_keeps_infection_alive():
     incidence = model.patches.incidence[:, 0]
     total_inc = np.sum(incidence)
     assert total_inc > 0, "Importation should trigger infections"
-
-    final_cases = model.patches.cases_test[-1, 0]
-    #assert final_cases > 0, "Infection should still be active at end"
-
+    # Obviously we could just do the > 1000 test but we want to see an explicit error if the >0 test fails.
     assert total_inc > 1000  # e.g., 1000 cases over 5 years
 
+
 @pytest.mark.modeltest
-#@pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
+# @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
 def skip_test_importation_keeps_infection_alive():
     """
     Infect_Random_Agents should maintain infections over long timescales.
@@ -743,11 +753,12 @@ def test_transmission_sir_behaves_like_transmission():
 
         pytest.fail("Outputs of both transmissions differ significantly. See 'test_transmission_comparison.png'")
 
+
 def test_stable_transmission_model_runs(stable_transmission_model):
     model = stable_transmission_model
-    #print("Initial itimer > 0:", np.sum(model.population.itimer[: model.population.count] > 0))
-    #print("Initial etimer > 0:", np.sum(model.population.etimer[: model.population.count] > 0))
-    #print("Initial susceptible count:", np.sum(model.population.susceptibility[: model.population.count] > 0))
+    # print("Initial itimer > 0:", np.sum(model.population.itimer[: model.population.count] > 0))
+    # print("Initial etimer > 0:", np.sum(model.population.etimer[: model.population.count] > 0))
+    # print("Initial susceptible count:", np.sum(model.population.susceptibility[: model.population.count] > 0))
     model.run()
 
     # Sanity checks
@@ -757,8 +768,8 @@ def test_stable_transmission_model_runs(stable_transmission_model):
     print(f"Total incidence: {total_inc}")
     assert total_inc > 0, "Model should produce ongoing transmission"
 
-    #final_cases = model.patches.cases_test[-1, 0]
-    #assert final_cases > 0, "Final case count should be non-zero"
+    # final_cases = model.patches.cases_test[-1, 0]
+    # assert final_cases > 0, "Final case count should be non-zero"
 
     max_cases = np.max(model.patches.cases_test[:, 0])
     assert max_cases > 0, "At least some infections should occur"
