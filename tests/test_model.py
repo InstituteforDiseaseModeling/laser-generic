@@ -499,57 +499,6 @@ def test_immunization_campaign_temporarily_blocks_spread(stable_transmission_mod
     assert mean_cases_with_campaign < mean_cases_no_campaign, "Campaign should reduce infections during its window"
 
 
-# @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
-def skip_test_immunization_campaign_temporarily_blocks_spread():
-    """
-    ImmunizationCampaign should reduce infections around the campaign time.
-    """
-    pop = 100_000
-    nticks = 365 * 2
-    scenario = pd.DataFrame({"name": ["home"], "population": [pop]})
-
-    base_params = get_default_parameters() | {
-        "nticks": nticks,
-        "seed": 888,
-        "beta": 0.05,
-        "cbr": 0.03,
-        "inf_mean": 5,
-    }
-
-    # Without campaign
-    model1 = Model(scenario, base_params)
-    model1.components = [
-        Births_ConstantPop,
-        Susceptibility,
-        Exposure,
-        Infection,
-        Transmission,
-    ]
-    seed_infections_randomly_SI(model1, ninfections=10)
-    model1.run()
-    cases1 = model1.patches.cases_test[:, 0]
-
-    # With campaign
-    model2 = Model(scenario, base_params)
-    campaign = ImmunizationCampaign(
-        model2,
-        period=1,  # Apply every day during campaign
-        coverage=0.9,
-        age_lower=0,
-        age_upper=365 * 5,  # Ages 0 to 5 years
-        start=100,
-        end=120,
-        verbose=base_params.verbose,
-    )
-    model2.components = [Births_ConstantPop, Susceptibility, Exposure, Infection, Transmission, campaign]
-    seed_infections_randomly_SI(model2, ninfections=10)
-    model2.run()
-    cases2 = model2.patches.cases_test[:, 0]
-
-    # We expect fewer cases during the campaign period
-    assert np.mean(cases2[100:121]) < np.mean(cases1[100:121]), "Campaign should reduce infections during its window"
-
-
 @pytest.mark.modeltest
 def test_importation_keeps_infection_alive():
     """
@@ -592,45 +541,6 @@ def test_importation_keeps_infection_alive():
     assert total_inc > 0, "Importation should trigger infections"
     # Obviously we could just do the > 1000 test but we want to see an explicit error if the >0 test fails.
     assert total_inc > 1000  # e.g., 1000 cases over 5 years
-
-
-@pytest.mark.modeltest
-# @pytest.mark.xfail(reason="Known issue not yet fixed", strict=True)
-def skip_test_importation_keeps_infection_alive():
-    """
-    Infect_Random_Agents should maintain infections over long timescales.
-    """
-    pop = 100_000
-    nticks = 365 * 5
-    scenario = pd.DataFrame({"name": ["home"], "population": [pop]})
-
-    base_params = get_default_parameters() | {
-        "nticks": nticks,
-        "seed": 444,
-        "beta": 0.04,
-        "cbr": 0.03,
-        "inf_mean": 5,
-        "importation_period": 30,  # One new case every 30 days
-        "importation_count": 1,
-        "importation_start": 0,
-        "importation_end": nticks,
-        "verbose": False,
-    }
-
-    model = Model(scenario, base_params)
-    model.components = [
-        Births_ConstantPop,
-        Susceptibility,
-        Exposure,
-        Infection,
-        Transmission,
-        Infect_Random_Agents,
-    ]
-    seed_infections_randomly_SI(model, ninfections=1)
-    model.run()
-
-    final_I = model.patches.cases_test[-1, 0]
-    assert final_I > 0, "Importation should maintain infections"
 
 
 @pytest.mark.modeltest
