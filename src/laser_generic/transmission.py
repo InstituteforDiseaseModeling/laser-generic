@@ -379,7 +379,7 @@ class TransmissionSIR(Transmission):
         condition = population.susceptibility[0 : population.count] == 0
 
         if len(patches) == 1:
-            np.add(contagion, np.sum(condition), out=contagion)
+            np.add(contagion, np.uint32(np.sum(condition)), out=contagion)
         else:
             nodeids = population.nodeid[0 : population.count]
             np.add.at(contagion, nodeids[condition], 1)
