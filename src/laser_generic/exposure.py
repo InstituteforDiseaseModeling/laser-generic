@@ -79,7 +79,7 @@ class Exposure:
             condition = population.etimer[0 : population.count] > 0
 
             if len(patches) == 1:
-                np.add(exposed_count, np.count_nonzero(condition), out=exposed_count)
+                np.add(exposed_count, np.uint32(np.count_nonzero(condition)), out=exposed_count)
             else:
                 nodeids = population.nodeid[0 : population.count]
                 np.add.at(exposed_count, nodeids[condition], np.uint32(1))
