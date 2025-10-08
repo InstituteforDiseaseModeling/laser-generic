@@ -416,7 +416,7 @@ def test_births_variable_birthrate_maintains_population():
 
 @pytest.mark.modeltest
 @pytest.mark.xfail(reason="Known issue not yet fixed: AssertionError: Routine immunization should reduce infections", strict=True)
-def test_routine_immunization_blocks_spread_compare():
+def test_routine_immunization_blocks_spread_compare(stable_transmission_model):
     """
     Routine immunization at high coverage should suppress outbreak spread.
     """
@@ -434,16 +434,7 @@ def test_routine_immunization_blocks_spread_compare():
         "inf_mean": 5,
     }
 
-    # Without immunization
-    model1 = Model(scenario, base_params)
-    model1.components = [
-        Births_ConstantPop,
-        Susceptibility,
-        Exposure,
-        Infection,
-        Transmission,
-    ]
-    seed_infections_randomly_SI(model1, ninfections=100)
+    model1 = stable_transmission_model
     model1.run()
     total_cases1 = model1.patches.cases_test[-1, 0]
 
