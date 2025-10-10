@@ -19,7 +19,7 @@ LASER (Lightweight Agent Spatial modeling for ERadication) is a framework for bu
 
 `laser-generic` adds additional modeling components to those developed for `laser-core`. They include:
 
-**Infection & Transmission**
+### Infection & transmission
 
 - ``Infection()`` / ``Infection_SIS()`` – intrahost progression for SI and SIS models.
 - ``Susceptibility()`` – manages agent susceptibility.
@@ -27,24 +27,24 @@ LASER (Lightweight Agent Spatial modeling for ERadication) is a framework for bu
 - ``Transmission()`` / ``TransmissionSIR()`` – interhost transmission dynamics.
 - ``Infect_Agents_In_Patch()`` / ``Infect_Random_Agents()`` – stochastic infection events.
 
-**Births & Demographics**
+### Births & demographics
 
 - ``Births()`` – demographic process, assigning DOB and node IDs.
 - ``Births_ConstantPop()`` – keeps population constant by matching births to deaths.
 - ``Births_ConstantPop_VariableBirthRate()`` – constant population but with variable crude birth rates.
 
-**Immunization**
+### Immunization
 
 - ``ImmunizationCampaign()`` – age-targeted, periodic campaigns.
 - ``RoutineImmunization()`` – ongoing routine immunization at target ages.
 - ``immunize_in_age_window()`` – helper to immunize within an age band.
 
-**Initialization & Seeding**
+### Initialization & seeding
 
 - ``seed_infections_in_patch()`` / ``seed_infections_randomly()`` / ``seed_infections_randomly_SI()`` – seed infections at start.
 - ``set_initial_susceptibility_in_patch()`` / ``set_initial_susceptibility_randomly()`` – initialize susceptibility.
 
-**Utilities**
+### Utilities
 
 - ``calc_capacity()`` – computes population capacity given births and ticks.
 - ``calc_distances()`` – helper for spatial coupling via geocoordinates.
