@@ -31,7 +31,7 @@ theme:
       accent: light blue
 
 nav: # Navigation structure for the documentation
-  - index.md
+  - Home: index.md
   - What's new: whatsnew.md
   - Get started: get-started.md
   - Tutorials: # this creates a section in the TOC
