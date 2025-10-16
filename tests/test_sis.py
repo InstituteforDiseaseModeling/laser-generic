@@ -3,16 +3,17 @@ from laser_generic.newutils import TimingStats as ts  # noqa: I001
 import sys
 import unittest
 from argparse import ArgumentParser
-from functools import partial
 from pathlib import Path
 
 import contextily as ctx
+import numba as nb
 import numpy as np
 from laser_core import PropertySet
+from laser_core.demographics import AliasedDistribution
+from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SIS as SIS
 from laser_generic.newutils import RateMap
-from laser_generic.newutils import draw_vital_dynamics
 from laser_generic.newutils import grid
 from laser_generic.tstreemap import generate_d3_treemap_html
 
@@ -22,6 +23,7 @@ EM = 10
 EN = 10
 PEE = 10
 VALIDATING = False
+NTICKS = 365
 
 base_maps = [
     ctx.providers.Esri.NatGeoWorldMap,
@@ -53,23 +55,37 @@ class Default(unittest.TestCase):
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
 
-            crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
-            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
+            crude_birthrate = np.random.uniform(5, 35, len(scenario)) / 365
+            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=NTICKS)
             crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=scenario.shape[0], nsteps=365)
-            births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
+            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=len(scenario), nsteps=NTICKS)
 
-            R0 = 8.0
+            R0 = 1.2
             infectious_duration_mean = 7.0
             beta = R0 / infectious_duration_mean
-            params = PropertySet({"nticks": 365, "beta": beta})
+            params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIS.Model(scenario, params, births, deaths)
-                draw = partial(np.random.normal, loc=infectious_duration_mean, scale=2)
-                model.infectious_duration_distribution = lambda size: np.clip(
-                    np.round(draw(size=size)).astype(np.uint8), a_min=1, a_max=None
-                )
+                model = SIS.Model(scenario, params, birthrates=birthrate_map.rates, mortalityrates=mortality_map.rates)
+
+                # draw = partial(np.random.normal, loc=infectious_duration_mean, scale=2)
+                # model.infectious_duration_distribution = lambda size: np.clip(
+                #     np.round(draw(size=size)).astype(np.uint8), a_min=1, a_max=None
+                # )
+                @nb.njit(nogil=True, cache=True)
+                def infectious_duration_distribution():
+                    draw = np.random.normal(loc=infectious_duration_mean, scale=2)
+                    rounded = np.round(draw)
+                    asuint8 = np.uint8(rounded)
+                    clipped = np.maximum(1, asuint8)
+                    return clipped
+
+                model.infectious_duration_fn = infectious_duration_distribution
+
+                # Sampling this pyramid will return indices in [0, 88] with equal probability.
+                model.pyramid = AliasedDistribution(np.full(89, 1_000))
+                # The survival function will return the probability of surviving past each age.
+                model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SIS.Susceptible(model)
                 i = SIS.Infectious(model)
@@ -109,23 +125,37 @@ class Default(unittest.TestCase):
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
 
-            crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
-            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
+            crude_birthrate = np.random.uniform(5, 35, len(scenario)) / 365
+            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=NTICKS)
             crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=scenario.shape[0], nsteps=365)
-            births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
+            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=len(scenario), nsteps=NTICKS)
 
-            R0 = 8.0
+            R0 = 1.2
             infectious_duration_mean = 7.0
             beta = R0 / infectious_duration_mean
-            params = PropertySet({"nticks": 365, "beta": beta})
+            params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIS.Model(scenario, params, births, deaths)
-                draw = partial(np.random.normal, loc=infectious_duration_mean, scale=2)
-                model.infectious_duration_distribution = lambda size: np.clip(
-                    np.round(draw(size=size)).astype(np.uint8), a_min=1, a_max=None
-                )
+                model = SIS.Model(scenario, params, birthrate_map.rates, mortality_map.rates)
+
+                # draw = partial(np.random.normal, loc=infectious_duration_mean, scale=2)
+                # model.infectious_duration_distribution = lambda size: np.clip(
+                #     np.round(draw(size=size)).astype(np.uint8), a_min=1, a_max=None
+                # )
+                @nb.njit(nogil=True, cache=True)
+                def infectious_duration_distribution():
+                    draw = np.random.normal(loc=infectious_duration_mean, scale=2)
+                    rounded = np.round(draw)
+                    asuint8 = np.uint8(rounded)
+                    clipped = np.maximum(1, asuint8)
+                    return clipped
+
+                model.infectious_duration_fn = infectious_duration_distribution
+
+                # Sampling this pyramid will return indices in [0, 88] with equal probability.
+                model.pyramid = AliasedDistribution(np.full(89, 1_000))
+                # The survival function will return the probability of surviving past each age.
+                model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SIS.Susceptible(model)
                 i = SIS.Infectious(model)
@@ -159,6 +189,8 @@ if __name__ == "__main__":
     parser.add_argument("-p", type=int, default=10, help="Number of linear nodes (N)")
     parser.add_argument("--validating", action="store_true", help="Enable validating mode")
 
+    parser.add_argument("-t", "--ticks", type=int, default=365, help="Number of days to simulate (nticks)")
+
     parser.add_argument("-g", "--grid", action="store_true", help="Run grid test")
     parser.add_argument("-l", "--linear", action="store_true", help="Run linear test")
     parser.add_argument("-c", "--constant", action="store_true", help="Run constant population test")
@@ -170,10 +202,13 @@ if __name__ == "__main__":
     VERBOSE = args.verbose
     VALIDATING = args.validating
 
+    NTICKS = args.ticks
+
     EM = args.m
     EN = args.n
     PEE = args.p
 
+    # debugging
     args.grid = True
 
     print(f"Using arguments {args=}")

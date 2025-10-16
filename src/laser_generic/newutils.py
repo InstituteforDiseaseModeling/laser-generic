@@ -1,10 +1,11 @@
 import time
+import warnings
 
 import geopandas as gpd
 import numpy as np
 from shapely.geometry import Polygon
 
-__all__ = ["RateMap", "TimingStats", "draw_vital_dynamics", "grid"]
+__all__ = ["PubSub", "RateMap", "TimingStats", "draw_vital_dynamics", "grid"]
 
 
 class RateMap:
@@ -276,3 +277,51 @@ def validate(pre, post):
         return wrapper
 
     return decorator
+
+
+class PubSub:
+    def __init__(self, fn_name):
+        self._subscriptions = []
+        self._fn_name = fn_name
+        self.ts = TimingStats
+        return
+
+    def __add__(self, component):
+        if component in self._subscriptions:
+            warnings.warn(f"{component.__class__.__name__} already subscribed.", stacklevel=2)
+            return self
+
+        callback = getattr(component, self._fn_name) if hasattr(component, self._fn_name) else None
+
+        if callback is None:
+            warnings.warn(f"{component.__class__.__name__}.{self._fn_name}() missing.", stacklevel=2)
+            return self
+
+        if not callable(callback):
+            warnings.warn(f"{component.__class__.__name__}.{self._fn_name} is not callable.", stacklevel=2)
+            return self
+
+        self._subscriptions += [component]
+
+        return self
+
+    def __sub__(self, component):
+        if component not in self._subscriptions:
+            warnings.warn(f"{component.__class__.__name__} not subscribed.", stacklevel=2)
+            return
+
+        self._subscriptions.remove(component)
+
+        return self
+
+    @property
+    def subscriptions(self):
+        return [getattr(component, self._fn_name) for component in self._subscriptions]
+
+    def trigger(self, *args):
+        for component in self._subscriptions:
+            callback = getattr(component, self._fn_name)
+            with self.ts.start(f"{component.__class__.__name__}.{self._fn_name}()"):
+                callback(*args)
+
+        return

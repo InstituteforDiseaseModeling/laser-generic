@@ -5,62 +5,50 @@ import unittest
 from argparse import ArgumentParser
 from pathlib import Path
 
-import contextily as ctx
 import numpy as np
 from laser_core import PropertySet
+from laser_core.demographics import AliasedDistribution
+from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SI as SI
 from laser_generic.newutils import RateMap
 from laser_generic.newutils import draw_vital_dynamics
 from laser_generic.newutils import grid
 from laser_generic.tstreemap import generate_d3_treemap_html
+from utils import base_maps
+from utils import stdgrid
 
 PLOTTING = False
 VERBOSE = False
 EM = 10
 EN = 10
 PEE = 10
-
-base_maps = [
-    ctx.providers.Esri.NatGeoWorldMap,
-    ctx.providers.Esri.WorldGrayCanvas,
-    ctx.providers.Esri.WorldImagery,
-    ctx.providers.Esri.WorldPhysical,
-    ctx.providers.Esri.WorldShadedRelief,
-    ctx.providers.Esri.WorldStreetMap,
-    ctx.providers.Esri.WorldTerrain,
-    ctx.providers.Esri.WorldTopoMap,
-    # ctx.providers.NASAGIBS.ModisTerraTrueColorCR,
-]
+VALIDATING = False
 
 
 class Default(unittest.TestCase):
     def test_grid(self):
         with ts.start("test_grid"):
-            # Brothers, OR = 43°48'47"N 120°36'05"W (43.8130555556, -120.601388889)
-            grd = grid(
-                M=EM,
-                N=EN,
-                node_size_km=10,
-                population_fn=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
-                # population_fn=lambda x, y: int(np.random.exponential(50_000)),
-                origin_x=-120.601388889,
-                origin_y=43.8130555556,
-            )
-            scenario = grd
+            scenario = stdgrid(M=EM, N=EN)
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
 
-            crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
+            crude_birthrate = np.random.uniform(5, 35, len(scenario)) / 365
             birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
             crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=scenario.shape[0], nsteps=365)
+            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=len(scenario), nsteps=365)
             births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
 
             params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
 
             with ts.start("Model Initialization"):
                 model = SI.Model(scenario, params, births, deaths)
+                model.validating = VALIDATING
+
+                # Sampling this pyramid will return indices in [0, 88] with equal probability.
+                model.pyramid = AliasedDistribution(np.full(89, 1_000))
+                # The survival function will return the probability of surviving past each age.
+                model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SI.Susceptible(model)
                 i = SI.Infected(model)
@@ -75,38 +63,38 @@ class Default(unittest.TestCase):
             print(model.nodes.describe("Nodes"))
 
         if PLOTTING:
-            ibm = np.random.choice(len(base_maps))
-            model.basemap_provider = base_maps[ibm]
-            print(f"Using basemap: {model.basemap_provider.name}")
+            if base_maps:
+                ibm = np.random.choice(len(base_maps))
+                model.basemap_provider = base_maps[ibm]
+                print(f"Using basemap: {model.basemap_provider.name}")
+            else:
+                print("No base maps available.")
             model.plot()
 
         return
 
     def test_linear(self):
         with ts.start("test_linear"):
-            # Brothers, OR = 43°48'47"N 120°36'05"W (43.8130555556, -120.601388889)
-            lin = grid(
-                M=1,
-                N=PEE,
-                node_size_km=10,
-                population_fn=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
-                origin_x=-120.601388889,
-                origin_y=43.8130555556,
-            )
-            scenario = lin
+            scenario = stdgrid(M=1, N=PEE)
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
 
-            crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
+            crude_birthrate = np.random.uniform(5, 35, len(scenario)) / 365
             birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
             crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=scenario.shape[0], nsteps=365)
+            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=len(scenario), nsteps=365)
             births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
 
             params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
 
             with ts.start("Model Initialization"):
                 model = SI.Model(scenario, params, births, deaths)
+                model.validating = VALIDATING
+
+                # Sampling this pyramid will return indices in [0, 88] with equal probability.
+                model.pyramid = AliasedDistribution(np.full(89, 1_000))
+                # The survival function will return the probability of surviving past each age.
+                model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SI.Susceptible(model)
                 i = SI.Infected(model)
@@ -121,9 +109,12 @@ class Default(unittest.TestCase):
             print(model.nodes.describe("Nodes"))
 
         if PLOTTING:
-            ibm = np.random.choice(len(base_maps))
-            model.basemap_provider = base_maps[ibm]
-            print(f"Using basemap: {model.basemap_provider.name}")
+            if base_maps:
+                ibm = np.random.choice(len(base_maps))
+                model.basemap_provider = base_maps[ibm]
+                print(f"Using basemap: {model.basemap_provider.name}")
+            else:
+                print("No base maps available.")
             model.plot()
 
         return
@@ -135,17 +126,18 @@ class Default(unittest.TestCase):
             # Seattle, WA = 47°36'35"N 122°19'59"W (47.609722, -122.333056)
             latitude = 47 + (36 + (35 / 60)) / 60
             longitude = -(122 + (19 + (59 / 60)) / 60)
-            scenario = grid(M=1, N=1, grid_size=10, population_fn=lambda x, y: pop, origin_x=longitude, origin_y=latitude)
+            scenario = grid(M=1, N=1, node_size_km=10, population_fn=lambda x, y: pop, origin_x=longitude, origin_y=latitude)
             scenario["S"] = scenario.population - init_inf
             scenario["I"] = init_inf
             parameters = PropertySet({"seed": 2, "nticks": 730, "verbose": True, "beta": 0.04, "cbr": 400})
             birthrates = RateMap.from_scalar(parameters.cbr / 365, nsteps=parameters.nticks, nnodes=1)
             mortality = RateMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1)
             births, deaths = draw_vital_dynamics(birthrates, mortality, scenario.population)
-            model = SI.Model(scenario, parameters, births=births, deaths=deaths, skip_capacity=True)
-            model.validating = True
 
             with ts.start("Model Initialization"):
+                model = SI.Model(scenario, parameters, birthrates=births, mortalityrates=deaths, skip_capacity=True)
+                model.validating = VALIDATING
+
                 model.components = [
                     SI.Susceptible(model),
                     SI.Infected(model),
@@ -160,9 +152,12 @@ class Default(unittest.TestCase):
             print(model.nodes.describe("Nodes"))
 
         if PLOTTING:
-            ibm = np.random.choice(len(base_maps))
-            model.basemap_provider = base_maps[ibm]
-            print(f"Using basemap: {model.basemap_provider.name}")
+            if base_maps:
+                ibm = np.random.choice(len(base_maps))
+                model.basemap_provider = base_maps[ibm]
+                print(f"Using basemap: {model.basemap_provider.name}")
+            else:
+                print("No base maps available.")
             model.plot()
 
         return
@@ -175,6 +170,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", type=int, default=5, help="Number of grid rows (M)")
     parser.add_argument("-n", type=int, default=5, help="Number of grid columns (N)")
     parser.add_argument("-p", type=int, default=10, help="Number of linear nodes (N)")
+    parser.add_argument("--validating", action="store_true", help="Enable validating mode")
 
     parser.add_argument("-g", "--grid", action="store_true", help="Run grid test")
     parser.add_argument("-l", "--linear", action="store_true", help="Run linear test")
@@ -185,10 +181,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     PLOTTING = args.plot
     VERBOSE = args.verbose
+    VALIDATING = args.validating
 
     EM = args.m
     EN = args.n
     PEE = args.p
+
+    # # debugging
+    # args.grid = True
 
     if not (args.grid or args.linear or args.constant):  # Run everything
         sys.argv[1:] = args.unittest  # Pass remaining args to unittest
@@ -198,13 +198,13 @@ if __name__ == "__main__":
         tc = Default()
 
         if args.grid:
-            tc.test_grid()
+            tc.test_grid(args)
 
         if args.linear:
-            tc.test_linear()
+            tc.test_linear(args)
 
         if args.constant:
-            tc.test_constant_pop()
+            tc.test_constant_pop(args)
 
     ts.freeze()
 
