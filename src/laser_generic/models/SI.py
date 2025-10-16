@@ -1,11 +1,13 @@
 """Components for the SI model."""
 
+import warnings
 from enum import Enum
 
 import contextily as ctx
 import geopandas as gpd
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
+import numba as nb
 import numpy as np
 from laser_core import LaserFrame
 from laser_core.migration import distance
@@ -94,6 +96,20 @@ class Transmission:
 
         return
 
+    @staticmethod
+    @nb.njit((nb.int8[:], nb.uint16[:], nb.float32[:], nb.uint32[:, :]), nogil=True, parallel=True, cache=True)
+    def nb_transmission_step(states, nodeids, ft, inf_by_node):
+        for i in nb.prange(len(states)):
+            if states[i] == State.SUSCEPTIBLE.value:
+                # Check for infection
+                draw = np.random.rand()
+                nid = nodeids[i]
+                if draw < ft[nid]:
+                    states[i] = State.INFECTED.value
+                    inf_by_node[nb.get_thread_id(), nid] += 1
+
+        return
+
     def step(self, tick: int) -> None:
         ft = self.model.nodes.forces[tick]
         ft[:] = self.model.params.beta * self.model.nodes.I[tick] / (self.model.nodes.S[tick] + self.model.nodes.I[tick])
@@ -101,13 +117,23 @@ class Transmission:
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
 
-        states = self.model.people.state
-        susceptible = states == State.SUSCEPTIBLE.value
-        draws = np.random.rand(self.model.people.count).astype(np.float32)
-        nodeids = self.model.people.nodeid
-        infections = (draws < ft[nodeids]) & susceptible
-        states[infections] = State.INFECTED.value
-        inf_by_node = np.bincount(nodeids[infections], minlength=self.model.nodes.count).astype(np.uint32)
+        # states = self.model.people.state
+        # susceptible = states == State.SUSCEPTIBLE.value
+        # draws = np.random.rand(self.model.people.count).astype(np.float32)
+        # nodeids = self.model.people.nodeid
+        # infections = (draws < ft[nodeids]) & susceptible
+        # states[infections] = State.INFECTED.value
+        # inf_by_node = np.bincount(nodeids[infections], minlength=self.model.nodes.count).astype(np.uint32)
+
+        inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
+        self.nb_transmission_step(
+            self.model.people.state,
+            self.model.people.nodeid,
+            ft,
+            inf_by_node,
+        )
+        inf_by_node = inf_by_node.sum(axis=0)  # Sum over threads
+
         # state(t+1) = state(t) + ∆state(t)
         self.model.nodes.S[tick + 1] -= inf_by_node
         self.model.nodes.I[tick + 1] += inf_by_node
@@ -203,8 +229,34 @@ class Infected:
 class VitalDynamics:
     def __init__(self, model):
         self.model = model
-        assert hasattr(self.model, "births")
-        assert hasattr(self.model, "deaths")
+
+        # This component requires these model properties
+        assert hasattr(self.model, "birthrates")
+        assert hasattr(self.model, "mortalityrates")
+        assert hasattr(self.model, "pyramid")
+        assert hasattr(self.model, "survival")
+
+        # Date-Of-Birth and Date-Of-Death properties per agent
+        self.model.people.add_property("dob", dtype=np.int16)
+        self.model.people.add_property("dod", dtype=np.int16)
+        # birth and death statistics per node
+        self.model.nodes.add_vector_property("births", model.params.nticks + 1, dtype=np.uint32)
+        self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.uint32)
+
+        # Initialize starting population
+        self.pyramid = self.model.pyramid
+        dobs = self.model.people.dob
+        # Get years of age sampled from the population pyramid
+        dobs[:] = self.pyramid.sample(self.model.people.count).astype(np.int16)  # Fit in np.int16
+        dobs *= 365  # Convert years to days
+        dobs += np.random.randint(0, 365, size=len(dobs))  # add some noise within the year
+        dods = self.model.people.dod
+        dods[:] = self.model.survival.predict_age_at_death(dobs).astype(np.int16)  # Fit in np.int16
+        dods -= dobs  # How many more days will each person live?
+        # pyramid.sample actually returned ages. Turn them into dobs by treating them
+        # as days before today (t = 0). dobs = 0 - dobs == dobs = -dobs
+        dobs *= -1
+
         return
 
     def prevalidate_step(self, tick: int) -> None:
@@ -214,77 +266,85 @@ class VitalDynamics:
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        nbirths = self.model.births[tick].sum()
+        nbirths = self.model.birthrates[tick].sum()
         assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
         istart = self._cpeople
         iend = self.model.people.count
-        # Assert that number of births by patch matches self.model.births[tick]
+        # Assert that number of births by patch matches self.model.birthrates[tick]
         birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
-        assert np.all(birth_counts == self.model.births[tick]), "Birth counts by patch mismatch"
+        assert np.all(birth_counts == self.model.birthrates[tick]), "Birth counts by patch mismatch"
         assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
         assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
 
-        ndeaths = self.model.deaths[tick].sum()
+        ndeaths = self.model.mortalityrates[tick].sum()
         deceased = self.model.people.state == State.DECEASED.value
         assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
-        # Assert that new deaths by patch matches self.model.deaths[tick]
+        # Assert that new deaths by patch matches self.model.mortalityrates[tick]
         prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.nodes.count)
         now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.nodes.count)
         death_counts = now - prv
-        assert np.all(death_counts == self.model.deaths[tick]), "Death counts by patch mismatch"
+        assert np.all(death_counts == self.model.mortalityrates[tick]), "Death counts by patch mismatch"
+
+        return
+
+    @staticmethod
+    @nb.njit((nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32), nogil=True, parallel=True, cache=True)
+    def nb_process_deaths(dods, states, nodeids, delta_S, delta_I, tick):
+        for i in nb.prange(len(dods)):
+            if dods[i] == tick:
+                if states[i] == State.SUSCEPTIBLE.value:
+                    delta_S[nb.get_thread_id(), nodeids[i]] -= 1
+                else:
+                    delta_I[nb.get_thread_id(), nodeids[i]] -= 1
+                states[i] = State.DECEASED.value
 
         return
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         # Do mortality first, then births
-        # Mortality by patch
-        for node in range(self.model.nodes.count):
-            if (ndeaths := self.model.deaths[tick, node]) > 0:
-                citizens = np.nonzero(self.model.people.nodeid == node)[0]
-                npop = len(citizens)
-                if npop < ndeaths:
-                    print(
-                        f"Warning: Node {node} has {npop} citizens but {ndeaths} deaths requested at tick {tick}. Capping deaths to {npop}."
-                    )
-                    ndeaths = npop
-                # Sample deaths from the population
-                if ndeaths > 0:
-                    to_remove = np.random.choice(citizens, size=ndeaths, replace=False)
-                    cinfected = (self.model.people.state[to_remove] == State.INFECTED.value).sum()
-                    if cinfected > self.model.nodes.I[tick + 1, node]:
-                        ...  # debugging
-                    self.model.people.state[to_remove] = State.DECEASED.value
-                    # state(t+1) = state(t) + ∆state(t)
-                    self.model.nodes.S[tick + 1, node] -= ndeaths - cinfected
-                    self.model.nodes.I[tick + 1, node] -= cinfected
+        delta_S = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        delta_I = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        self.nb_process_deaths(self.model.people.dod, self.model.people.state, self.model.people.nodeid, delta_S, delta_I, tick)
+        # Combine thread results
+        delta_S = delta_S.sum(axis=0).astype(self.model.nodes.S.dtype)
+        delta_I = delta_I.sum(axis=0).astype(self.model.nodes.I.dtype)
+        # state(t+1) = state(t) + ∆state(t)
+        self.model.nodes.S[tick + 1] += delta_S  # delta_S is negative or zero
+        self.model.nodes.I[tick + 1] += delta_I  # delta_I is negative or zero
+        # Record today's ∆
+        self.model.nodes.deaths[tick] = -(delta_S + delta_I)  # Record
 
         # Births in one fell swoop
-        tbirths = self.model.births[tick].sum()
+        tbirths = self.model.birthrates[tick].sum()
         if tbirths > 0:
             istart, iend = self.model.people.add(tbirths)
-            self.model.people.nodeid[istart:iend] = np.repeat(np.arange(self.model.nodes.count, dtype=np.uint16), self.model.births[tick])
+            self.model.people.nodeid[istart:iend] = np.repeat(
+                np.arange(self.model.nodes.count, dtype=np.uint16), self.model.birthrates[tick]
+            )
             # State.SUSCEPTIBLE.value is the default
             # self.model.people.state[istart:iend] = State.SUSCEPTIBLE.value
             # state(t+1) = state(t) + ∆state(t)
-            self.model.nodes.S[tick + 1] += self.model.births[tick]
+            self.model.nodes.S[tick + 1] += self.model.birthrates[tick]
+            # Record today's ∆
+            self.model.nodes.births[tick] = self.model.birthrates[tick]
 
         return
 
     def plot(self):
         _fig, ax1 = plt.subplots(figsize=(16, 12))
-        births = np.sum(self.model.births, axis=1)
-        deaths = np.sum(self.model.deaths, axis=1)
-        ax1.plot(births, label="Daily Births", color="green")
-        ax1.plot(deaths, label="Daily Deaths", color="red")
+        birthrates = np.sum(self.model.birthrates, axis=1)
+        mortalityrates = np.sum(self.model.mortalityrates, axis=1)
+        ax1.plot(birthrates, label="Daily Birth Rates", color="green")
+        ax1.plot(mortalityrates, label="Daily Mortality Rates", color="red")
         ax1.set_xlabel("Tick")
         ax1.set_ylabel("Count")
-        ax1.set_title("Births and Deaths Over Time")
+        ax1.set_title("Birth Rates and Mortality Rates Over Time")
         ax1.legend(loc="upper left")
 
         ax2 = ax1.twinx()
-        ax2.plot(np.cumsum(births), color="tab:green", linestyle="--", label="Cumulative Births")
-        ax2.plot(np.cumsum(deaths), color="tab:red", linestyle="--", label="Cumulative Deaths")
+        ax2.plot(np.cumsum(birthrates), color="tab:green", linestyle="--", label="Cumulative Birth Rates")
+        ax2.plot(np.cumsum(mortalityrates), color="tab:red", linestyle="--", label="Cumulative Mortality Rates")
         ax2.set_ylabel("Cumulative Count")
         ax2.legend(loc="upper right")
         plt.show()
@@ -298,14 +358,19 @@ class ConstantPopVitalDynamics:
         self.model.nodes.add_vector_property("births", model.params.nticks + 1, dtype=np.uint32)
         self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.uint32)
 
-        births = (
-            self.model.births if hasattr(self.model, "births") else RateMap.from_scalar(0.0, model.params.nticks, model.nodes.count).rates
-        )
-        deaths = (
-            self.model.deaths if hasattr(self.model, "deaths") else RateMap.from_scalar(0.0, model.params.nticks, model.nodes.count).rates
-        )
+        if hasattr(self.model, "birthrates"):
+            birthrates = self.model.birthrates
+        else:
+            birthrates = RateMap.from_scalar(0.0, model.params.nticks, model.nodes.count).rates
+            warnings.warn("No birthrates found in model; defaulting to zero birthrates.", stacklevel=2)
 
-        self.rates = np.maximum(births, deaths)
+        if hasattr(self.model, "mortalityrates"):
+            mortalityrates = self.model.mortalityrates
+        else:
+            mortalityrates = RateMap.from_scalar(0.0, model.params.nticks, model.nodes.count).rates
+            warnings.warn("No mortalityrates found in model; defaulting to zero mortalityrates.", stacklevel=2)
+
+        self.rates = np.maximum(birthrates, mortalityrates)
 
         assert self.rates.shape == (self.model.params.nticks, self.model.nodes.count), "Births/deaths array shape mismatch"
 
@@ -315,20 +380,50 @@ class ConstantPopVitalDynamics:
 
     def postvalidate_step(self, tick: int) -> None: ...
 
+    @staticmethod
+    @nb.njit((nb.float32[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :]), nogil=True, parallel=True, cache=True)
+    def nb_process_recycling(rates, states, nodeids, recycled, infected):
+        for i in nb.prange(len(states)):
+            draw = np.random.rand()
+            nid = nodeids[i]
+            if draw < rates[nid]:
+                tid = nb.get_thread_id()
+                recycled[tid, nid] += 1
+                if states[i] == State.INFECTED.value:
+                    states[i] = State.SUSCEPTIBLE.value
+                    infected[tid, nid] += 1
+                # else: # states[i] is already SUSCEPTIBLE, no change
+
+        return
+
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
-        for node in range(self.model.nodes.count):
-            # TODO - figure out tick and time step indexing
-            if self.rates[tick, node] > 0:
-                citizens = np.nonzero(self.model.people.nodeid == node)[0]
-                recycled = np.random.choice(citizens, size=self.rates[tick, node], replace=False)
-                cinfected = (self.model.people.state[recycled] == State.INFECTED.value).sum()
-                self.model.people.state[recycled] = State.SUSCEPTIBLE.value
-                if cinfected > self.model.nodes.I[tick, node]:
-                    ...
-                # state(t+1) = state(t) + ∆state(t)
-                self.model.nodes.S[tick + 1, node] += cinfected
-                self.model.nodes.I[tick + 1, node] -= cinfected
+        # for node in range(self.model.nodes.count):
+        #     # TODO - figure out tick and time step indexing
+        #     if self.rates[tick, node] > 0:
+        #         citizens = np.nonzero(self.model.people.nodeid == node)[0]
+        #         recycled = np.random.choice(citizens, size=self.rates[tick, node], replace=False)
+        #         cinfected = (self.model.people.state[recycled] == State.INFECTED.value).sum()
+        #         self.model.people.state[recycled] = State.SUSCEPTIBLE.value
+        #         if cinfected > self.model.nodes.I[tick, node]:
+        #             ...
+        #         # state(t+1) = state(t) + ∆state(t)
+        #         self.model.nodes.S[tick + 1, node] += cinfected
+        #         self.model.nodes.I[tick + 1, node] -= cinfected
+
+        probabilities = (self.rates[tick] / (self.model.nodes.S[tick] + self.model.nodes.I[tick])).astype(np.float32)
+        # probabilities = np.clip(probabilities, a_min=0.0, a_max=1.0)
+        probabilities = -np.expm1(-probabilities)  # Convert to rates to probabilities
+        recycled = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        infected = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        self.nb_process_recycling(probabilities, self.model.people.state, self.model.people.nodeid, recycled, infected)
+        recycled = recycled.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
+        infected = infected.sum(axis=0).astype(self.model.nodes.I.dtype)  # Sum over threads
+        # state(t+1) = state(t) + ∆state(t)
+        self.model.nodes.S[tick + 1] += infected
+        self.model.nodes.I[tick + 1] -= infected
+        # Record today's ∆
+        self.model.nodes.deaths[tick] = recycled  # Record recycled as "deaths
 
         return
 
@@ -345,25 +440,25 @@ class ConstantPopVitalDynamics:
 
 
 class Model:
-    def __init__(self, scenario, params, births=None, deaths=None, skip_capacity: bool = False):
+    def __init__(self, scenario, params, birthrates=None, mortalityrates=None, skip_capacity: bool = False):
         """
         Initialize the SI model.
 
         Args:
             scenario (GeoDataFrame): The scenario data containing per patch population, initial S and I counts, and geometry.
             params (PropertySet): The parameters for the model, including 'nticks' and 'beta'.
-            births (np.ndarray, optional): Birth counts per patch per tick. Defaults to None.
+            birthrates (np.ndarray, optional): Birth counts per patch per tick. Defaults to None.
             deaths (np.ndarray, optional): Death counts per patch per tick. Defaults to None.
             skip_capacity (bool, optional): If True, skips capacity checks. Defaults to False.
         """
         self.params = params
 
         num_nodes = max(np.unique(scenario.nodeid)) + 1
-        self.births = births if births is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
-        self.deaths = deaths if deaths is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
+        self.birthrates = birthrates if birthrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
+        self.mortalityrates = mortalityrates if mortalityrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
         num_active = scenario.population.sum()
         if not skip_capacity:
-            num_agents = num_active + self.births.sum()
+            num_agents = num_active + self.birthrates.sum()
         else:
             # Ignore births for capacity calculation
             num_agents = num_active
@@ -402,6 +497,7 @@ class Model:
         self.basemap_provider = ctx.providers.Esri.WorldImagery
 
         self._components = []
+        # self.on_birth = PubSub("on_birth")
 
         return
 
