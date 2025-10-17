@@ -5,7 +5,7 @@ import geopandas as gpd
 import numpy as np
 from shapely.geometry import Polygon
 
-__all__ = ["PubSub", "RateMap", "TimingStats", "draw_vital_dynamics", "grid"]
+__all__ = ["PubSub", "RateMap", "TimingStats", "estimate_capacity", "grid"]
 
 
 class RateMap:
@@ -125,29 +125,21 @@ def grid(M=5, N=5, node_size_km=10, population_fn=None, origin_x=0, origin_y=0):
     return gdf
 
 
-def draw_vital_dynamics(birthrates: RateMap, mortality: RateMap, initial_pop: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    assert birthrates.nnodes == mortality.nnodes == initial_pop.shape[0], (
-        "birthrates, mortality, and initial_pop must have the same number of nodes"
-    )
-    assert birthrates.nsteps == mortality.nsteps, "birthrates and mortality must have the same number of steps"
+def estimate_capacity(birthrates: np.ndarray, initial_pop: np.ndarray) -> np.ndarray:
+    nticks, nnodes = birthrates.shape
+    assert len(initial_pop) == nnodes, "initial_pop length must match number of nodes in birthrates_map"
+    estimate = initial_pop.copy()
 
-    current_pop = initial_pop.copy()
-    births = np.zeros_like(birthrates.rates, dtype=np.uint32)
-    deaths = np.zeros_like(mortality.rates, dtype=np.uint32)
-
-    for t in range(birthrates.nsteps):
+    for t in range(nticks):
         # Poisson draw for births per patch
-        births[t] = np.random.poisson(birthrates.rates[t] * current_pop / 1000)  # CBR is per 1,000 population
-        # Binomial draw for deaths per patch
-        # np.expm1(x) computes exp(x) - 1 accurately for small x
-        # -np.expm1(x) computes 1 - exp(x) accurately for small x
-        # -np.expm1(-mortality.rates[t]) gives the probability of death in a time step
-        deaths[t] = np.random.binomial(current_pop, -np.expm1(-mortality.rates[t]))
-        # Update population
-        current_pop += births[t]
-        current_pop -= deaths[t]
 
-    return births, deaths
+        # naive = rates[t] / 1000 / 365
+        # _ = np.random.poisson(naive * estimate)
+        accurate = (1.0 + birthrates[t] / 1000) ** (1.0 / 365) - 1.0
+        delta = np.random.poisson(accurate * estimate)
+        estimate += delta
+
+    return estimate
 
 
 class TimingContext:

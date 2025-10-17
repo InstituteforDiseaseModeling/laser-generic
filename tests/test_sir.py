@@ -3,18 +3,19 @@ from laser_generic.newutils import TimingStats as ts  # noqa: I001
 import sys
 import unittest
 from argparse import ArgumentParser
-from functools import partial
 from pathlib import Path
 
-import contextily as ctx
+import numba as nb
 import numpy as np
 from laser_core import PropertySet
+from laser_core.demographics import AliasedDistribution
+from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SIR as SIR
 from laser_generic.newutils import RateMap
-from laser_generic.newutils import draw_vital_dynamics
-from laser_generic.newutils import grid
 from laser_generic.tstreemap import generate_d3_treemap_html
+from utils import base_maps
+from utils import stdgrid
 
 PLOTTING = False
 VERBOSE = False
@@ -22,56 +23,91 @@ EM = 10
 EN = 10
 PEE = 10
 VALIDATING = False
-
-base_maps = [
-    ctx.providers.Esri.NatGeoWorldMap,
-    ctx.providers.Esri.WorldGrayCanvas,
-    ctx.providers.Esri.WorldImagery,
-    ctx.providers.Esri.WorldPhysical,
-    ctx.providers.Esri.WorldShadedRelief,
-    ctx.providers.Esri.WorldStreetMap,
-    ctx.providers.Esri.WorldTerrain,
-    ctx.providers.Esri.WorldTopoMap,
-    # ctx.providers.NASAGIBS.ModisTerraTrueColorCR,
-]
+NTICKS = 365
+R0 = 1.386  # final attack fraction of 50%
 
 
 class Default(unittest.TestCase):
-    def test_grid(self):
-        with ts.start("test_grid"):
-            # Black Rock Desert, NV = 40°47'13"N 119°12'15"W (40.786944, -119.204167)
-            grd = grid(
-                M=EM,
-                N=EN,
-                node_size_km=10,
-                population_fn=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
-                # population_fn=lambda x, y: int(np.random.exponential(50_000)),
-                origin_x=-119.204167,
-                origin_y=40.786944,
-            )
-            scenario = grd
+    def test_single(self):
+        with ts.start("test_single_node"):
+            scenario = stdgrid(M=1, N=1, population_fn=lambda x, y: 100_000)
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
             scenario["R"] = 0
 
-            # crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
-            # birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
-            # crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            # mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=scenario.shape[0], nsteps=365)
-            # births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
-
-            R0 = 8.0
             infectious_duration_mean = 7.0
             beta = R0 / infectious_duration_mean
-            params = PropertySet({"nticks": 365, "beta": beta})
+            params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                # model = SIR.Model(scenario, params, births, deaths)
                 model = SIR.Model(scenario, params)
-                draw = partial(np.random.normal, loc=infectious_duration_mean, scale=2)
-                model.infectious_duration_distribution = lambda size: np.clip(
-                    np.round(draw(size=size)).astype(np.uint8), a_min=1, a_max=None
-                )
+
+                @nb.njit(nogil=True, cache=True)
+                def infectious_duration_distribution():
+                    draw = np.random.normal(loc=infectious_duration_mean, scale=2)
+                    rounded = np.round(draw)
+                    asuint8 = np.uint8(rounded)
+                    clipped = np.maximum(1, asuint8)
+                    return clipped
+
+                model.infectious_duration_fn = infectious_duration_distribution
+
+                s = SIR.Susceptible(model)
+                i = SIR.Infectious(model)
+                r = SIR.Recovered(model)
+                tx = SIR.Transmission(model)
+                # Recovered has to run _before_ Infectious to move people correctly (Infectious updates model.nodes.R)
+                model.components = [s, r, i, tx]
+
+                model.validating = VALIDATING
+
+            model.run(f"SIR Single Node ({model.people.count:,}/{model.nodes.count:,})")
+
+        if VERBOSE:
+            print(model.people.describe("People"))
+            print(model.nodes.describe("Nodes"))
+
+        if PLOTTING:
+            # ibm = np.random.choice(len(base_maps))
+            model.basemap_provider = base_maps[0]  # [ibm]
+            print(f"Using basemap: {model.basemap_provider.name}")
+            model.plot()
+
+        return
+
+    def test_grid(self):
+        with ts.start("test_grid"):
+            scenario = stdgrid()
+            scenario["S"] = scenario["population"] - 10
+            scenario["I"] = 10
+            scenario["R"] = 0
+
+            cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
+            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
+            mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
+
+            infectious_duration_mean = 7.0
+            beta = R0 / infectious_duration_mean
+            params = PropertySet({"nticks": NTICKS, "beta": beta})
+
+            with ts.start("Model Initialization"):
+                model = SIR.Model(scenario, params, birthrates=birthrate_map.rates, mortalityrates=mortality_map.rates)
+
+                @nb.njit(nogil=True, cache=True)
+                def infectious_duration_distribution():
+                    draw = np.random.normal(loc=infectious_duration_mean, scale=2)
+                    rounded = np.round(draw)
+                    asuint8 = np.uint8(rounded)
+                    clipped = np.maximum(1, asuint8)
+                    return clipped
+
+                model.infectious_duration_fn = infectious_duration_distribution
+
+                # Sampling this pyramid will return indices in [0, 88] with equal probability.
+                model.pyramid = AliasedDistribution(np.full(89, 1_000))
+                # The survival function will return the probability of surviving past each age.
+                model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SIR.Susceptible(model)
                 i = SIR.Infectious(model)
@@ -100,37 +136,37 @@ class Default(unittest.TestCase):
     # @unittest.skip("demonstrating skipping")
     def test_linear(self):
         with ts.start("test_linear"):
-            # Black Rock Desert, NV = 40°47'13"N 119°12'15"W (40.786944, -119.204167)
-            lin = grid(
-                M=1,
-                N=PEE,
-                node_size_km=10,
-                population_fn=lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
-                origin_x=-119.204167,
-                origin_y=40.786944,
-            )
-            scenario = lin
+            scenario = stdgrid(M=1, N=PEE)
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
             scenario["R"] = 0
 
-            crude_birthrate = np.random.uniform(5, 35, scenario.shape[0]) / 365
-            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
-            crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=scenario.shape[0], nsteps=365)
-            births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
+            cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
+            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
+            mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
-            R0 = 8.0
             infectious_duration_mean = 7.0
             beta = R0 / infectious_duration_mean
-            params = PropertySet({"nticks": 365, "beta": beta})
+            params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIR.Model(scenario, params, births, deaths)
-                draw = partial(np.random.normal, loc=infectious_duration_mean, scale=2)
-                model.infectious_duration_distribution = lambda size: np.clip(
-                    np.round(draw(size=size)).astype(np.uint8), a_min=1, a_max=None
-                )
+                model = SIR.Model(scenario, params, birthrates=birthrate_map.rates, mortalityrates=mortality_map.rates)
+
+                @nb.njit(nogil=True, cache=True)
+                def infectious_duration_distribution():
+                    draw = np.random.normal(loc=infectious_duration_mean, scale=2)
+                    rounded = np.round(draw)
+                    asuint8 = np.uint8(rounded)
+                    clipped = np.maximum(1, asuint8)
+                    return clipped
+
+                model.infectious_duration_fn = infectious_duration_distribution
+
+                # Sampling this pyramid will return indices in [0, 88] with equal probability.
+                model.pyramid = AliasedDistribution(np.full(89, 1_000))
+                # The survival function will return the probability of surviving past each age.
+                model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SIR.Susceptible(model)
                 i = SIR.Infectious(model)
@@ -166,9 +202,19 @@ if __name__ == "__main__":
     parser.add_argument("-p", type=int, default=10, help="Number of linear nodes (N)")
     parser.add_argument("--validating", action="store_true", help="Enable validating mode")
 
+    parser.add_argument("-t", "--ticks", type=int, default=365, help="Number of days to simulate (nticks)")
+    parser.add_argument(
+        "-r",
+        "--r0",
+        type=float,
+        default=1.386,
+        help="Basic reproduction number (R0) [1.151 for 25% attack fraction, 1.386=50%, and 1.848=75%]",
+    )
+
     parser.add_argument("-g", "--grid", action="store_true", help="Run grid test")
     parser.add_argument("-l", "--linear", action="store_true", help="Run linear test")
-    parser.add_argument("-c", "--constant", action="store_true", help="Run constant population test")
+    parser.add_argument("-s", "--single", action="store_true", help="Run single node test")
+    # parser.add_argument("-c", "--constant", action="store_true", help="Run constant population test")
 
     parser.add_argument("unittest", nargs="*")  # Catch all for unittest args
 
@@ -177,15 +223,19 @@ if __name__ == "__main__":
     VERBOSE = args.verbose
     VALIDATING = args.validating
 
+    NTICKS = args.ticks
+    R0 = args.r0
+
     EM = args.m
     EN = args.n
     PEE = args.p
 
-    args.grid = True
+    # # debugging
+    # args.grid = True
 
     print(f"Using arguments {args=}")
 
-    if not (args.grid or args.linear or args.constant):  # Run everything
+    if not (args.grid or args.linear or args.single):  # Run everything
         sys.argv[1:] = args.unittest  # Pass remaining args to unittest
         unittest.main(exit=False)
 
@@ -198,8 +248,8 @@ if __name__ == "__main__":
         if args.linear:
             tc.test_linear()
 
-        # if args.constant:
-        #     tc.test_constant() --- IGNORE ---
+        if args.single:
+            tc.test_single()
 
     ts.freeze()
 
