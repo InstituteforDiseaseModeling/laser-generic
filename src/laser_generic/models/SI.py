@@ -116,6 +116,7 @@ class Transmission:
         transfer = ft[:, None] * self.model.network
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
+        ft = -np.expm1(-ft)
 
         # states = self.model.people.state
         # susceptible = states == State.SUSCEPTIBLE.value
