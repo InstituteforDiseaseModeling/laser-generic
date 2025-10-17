@@ -7,8 +7,8 @@ from math import ceil
 
 import click
 import numpy as np
-from laser_core import PropertySet
-from laser_core.migration import distance
+from .wrappers import LGPropertySet as PropertySet
+from laser_core.migration import distance as lgdistance
 
 
 def calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool = False) -> np.ndarray:
@@ -267,7 +267,7 @@ def get_default_parameters() -> PropertySet:
     """
     nticks = 365 * 2
     biweekly_steps = ceil(nticks / 14)
-    return PropertySet(
+    return LGPropertySet(
         {
             "nticks": nticks,
             "beta": 0.15,
