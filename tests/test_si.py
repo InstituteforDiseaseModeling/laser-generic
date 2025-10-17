@@ -12,7 +12,6 @@ from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SI as SI
 from laser_generic.newutils import RateMap
-from laser_generic.newutils import draw_vital_dynamics
 from laser_generic.newutils import grid
 from laser_generic.tstreemap import generate_d3_treemap_html
 from utils import base_maps
@@ -24,6 +23,7 @@ EM = 10
 EN = 10
 PEE = 10
 VALIDATING = False
+NTICKS = 365
 
 
 class Default(unittest.TestCase):
@@ -33,16 +33,15 @@ class Default(unittest.TestCase):
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
 
-            crude_birthrate = np.random.uniform(5, 35, len(scenario)) / 365
-            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
-            crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=len(scenario), nsteps=365)
-            births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
+            cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
+            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
+            mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
-            params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
+            params = PropertySet({"nticks": NTICKS, "beta": 1.0 / 32})
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, params, births, deaths)
+                model = SI.Model(scenario, params, birthrate_map.rates, mortality_map.rates)
                 model.validating = VALIDATING
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
@@ -79,16 +78,15 @@ class Default(unittest.TestCase):
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
 
-            crude_birthrate = np.random.uniform(5, 35, len(scenario)) / 365
-            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=365)
-            crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=len(scenario), nsteps=365)
-            births, deaths = draw_vital_dynamics(birthrate_map, mortality_map, scenario["population"].values)
+            cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
+            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
+            mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
-            params = PropertySet({"nticks": 365, "beta": 1.0 / 32})
+            params = PropertySet({"nticks": NTICKS, "beta": 1.0 / 32})
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, params, births, deaths)
+                model = SI.Model(scenario, params, birthrate_map.rates, mortality_map.rates)
                 model.validating = VALIDATING
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
@@ -129,13 +127,13 @@ class Default(unittest.TestCase):
             scenario = grid(M=1, N=1, node_size_km=10, population_fn=lambda x, y: pop, origin_x=longitude, origin_y=latitude)
             scenario["S"] = scenario.population - init_inf
             scenario["I"] = init_inf
-            parameters = PropertySet({"seed": 2, "nticks": 730, "verbose": True, "beta": 0.04, "cbr": 400})
-            birthrates = RateMap.from_scalar(parameters.cbr / 365, nsteps=parameters.nticks, nnodes=1)
-            mortality = RateMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1)
-            births, deaths = draw_vital_dynamics(birthrates, mortality, scenario.population)
+            parameters = PropertySet({"seed": 2, "nticks": NTICKS, "verbose": True, "beta": 0.04, "cbr": 400})
+
+            birthrate_map = RateMap.from_scalar(parameters.cbr, nsteps=parameters.nticks, nnodes=1)
+            mortality_map = RateMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1)
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, parameters, birthrates=births, mortalityrates=deaths, skip_capacity=True)
+                model = SI.Model(scenario, parameters, birthrate_map.rates, mortality_map.rates, skip_capacity=True)
                 model.validating = VALIDATING
 
                 model.components = [
@@ -172,6 +170,8 @@ if __name__ == "__main__":
     parser.add_argument("-p", type=int, default=10, help="Number of linear nodes (N)")
     parser.add_argument("--validating", action="store_true", help="Enable validating mode")
 
+    parser.add_argument("-t", "--ticks", type=int, default=365, help="Number of days to simulate (nticks)")
+
     parser.add_argument("-g", "--grid", action="store_true", help="Run grid test")
     parser.add_argument("-l", "--linear", action="store_true", help="Run linear test")
     parser.add_argument("-c", "--constant", action="store_true", help="Run constant population test")
@@ -182,6 +182,8 @@ if __name__ == "__main__":
     PLOTTING = args.plot
     VERBOSE = args.verbose
     VALIDATING = args.validating
+
+    NTICKS = args.ticks
 
     EM = args.m
     EN = args.n

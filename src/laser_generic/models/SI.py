@@ -17,6 +17,7 @@ from tqdm import tqdm
 
 from laser_generic.newutils import RateMap
 from laser_generic.newutils import TimingStats as ts
+from laser_generic.newutils import estimate_capacity
 from laser_generic.newutils import validate
 
 __all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "Susceptible", "Transmission", "VitalDynamics"]
@@ -116,6 +117,7 @@ class Transmission:
         transfer = ft[:, None] * self.model.network
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
+        ft = -np.expm1(-ft)  # Convert to probability of infection
 
         # states = self.model.people.state
         # susceptible = states == State.SUSCEPTIBLE.value
@@ -316,18 +318,20 @@ class VitalDynamics:
         self.model.nodes.deaths[tick] = -(delta_S + delta_I)  # Record
 
         # Births in one fell swoop
-        tbirths = self.model.birthrates[tick].sum()
+        rates = np.power(1.0 + self.model.birthrates[tick] / 1000, 1.0 / 365) - 1.0
+        # Use "tomorrow's" population which accounts for mortality above.
+        N = self.model.nodes.S[tick + 1] + self.model.nodes.I[tick + 1]
+        births = np.round(np.random.poisson(rates * N)).astype(np.uint32)
+        tbirths = births.sum()
         if tbirths > 0:
             istart, iend = self.model.people.add(tbirths)
-            self.model.people.nodeid[istart:iend] = np.repeat(
-                np.arange(self.model.nodes.count, dtype=np.uint16), self.model.birthrates[tick]
-            )
+            self.model.people.nodeid[istart:iend] = np.repeat(np.arange(self.model.nodes.count, dtype=np.uint16), births)
             # State.SUSCEPTIBLE.value is the default
             # self.model.people.state[istart:iend] = State.SUSCEPTIBLE.value
             # state(t+1) = state(t) + ∆state(t)
-            self.model.nodes.S[tick + 1] += self.model.birthrates[tick]
+            self.model.nodes.S[tick + 1] += births
             # Record today's ∆
-            self.model.nodes.births[tick] = self.model.birthrates[tick]
+            self.model.nodes.births[tick] = births
 
         return
 
@@ -458,7 +462,7 @@ class Model:
         self.mortalityrates = mortalityrates if mortalityrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
         num_active = scenario.population.sum()
         if not skip_capacity:
-            num_agents = num_active + self.birthrates.sum()
+            num_agents = estimate_capacity(self.birthrates, scenario.population).sum()
         else:
             # Ignore births for capacity calculation
             num_agents = num_active
@@ -571,8 +575,46 @@ class Model:
             """
 
             plt.show()
+
+        # Plot active population (S + I) and total deceased over time
+        _fig, ax1 = plt.subplots(figsize=(10, 6))
+        active_population = self.nodes.S + self.nodes.I
+        total_active = np.sum(active_population, axis=1)
+        ax1.plot(total_active, label="Active Population (S + I)", color="blue")
+        ax1.set_xlabel("Tick")
+        ax1.set_ylabel("Active Population", color="blue")
+        ax1.tick_params(axis="y", labelcolor="blue")
+        ax1.legend(loc="upper left")
+
+        if hasattr(self.nodes, "deaths"):
+            ax2 = ax1.twinx()
+            total_deceased = np.sum(self.nodes.deaths, axis=1).cumsum()
+            ax2.plot(total_deceased, label="Total Deceased", color="red")
+            ax2.set_ylabel("Total Deceased", color="red")
+            ax2.tick_params(axis="y", labelcolor="red")
+            ax2.legend(loc="upper right")
+
+            plt.title("Active Population and Total Deceased Over Time")
         else:
-            return
+            plt.title("Active Population Over Time")
+
+        plt.tight_layout()
+        plt.show()
+
+        # Plot total S and total I over time
+        _fig, ax1 = plt.subplots(figsize=(10, 6))
+        total_S = np.sum(self.nodes.S, axis=1)
+        total_I = np.sum(self.nodes.I, axis=1)
+        ax1.plot(total_S, label="Total Susceptible (S)", color="blue")
+        ax1.plot(total_I, label="Total Infectious (I)", color="orange")
+        ax1.set_xlabel("Tick")
+        ax1.set_ylabel("Count")
+        ax1.legend(loc="upper right")
+        plt.title("Total Susceptible and Infectious Over Time")
+        plt.tight_layout()
+        plt.show()
+
+        return
 
     def plot(self):
         self._plot(getattr(self, "basemap_provider", None))  # Pass basemap_provider argument to _plot if provided

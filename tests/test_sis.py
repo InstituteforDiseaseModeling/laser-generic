@@ -68,10 +68,6 @@ class Default(unittest.TestCase):
             with ts.start("Model Initialization"):
                 model = SIS.Model(scenario, params, birthrates=birthrate_map.rates, mortalityrates=mortality_map.rates)
 
-                # draw = partial(np.random.normal, loc=infectious_duration_mean, scale=2)
-                # model.infectious_duration_distribution = lambda size: np.clip(
-                #     np.round(draw(size=size)).astype(np.uint8), a_min=1, a_max=None
-                # )
                 @nb.njit(nogil=True, cache=True)
                 def infectious_duration_distribution():
                     draw = np.random.normal(loc=infectious_duration_mean, scale=2)
@@ -138,10 +134,6 @@ class Default(unittest.TestCase):
             with ts.start("Model Initialization"):
                 model = SIS.Model(scenario, params, birthrate_map.rates, mortality_map.rates)
 
-                # draw = partial(np.random.normal, loc=infectious_duration_mean, scale=2)
-                # model.infectious_duration_distribution = lambda size: np.clip(
-                #     np.round(draw(size=size)).astype(np.uint8), a_min=1, a_max=None
-                # )
                 @nb.njit(nogil=True, cache=True)
                 def infectious_duration_distribution():
                     draw = np.random.normal(loc=infectious_duration_mean, scale=2)
