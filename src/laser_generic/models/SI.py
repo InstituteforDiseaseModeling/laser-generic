@@ -112,19 +112,12 @@ class Transmission:
 
     def step(self, tick: int) -> None:
         ft = self.model.nodes.forces[tick]
-        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / (self.model.nodes.S[tick] + self.model.nodes.I[tick])
+        N = self.model.nodes.S[tick] + self.model.nodes.I[tick]
+        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / N
         transfer = ft[:, None] * self.model.network
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
         ft = -np.expm1(-ft)
-
-        # states = self.model.people.state
-        # susceptible = states == State.SUSCEPTIBLE.value
-        # draws = np.random.rand(self.model.people.count).astype(np.float32)
-        # nodeids = self.model.people.nodeid
-        # infections = (draws < ft[nodeids]) & susceptible
-        # states[infections] = State.INFECTED.value
-        # inf_by_node = np.bincount(nodeids[infections], minlength=self.model.nodes.count).astype(np.uint32)
 
         inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(
@@ -474,7 +467,10 @@ class Model:
         # Project to EPSG:3857, calculate centroids, then convert back to degrees
         gdf_proj = self.scenario.to_crs(epsg=3857)
         centroids_proj = gdf_proj.geometry.centroid
-        centroids_deg = centroids_proj.to_crs(epsg=4326)
+        # TODO - figure out how to avoid the DeprecationWarning coming from NumPy via GeoPandas
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=DeprecationWarning)
+            centroids_deg = centroids_proj.to_crs(epsg=4326)
 
         self.scenario["x"] = centroids_deg.x
         self.scenario["y"] = centroids_deg.y

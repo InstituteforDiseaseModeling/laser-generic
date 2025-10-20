@@ -23,4 +23,6 @@ recursive-exclude notebooks *.ipynb
 global-exclude *.py[cod] __pycache__/* *.so *.dylib
 
 exclude convert_clean.sh
+exclude CLAUDE.md
+
 prune data

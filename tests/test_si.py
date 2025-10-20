@@ -123,10 +123,7 @@ class Default(unittest.TestCase):
         with ts.start("test_constant_pop"):
             pop = 1e6
             init_inf = 1
-            # Seattle, WA = 47°36'35"N 122°19'59"W (47.609722, -122.333056)
-            latitude = 47 + (36 + (35 / 60)) / 60
-            longitude = -(122 + (19 + (59 / 60)) / 60)
-            scenario = grid(M=1, N=1, node_size_km=10, population_fn=lambda x, y: pop, origin_x=longitude, origin_y=latitude)
+            scenario = grid(M=1, N=1, node_size_km=10, population_fn=lambda x, y: pop, origin_x=0, origin_y=0)
             scenario["S"] = scenario.population - init_inf
             scenario["I"] = init_inf
             parameters = PropertySet({"seed": 2, "nticks": 730, "verbose": True, "beta": 0.04, "cbr": 400})

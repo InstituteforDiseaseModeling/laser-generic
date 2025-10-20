@@ -73,6 +73,14 @@ laser\_generic.model module
    :undoc-members:
    :show-inheritance:
 
+laser\_generic.newutils module
+------------------------------
+
+.. automodule:: laser_generic.newutils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 laser\_generic.susceptibility module
 ------------------------------------
 
@@ -85,6 +93,14 @@ laser\_generic.transmission module
 ----------------------------------
 
 .. automodule:: laser_generic.transmission
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+laser\_generic.tstreemap module
+-------------------------------
+
+.. automodule:: laser_generic.tstreemap
    :members:
    :undoc-members:
    :show-inheritance:

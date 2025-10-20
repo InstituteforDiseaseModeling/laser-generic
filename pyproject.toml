@@ -4,12 +4,11 @@ version = "0.0.0"
 description = "Generic, SI/SIR/SEIR/etc., disease models implemented with the LASER toolkit."
 requires-python = ">= 3.9"
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "MIT"
 keywords = ["sir", "seir", "spatial", "modeling", "laser"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Unix",
     "Operating System :: POSIX",
     "Operating System :: Microsoft :: Windows",
@@ -41,7 +40,7 @@ maintainers = [
 
 dependencies = [
   "click",
-  "laser-core",
+  "laser-core@git+https://github.com/InstituteforDiseaseModeling/laser.git",
   "tqdm",
   "geopandas",
   "pandas",
