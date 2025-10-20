@@ -55,10 +55,10 @@ class Default(unittest.TestCase):
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
 
-            crude_birthrate = np.random.uniform(5, 35, len(scenario)) / 365
-            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=NTICKS)
-            crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=len(scenario), nsteps=NTICKS)
+            cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
+            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
+            mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
             R0 = 1.2
             infectious_duration_mean = 7.0
@@ -121,10 +121,10 @@ class Default(unittest.TestCase):
             scenario["S"] = scenario["population"] - 10
             scenario["I"] = 10
 
-            crude_birthrate = np.random.uniform(5, 35, len(scenario)) / 365
-            birthrate_map = RateMap.from_nodes(crude_birthrate, nsteps=NTICKS)
-            crude_mortality_rate = (1 / 60) / 365  # daily mortality rate (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(crude_mortality_rate, nnodes=len(scenario), nsteps=NTICKS)
+            cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
+            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
+            mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
             R0 = 1.2
             infectious_duration_mean = 7.0
@@ -200,8 +200,8 @@ if __name__ == "__main__":
     EN = args.n
     PEE = args.p
 
-    # debugging
-    args.grid = True
+    # # debugging
+    # args.grid = True
 
     print(f"Using arguments {args=}")
 

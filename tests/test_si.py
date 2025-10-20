@@ -200,13 +200,13 @@ if __name__ == "__main__":
         tc = Default()
 
         if args.grid:
-            tc.test_grid(args)
+            tc.test_grid()
 
         if args.linear:
-            tc.test_linear(args)
+            tc.test_linear()
 
         if args.constant:
-            tc.test_constant_pop(args)
+            tc.test_constant_pop()
 
     ts.freeze()
 

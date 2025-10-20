@@ -22,6 +22,7 @@ include README.md
 recursive-exclude notebooks *.ipynb
 global-exclude *.py[cod] __pycache__/* *.so *.dylib
 
+exclude CLAUDE.md
 exclude convert_clean.sh
 prune data
 

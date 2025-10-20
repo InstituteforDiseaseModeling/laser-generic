@@ -41,7 +41,8 @@ maintainers = [
 
 dependencies = [
   "click",
-  "laser-core",
+  # "laser-core",
+  "laser-core@git+https://github.com/InstituteforDiseaseModeling/laser.git",
   "tqdm",
   "geopandas",
   "pandas",

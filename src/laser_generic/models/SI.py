@@ -18,6 +18,7 @@ from tqdm import tqdm
 from laser_generic.newutils import RateMap
 from laser_generic.newutils import TimingStats as ts
 from laser_generic.newutils import estimate_capacity
+from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
 
 __all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "Susceptible", "Transmission", "VitalDynamics"]
@@ -25,7 +26,7 @@ __all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "Susceptible", "Tran
 
 class State(Enum):
     SUSCEPTIBLE = 0
-    INFECTED = 1
+    INFECTIOUS = 2  # save space for EXPOSED
     DECEASED = -1
 
     def __new__(cls, value):
@@ -106,7 +107,7 @@ class Transmission:
                 draw = np.random.rand()
                 nid = nodeids[i]
                 if draw < ft[nid]:
-                    states[i] = State.INFECTED.value
+                    states[i] = State.INFECTIOUS.value
                     inf_by_node[nb.get_thread_id(), nid] += 1
 
         return
@@ -118,14 +119,6 @@ class Transmission:
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
         ft = -np.expm1(-ft)  # Convert to probability of infection
-
-        # states = self.model.people.state
-        # susceptible = states == State.SUSCEPTIBLE.value
-        # draws = np.random.rand(self.model.people.count).astype(np.float32)
-        # nodeids = self.model.people.nodeid
-        # infections = (draws < ft[nodeids]) & susceptible
-        # states[infections] = State.INFECTED.value
-        # inf_by_node = np.bincount(nodeids[infections], minlength=self.model.nodes.count).astype(np.uint32)
 
         inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(
@@ -172,7 +165,7 @@ class Infected:
             assert nseeds <= len(citizens), f"Node {node} has more initial infected ({nseeds}) than population ({len(citizens)})"
             if nseeds > 0:
                 indices = np.random.choice(citizens, size=nseeds, replace=False)
-                self.model.people.state[indices] = State.INFECTED.value
+                self.model.people.state[indices] = State.INFECTIOUS.value
 
         self.model.nodes.I[0] = self.model.scenario.I
         assert np.all(self.model.nodes.S[0] + self.model.nodes.I[0] == self.model.scenario.population), (
@@ -188,7 +181,7 @@ class Infected:
         state = self.model.people.state
         assert np.all(
             (expected := self.model.nodes.I[tick])
-            == (actual := np.bincount(nodeids, state == State.INFECTED.value, minlength=self.model.nodes.count))
+            == (actual := np.bincount(nodeids, state == State.INFECTIOUS.value, minlength=self.model.nodes.count))
         ), f"Infected census does not match infected counts.\nExpected: {expected}\nActual: {actual}"
         assert np.all(self.model.nodes.I[tick + 1] == self.model.nodes.I[tick]), (
             "Infected counts should not change outside of Transmission and VitalDynamics."
@@ -393,7 +386,7 @@ class ConstantPopVitalDynamics:
             if draw < rates[nid]:
                 tid = nb.get_thread_id()
                 recycled[tid, nid] += 1
-                if states[i] == State.INFECTED.value:
+                if states[i] == State.INFECTIOUS.value:
                     states[i] = State.SUSCEPTIBLE.value
                     infected[tid, nid] += 1
                 # else: # states[i] is already SUSCEPTIBLE, no change
@@ -402,19 +395,6 @@ class ConstantPopVitalDynamics:
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
-        # for node in range(self.model.nodes.count):
-        #     # TODO - figure out tick and time step indexing
-        #     if self.rates[tick, node] > 0:
-        #         citizens = np.nonzero(self.model.people.nodeid == node)[0]
-        #         recycled = np.random.choice(citizens, size=self.rates[tick, node], replace=False)
-        #         cinfected = (self.model.people.state[recycled] == State.INFECTED.value).sum()
-        #         self.model.people.state[recycled] = State.SUSCEPTIBLE.value
-        #         if cinfected > self.model.nodes.I[tick, node]:
-        #             ...
-        #         # state(t+1) = state(t) + ∆state(t)
-        #         self.model.nodes.S[tick + 1, node] += cinfected
-        #         self.model.nodes.I[tick + 1, node] -= cinfected
-
         probabilities = (self.rates[tick] / (self.model.nodes.S[tick] + self.model.nodes.I[tick])).astype(np.float32)
         # probabilities = np.clip(probabilities, a_min=0.0, a_max=1.0)
         probabilities = -np.expm1(-probabilities)  # Convert to rates to probabilities
@@ -474,13 +454,9 @@ class Model:
         self.scenario = scenario
         self.validating = False
 
-        # Project to EPSG:3857, calculate centroids, then convert back to degrees
-        gdf_proj = self.scenario.to_crs(epsg=3857)
-        centroids_proj = gdf_proj.geometry.centroid
-        centroids_deg = centroids_proj.to_crs(epsg=4326)
-
-        self.scenario["x"] = centroids_deg.x
-        self.scenario["y"] = centroids_deg.y
+        centroids = get_centroids(scenario)
+        self.scenario["x"] = centroids.x
+        self.scenario["y"] = centroids.y
 
         # Calculate pairwise distances between nodes using centroids
         longs = self.scenario["x"].values
