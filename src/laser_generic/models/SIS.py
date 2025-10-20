@@ -93,7 +93,7 @@ class Susceptible:
 class Infectious:
     def __init__(self, model):
         self.model = model
-        self.model.people.add_scalar_property("itimer", dtype=np.uint8)
+        self.model.people.add_scalar_property("itimer", dtype=np.uint16)
         self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.int32)
         self.model.nodes.add_vector_property("recovered", model.params.nticks + 1, dtype=np.uint32)
 
@@ -155,7 +155,7 @@ class Infectious:
         return
 
     @staticmethod
-    @nb.njit((nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]), nogil=True, parallel=True, cache=True)
+    @nb.njit((nb.int8[:], nb.uint16[:], nb.uint32[:, :], nb.uint16[:]), nogil=True, parallel=True, cache=True)
     def nb_infectious_step(states, itimers, recovered, nodeids):
         for i in nb.prange(len(states)):
             if states[i] == State.INFECTIOUS.value:
@@ -241,8 +241,8 @@ class Transmission:
             nb.uint16[:],
             nb.float32[:],
             nb.uint32[:, :],
-            nb.uint8[:],
-            nb.types.FunctionType(nb.types.uint8()),
+            nb.uint16[:],
+            nb.types.FunctionType(nb.types.uint16()),
         ),
         nogil=True,
         parallel=True,
@@ -545,7 +545,7 @@ class Model:
             values = np.array(value)
             assert np.all(values > 0), "All infectious duration values must be positive"
             assert np.all(values == values.astype(int)), "All infectious duration values must be integers"
-            values = values.astype(np.uint8)
+            values = values.astype(np.uint16)
 
             # def sampler(n):
             #     return np.random.choice(values, size=1)
