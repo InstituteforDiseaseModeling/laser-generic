@@ -142,9 +142,8 @@ def draw_vital_dynamics(birthrates: RateMap, mortality: RateMap, initial_pop: np
         # np.expm1(x) computes exp(x) - 1 accurately for small x
         # -np.expm1(x) computes 1 - exp(x) accurately for small x
         # -np.expm1(-mortality.rates[t]) gives the probability of death in a time step
-        #KM: Would be good to think about unitization of birth vs mortality rates, with the implicit per-1k-per-year vs. per-year here.
-        #Also - for large pop and small mortality rates, Poisson is a reasonable approximation to binomial.  But this is safer for small nodes and probably a very small performance
-
+        # KM: Would be good to think about unitization of birth vs mortality rates, with the implicit per-1k-per-year vs. per-year here.
+        # Also - for large pop and small mortality rates, Poisson is a reasonable approximation to binomial.  But this is safer for small nodes and probably a very small performance
 
         deaths[t] = np.random.binomial(current_pop, -np.expm1(-mortality.rates[t]))
         # Update population

@@ -208,8 +208,8 @@ if __name__ == "__main__":
     EN = args.n
     PEE = args.p
 
-    # debugging
-    args.grid = True
+    # # debugging
+    # args.grid = True
 
     print(f"Using arguments {args=}")
 

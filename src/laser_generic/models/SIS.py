@@ -264,23 +264,12 @@ class Transmission:
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         ft = self.model.nodes.forces[tick]
-        # if np.all((self.model.nodes.S[tick] + self.model.nodes.I[tick]) == 0):
-        #     ...
-        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / (self.model.nodes.S[tick] + self.model.nodes.I[tick])
+        N = self.model.nodes.S[tick] + self.model.nodes.I[tick]
+        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / N
         transfer = ft[:, None] * self.model.network
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
-
-        # itimers = self.model.people.itimer
-        # states = self.model.people.state
-        # susceptible = states == State.SUSCEPTIBLE.value
-        # draws = np.random.rand(self.model.people.count).astype(np.float32)
-        # nodeids = self.model.people.nodeid
-        # i_infections = np.nonzero((draws < ft[nodeids]) & susceptible)[0]
-        # itimers[i_infections] = self.infectious_duration_fn(len(i_infections))
-        # states[i_infections] = State.INFECTIOUS.value
-
-        # inf_by_node = np.bincount(nodeids[i_infections], minlength=self.model.nodes.count).astype(np.uint32)
+        ft = -np.expm1(-ft)
 
         inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(

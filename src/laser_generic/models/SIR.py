@@ -278,12 +278,12 @@ class Transmission:
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         ft = self.model.nodes.forces[tick]
-        if np.all((self.model.nodes.S[tick] + self.model.nodes.I[tick]) == 0):
-            ...
-        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / (self.model.nodes.S[tick] + self.model.nodes.I[tick])
+        N = self.model.nodes.S[tick] + self.model.nodes.I[tick] + self.model.nodes.R[tick]
+        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / N
         transfer = ft[:, None] * self.model.network
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
+        ft = -np.expm1(-ft)
 
         itimers = self.model.people.itimer
         states = self.model.people.state
