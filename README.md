@@ -9,9 +9,47 @@
 [![Supported implementations](https://img.shields.io/pypi/implementation/laser-generic.svg)](https://test.pypi.org/project/laser-generic)
 [![Commits since latest release](https://img.shields.io/github/commits-since/InstituteforDiseaseModeling/laser-generic/v0.0.0.svg)](https://github.com/InstituteforDiseaseModeling/laser-generic/compare/v0.0.0...main)
 
-Generic disease models implemented with the LASER framework.
+LASER (Lightweight Agent Spatial modeling for ERadication) is a framework for building agent-based infectious disease models with an emphasis on spatial modeling and efficient computation at scale.
+
+[`laser-generic`](https://github.com/InstituteforDiseaseModeling/laser-generic) builds on top of [`laser-core`](https://github.com/InstituteforDiseaseModeling/laser), offering a set of ready-to-use, generic disease model components (e.g., SI, SIS, SIR dynamics, births, deaths, vaccination).
 
 * Free software: MIT license
+
+## New model components
+
+`laser-generic` adds additional modeling components to those developed for `laser-core`. They include:
+
+### Infection & transmission
+
+- ``Infection()`` / ``Infection_SIS()`` – intrahost progression for SI and SIS models.
+- ``Susceptibility()`` – manages agent susceptibility.
+- ``Exposure()`` – models exposed (latent) state with timers.
+- ``Transmission()`` / ``TransmissionSIR()`` – interhost transmission dynamics.
+- ``Infect_Agents_In_Patch()`` / ``Infect_Random_Agents()`` – stochastic infection events.
+
+### Births & demographics
+
+- ``Births()`` – demographic process, assigning DOB and node IDs.
+- ``Births_ConstantPop()`` – keeps population constant by matching births to deaths.
+- ``Births_ConstantPop_VariableBirthRate()`` – constant population but with variable crude birth rates.
+
+### Immunization
+
+- ``ImmunizationCampaign()`` – age-targeted, periodic campaigns.
+- ``RoutineImmunization()`` – ongoing routine immunization at target ages.
+- ``immunize_in_age_window()`` – helper to immunize within an age band.
+
+### Initialization & seeding
+
+- ``seed_infections_in_patch()`` / ``seed_infections_randomly()`` / ``seed_infections_randomly_SI()`` – seed infections at start.
+- ``set_initial_susceptibility_in_patch()`` / ``set_initial_susceptibility_randomly()`` – initialize susceptibility.
+
+### Utilities
+
+- ``calc_capacity()`` – computes population capacity given births and ticks.
+- ``calc_distances()`` – helper for spatial coupling via geocoordinates.
+- ``get_default_parameters()`` – returns baseline parameters.
+
 
 ## Installation
 
