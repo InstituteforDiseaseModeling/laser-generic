@@ -3,9 +3,11 @@ import warnings
 
 import geopandas as gpd
 import numpy as np
+from pyproj import Transformer
+from shapely.geometry import Point
 from shapely.geometry import Polygon
 
-__all__ = ["PubSub", "RateMap", "TimingStats", "estimate_capacity", "grid"]
+__all__ = ["PubSub", "RateMap", "TimingStats", "estimate_capacity", "get_centroids", "grid"]
 
 
 class RateMap:
@@ -317,3 +319,22 @@ class PubSub:
                 callback(*args)
 
         return
+
+
+def get_centroids(gdf: gpd.GeoDataFrame) -> np.ndarray:
+    """Get centroids of geometries in gdf in degrees (EPSG:4326)."""
+
+    gdf_3857 = gdf.to_crs(epsg=3857)
+    centroids_3857 = gdf_3857.geometry.centroid
+
+    # centroids_3857.to_crs(epsg=4326) emits a Warning is there is only one point (one node)
+    if len(centroids_3857) > 1:
+        centroids_deg = centroids_3857.to_crs(epsg=4326)
+    else:
+        # Explicitly transform the single centroid
+        transformer = Transformer.from_crs(3857, 4326, always_xy=True)
+        x, y = centroids_3857.x.values[0], centroids_3857.y.values[0]
+        lon, lat = transformer.transform(x, y)
+        centroids_deg = gpd.GeoSeries([Point(lon, lat)], crs="EPSG:4326")
+
+    return centroids_deg

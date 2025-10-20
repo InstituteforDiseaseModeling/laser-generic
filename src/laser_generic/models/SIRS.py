@@ -15,6 +15,7 @@ from tqdm import tqdm
 from laser_generic.newutils import RateMap
 from laser_generic.newutils import TimingStats as ts
 from laser_generic.newutils import estimate_capacity
+from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
 
 from .shared import sample_dobs
@@ -581,13 +582,9 @@ class Model:
         self.scenario = scenario
         self.validating = False
 
-        # Project to EPSG:3857, calculate centroids, then convert back to degrees
-        gdf_proj = self.scenario.to_crs(epsg=3857)
-        centroids_proj = gdf_proj.geometry.centroid
-        centroids_deg = centroids_proj.to_crs(epsg=4326)
-
-        self.scenario["x"] = centroids_deg.x
-        self.scenario["y"] = centroids_deg.y
+        centroids = get_centroids(scenario)
+        self.scenario["x"] = centroids.x
+        self.scenario["y"] = centroids.y
 
         # Calculate pairwise distances between nodes using centroids
         longs = self.scenario["x"].values
