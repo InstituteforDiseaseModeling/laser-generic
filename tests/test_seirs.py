@@ -11,7 +11,7 @@ from laser_core import PropertySet
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
-import laser_generic.models.SEIR as SEIR
+import laser_generic.models.SEIRS as SEIRS
 from laser_generic.newutils import RateMap
 from laser_generic.tstreemap import generate_d3_treemap_html
 from utils import base_maps
@@ -46,7 +46,7 @@ def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None
     params = PropertySet({"nticks": NTICKS, "beta": beta})
 
     with ts.start("Model Initialization"):
-        model = SEIR.Model(scenario, params, birthrates=birthrates, mortalityrates=mortalityrates)
+        model = SEIRS.Model(scenario, params, birthrates=birthrates, mortalityrates=mortalityrates)
 
         @nb.njit(nogil=True, cache=True)
         def exposure_duration_distribution():
@@ -68,17 +68,27 @@ def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None
 
         model.infectious_duration_fn = infectious_duration_distribution
 
-        s = SEIR.Susceptible(model)
-        e = SEIR.Exposed(model)
-        i = SEIR.Infectious(model)
-        r = SEIR.Recovered(model)
-        tx = SEIR.Transmission(model)
+        @nb.njit(nogil=True, cache=True)
+        def waning_duration_distribution():
+            draw = np.random.normal(loc=WANING_DURATION_MEAN, scale=5)
+            rounded = np.round(draw)
+            asuint8 = np.uint8(rounded)
+            clipped = np.maximum(1, asuint8)
+            return clipped
+
+        model.waning_duration_fn = waning_duration_distribution
+
+        s = SEIRS.Susceptible(model)
+        e = SEIRS.Exposed(model)
+        i = SEIRS.Infectious(model)
+        r = SEIRS.Recovered(model)
+        tx = SEIRS.Transmission(model)
         if birthrates is not None or mortalityrates is not None:
             assert birthrates is not None, "Birthrates must be provided for vital dynamics."
             assert mortalityrates is not None, "Mortalityrates must be provided for vital dynamics."
             model.pyramid = pyramid
             model.survival = survival
-            vitals = SEIR.VitalDynamics(model)
+            vitals = SEIRS.VitalDynamics(model)
             # Recovered has to run _before_ Infectious to move people correctly (Infectious updates model.nodes.R)
             # Infectious should run _before_ Exposed to move people correctly (Exposed updates model.nodes.I)
             model.components = [s, r, i, e, tx, vitals]
@@ -97,7 +107,7 @@ class Default(unittest.TestCase):
         with ts.start("test_single_node"):
             model = build_model(1, 1, lambda x, y: 100_000, init_infected=10, init_recovered=0)
 
-            model.run(f"SEIR Single Node ({model.people.count:,}/{model.nodes.count:,})")
+            model.run(f"SEIRS Single Node ({model.people.count:,}/{model.nodes.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
@@ -134,7 +144,7 @@ class Default(unittest.TestCase):
                     survival=survival,
                 )
 
-            model.run(f"SEIR Grid ({model.people.count:,}/{model.nodes.count:,})")
+            model.run(f"SEIRS Grid ({model.people.count:,}/{model.nodes.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
@@ -172,7 +182,7 @@ class Default(unittest.TestCase):
                     survival=survival,
                 )
 
-            model.run(f"SEIR Linear ({model.people.count:,}/{model.nodes.count:,})")
+            model.run(f"SEIRS Linear ({model.people.count:,}/{model.nodes.count:,})")
 
         if VERBOSE:
             print(model.people.describe("People"))
