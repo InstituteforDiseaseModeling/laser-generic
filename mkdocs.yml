@@ -103,6 +103,8 @@ plugins:
         python:
           paths: [src] # path to source code
           options:
+            preload_modules:
+              - laser_core
             docstring_style: google
             show_source: false
             merge_init_into_class: true
