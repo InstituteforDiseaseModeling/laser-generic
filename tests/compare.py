@@ -1,6 +1,8 @@
 from laser_generic.newutils import TimingStats as ts  # noqa: I001
 
+import json
 from argparse import ArgumentParser
+from pathlib import Path
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -104,10 +106,19 @@ def main():
     POPULATION = int(1e6)
     sir, sirs, seir, seirs = build_models(m=1, n=1, pop_fn=lambda x, y: POPULATION, init_infected=10)
 
-    sir.run(f"SIR Model of {POPULATION} people on {EM}x{EN} grid)")
-    sirs.run(f"SIR Model of {POPULATION} people on {EM}x{EN} grid)")
-    seir.run(f"SIR Model of {POPULATION} people on {EM}x{EN} grid)")
-    seirs.run(f"SIR Model of {POPULATION} people on {EM}x{EN} grid)")
+    models = [
+        ("SIR", sir),
+        ("SIRS", sirs),
+        ("SEIR", seir),
+        ("SEIRS", seirs),
+    ]
+    for name, model in models:
+        print(f"Running {name} model...")
+        with ts.start(f"Run {name} Model"):
+            model.run(f"{name:<5} Model of {POPULATION} people on {EM}x{EN} grid)")
+
+    ts.freeze()
+    json.dump(ts.to_dict(scale="ms"), Path("timing_data.json").open("w"), indent=4)
 
     do_plots(sir, sirs, seir, seirs, OVERLAY)
 
@@ -119,18 +130,16 @@ def do_plots(sir, sirs, seir, seirs, overlay=True):
     # Use blue for S, orange for E, red for I, and green for R
 
     def plot_model(ax, model, label_prefix, linestyle):
-        # times = np.arange(NTICKS+1)
         S = model.nodes.S.sum(axis=1)
         I = model.nodes.I.sum(axis=1)  # noqa: E741
         R = model.nodes.R.sum(axis=1)
-        # ax.plot(times, S, color="blue", linestyle="-", label=f"{label_prefix} S")
+
         ax.plot(S, color="blue", linestyle=linestyle, label=f"{label_prefix} S")
+
         if hasattr(model.nodes, "E"):
             E = model.nodes.E.sum(axis=1)
-            # ax.plot(times, E, color="orange", linestyle="--", label=f"{label_prefix} E")
             ax.plot(E, color="orange", linestyle=linestyle, label=f"{label_prefix} E")
-        # ax.plot(times, I, color="red", linestyle="-.", label=f"{label_prefix} I")
-        # ax.plot(times, R, color="green", linestyle=":", label=f"{label_prefix} R")
+
         ax.plot(I, color="red", linestyle=linestyle, label=f"{label_prefix} I")
         ax.plot(R, color="green", linestyle=linestyle, label=f"{label_prefix} R")
 

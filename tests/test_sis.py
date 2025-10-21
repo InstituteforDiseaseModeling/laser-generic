@@ -5,7 +5,6 @@ import unittest
 from argparse import ArgumentParser
 from pathlib import Path
 
-import contextily as ctx
 import numba as nb
 import numpy as np
 from laser_core import PropertySet
@@ -14,8 +13,9 @@ from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SIS as SIS
 from laser_generic.newutils import RateMap
-from laser_generic.newutils import grid
 from laser_generic.tstreemap import generate_d3_treemap_html
+from utils import base_maps
+from utils import stdgrid
 
 PLOTTING = False
 VERBOSE = False
@@ -25,24 +25,12 @@ PEE = 10
 VALIDATING = False
 NTICKS = 365
 
-base_maps = [
-    ctx.providers.Esri.NatGeoWorldMap,
-    ctx.providers.Esri.WorldGrayCanvas,
-    ctx.providers.Esri.WorldImagery,
-    ctx.providers.Esri.WorldPhysical,
-    ctx.providers.Esri.WorldShadedRelief,
-    ctx.providers.Esri.WorldStreetMap,
-    ctx.providers.Esri.WorldTerrain,
-    ctx.providers.Esri.WorldTopoMap,
-    # ctx.providers.NASAGIBS.ModisTerraTrueColorCR,
-]
-
 
 class Default(unittest.TestCase):
     def test_grid(self):
         with ts.start("test_grid"):
             # Black Rock Desert, NV = 40°47'13"N 119°12'15"W (40.786944, -119.204167)
-            grd = grid(
+            grd = stdgrid(
                 M=EM,
                 N=EN,
                 node_size_km=10,
@@ -109,7 +97,7 @@ class Default(unittest.TestCase):
     def test_linear(self):
         with ts.start("test_linear"):
             # Black Rock Desert, NV = 40°47'13"N 119°12'15"W (40.786944, -119.204167)
-            lin = grid(
+            lin = stdgrid(
                 M=1,
                 N=PEE,
                 node_size_km=10,
