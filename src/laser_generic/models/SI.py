@@ -114,7 +114,8 @@ class Transmission:
 
     def step(self, tick: int) -> None:
         ft = self.model.nodes.forces[tick]
-        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / (self.model.nodes.S[tick] + self.model.nodes.I[tick])
+        N = self.model.nodes.S[tick] + self.model.nodes.I[tick]
+        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / N
         transfer = ft[:, None] * self.model.network
         ft += transfer.sum(axis=0)
         ft -= transfer.sum(axis=1)
@@ -395,19 +396,24 @@ class ConstantPopVitalDynamics:
 
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
-        probabilities = (self.rates[tick] / (self.model.nodes.S[tick] + self.model.nodes.I[tick])).astype(np.float32)
-        # probabilities = np.clip(probabilities, a_min=0.0, a_max=1.0)
-        probabilities = -np.expm1(-probabilities)  # Convert to rates to probabilities
+        cxr = self.rates[tick]  # cxr because we've selected the larger of birth/death rates (CBR or CDR)
+        annual_growth_rates = 1.0 + (cxr / 1_000)
+        daily_growth_rates = np.power(annual_growth_rates, 1.0 / 365)
+        probabilities = -np.expm1(1.0 - daily_growth_rates)
+
         recycled = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
         infected = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
         self.nb_process_recycling(probabilities, self.model.people.state, self.model.people.nodeid, recycled, infected)
         recycled = recycled.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
         infected = infected.sum(axis=0).astype(self.model.nodes.I.dtype)  # Sum over threads
+
         # state(t+1) = state(t) + ∆state(t)
         self.model.nodes.S[tick + 1] += infected
         self.model.nodes.I[tick + 1] -= infected
+
         # Record today's ∆
-        self.model.nodes.deaths[tick] = recycled  # Record recycled as "deaths
+        self.model.nodes.births[tick] = recycled  # Record recycled as "births"
+        self.model.nodes.deaths[tick] = recycled  # Record recycled as "deaths"
 
         return
 

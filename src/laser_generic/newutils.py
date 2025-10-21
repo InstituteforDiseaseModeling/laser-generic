@@ -1,5 +1,6 @@
 import time
 import warnings
+from typing import ClassVar
 
 import geopandas as gpd
 import numpy as np
@@ -216,23 +217,24 @@ class _TimingStats:
 
         return
 
+    _scale_factors: ClassVar[dict[str, float]] = {
+        "ns": 1,
+        "nanoseconds": 1,
+        "us": 1e3,
+        "µs": 1e3,
+        "microseconds": 1e3,
+        "ms": 1e6,
+        "milliseonds": 1e6,
+        "s": 1e9,
+        "sec": 1e9,
+        "seconds": 1e9,
+    }
+
     def to_string(self, scale: str = "ms") -> str:
         assert self.frozen is True
 
-        scale_factors = {
-            "ns": 1,
-            "nanoseconds": 1,
-            "us": 1e3,
-            "µs": 1e3,
-            "microseconds": 1e3,
-            "ms": 1e6,
-            "milliseonds": 1e6,
-            "s": 1e9,
-            "sec": 1e9,
-            "seconds": 1e9,
-        }
-        assert scale in scale_factors
-        factor = scale_factors[scale]
+        assert scale in self._scale_factors
+        factor = self._scale_factors[scale]
 
         lines = []
 
@@ -251,6 +253,27 @@ class _TimingStats:
 
         _recurse(self.root, 0)
         return "\n".join(lines)
+
+    def to_dict(self, scale: str = "ms") -> dict:
+        assert self.frozen is True
+
+        assert scale in self._scale_factors
+        factor = self._scale_factors[scale]
+
+        def _recurse(node: TimingContext) -> dict:
+            result = {
+                "label": node.label,
+                "ncalls": node.ncalls,
+                "inclusive_ns": node.inclusive / factor,
+                # "exclusive_ns": node.exclusive / factor,
+                "children": [],
+            }
+            for child in node.children.values():
+                result["children"].append(_recurse(child))
+
+            return result
+
+        return _recurse(self.root)
 
 
 TimingStats = _TimingStats()
