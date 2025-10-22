@@ -21,10 +21,8 @@ from datetime import datetime
 import click
 import numpy as np
 import pandas as pd
-#from laser_core.laserframe import LaserFrame
-from .wrappers import LGLaserFrame as LaserFrame
-#from laser_core.propertyset import PropertySet
-from .wrappers import LGPropertySet as PropertySet
+from laser_core.laserframe import LaserFrame
+from laser_core.propertyset import PropertySet
 from laser_core.random import seed as seed_prng
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
