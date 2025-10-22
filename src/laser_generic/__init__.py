@@ -18,12 +18,16 @@ from laser_core import LaserFrame
 from laser_core import PropertySet
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
+from laser_core.migration import distance
+from laser_core.random import seed
 
 __all__ = [
     "LaserFrame",
     "PropertySet",
     "AliasedDistribution",
     "KaplanMeierEstimator",
+    "distance",
+    "seed",
     "Births",
     "Births_ConstantPop",
     "Births_ConstantPop_VariableBirthRate",
