@@ -1,5 +1,13 @@
 __version__ = "0.0.0"
 
+# We are 'promoting' some classes (and later functions) from laser-core into laser-generic for documentation
+from laser_core import LaserFrame
+from laser_core import PropertySet
+from laser_core.demographics import AliasedDistribution
+from laser_core.demographics import KaplanMeierEstimator
+from laser_core.migration import distance
+from laser_core.random import seed
+
 from .births import Births
 from .births import Births_ConstantPop
 from .births import Births_ConstantPop_VariableBirthRate
@@ -14,6 +22,12 @@ from .susceptibility import Susceptibility
 from .transmission import Transmission
 
 __all__ = [
+    "LaserFrame",
+    "PropertySet",
+    "AliasedDistribution",
+    "KaplanMeierEstimator",
+    "distance",
+    "seed",
     "Births",
     "Births_ConstantPop",
     "Births_ConstantPop_VariableBirthRate",
