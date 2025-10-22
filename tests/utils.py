@@ -5,7 +5,7 @@ import numpy as np
 
 from laser_generic.newutils import grid
 
-_all__ = ["stdgrid", "base_maps"]
+__all__ = ["base_maps", "stdgrid"]
 
 
 def POP_FN(x, y):
