@@ -72,13 +72,13 @@ def lognormal(mean, sigma):
     return _lognormal
 
 
-# multinomial(n, pvals, size=None)
-def multinomial(n, pvals):
-    @nb.njit(nogil=True, cache=True)
-    def _multinomial():
-        return np.int32(np.random.multinomial(n, pvals))
-
-    return _multinomial
+# # multinomial(n, pvals, size=None)
+# def multinomial(n, pvals):
+#     @nb.njit(nogil=True, cache=True)
+#     def _multinomial():
+#         return np.int32(np.random.multinomial(n, pvals))
+#
+#     return _multinomial
 
 
 # negative_binomial(n, p, size=None)

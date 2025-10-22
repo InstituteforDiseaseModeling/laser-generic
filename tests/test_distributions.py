@@ -8,6 +8,7 @@
 # """
 
 import unittest
+from itertools import product
 
 import numba as nb
 import numpy as np
@@ -116,6 +117,15 @@ class TestDistributions(unittest.TestCase):
             ref_samples = lognorm.rvs(sigma, scale=np.exp(mean), size=NSAMPLES)
             stat, _ = ks_2samp(samples, ref_samples)
             assert stat < KS_THRESHOLD, f"Lognormal({mean},{sigma}) KS={stat}"
+
+    def test_negative_binomial(self):
+        params = product([1, 2, 3, 4, 5], [1 / 2, 1 / 3, 1 / 4, 1 / 5])
+        for r, p in params:
+            fn = dist.negative_binomial(r, p)
+            samples = sample_int(fn, NSAMPLES)
+            ref_samples = np.random.negative_binomial(r, p, size=NSAMPLES)
+            stat, _ = ks_2samp(samples, ref_samples)
+            assert stat < KS_THRESHOLD, f"Negative Binomial({r},{p}) KS={stat}"
 
     def test_normal(self):
         params = [(0, 0.2), (0, 1.0), (0, 5.0), (-2, 0.5)]
