@@ -20,6 +20,22 @@ def binomial(n, p):
     return _binomial
 
 
+def constant_float(value):
+    @nb.njit(nogil=True, cache=True)
+    def _constant():
+        return np.float32(value)
+
+    return _constant
+
+
+def constant_int(value):
+    @nb.njit(nogil=True, cache=True)
+    def _constant():
+        return np.int32(value)
+
+    return _constant
+
+
 # exponential(scale=1.0, size=None)
 def exponential(scale):
     @nb.njit(nogil=True, cache=True)

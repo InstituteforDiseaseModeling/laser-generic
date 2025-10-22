@@ -66,6 +66,20 @@ class TestDistributions(unittest.TestCase):
             stat, _ = ks_2samp(samples, ref_samples)
             assert stat < KS_THRESHOLD, f"Binomial({n},{p}) KS={stat}"
 
+    def test_constant_float(self):
+        values = [0.0, 1.0, -1.0, 3.14159, 2.71828]
+        for value in values:
+            fn = dist.constant_float(value)
+            samples = sample_float(fn, NSAMPLES)
+            assert np.all(samples == np.float32(value)), f"Constant Float({value}) failed"
+
+    def test_constant_int(self):
+        values = [0, 1, -1, 42, 100]
+        for value in values:
+            fn = dist.constant_int(value)
+            samples = sample_int(fn, NSAMPLES)
+            assert np.all(samples == np.int32(value)), f"Constant Int({value}) failed"
+
     def test_exponential(self):
         params = [0.5, 1.0, 1.5]
         for lam in params:
