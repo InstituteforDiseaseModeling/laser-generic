@@ -224,7 +224,7 @@ class _TimingStats:
         "µs": 1e3,
         "microseconds": 1e3,
         "ms": 1e6,
-        "milliseonds": 1e6,
+        "milliseconds": 1e6,
         "s": 1e9,
         "sec": 1e9,
         "seconds": 1e9,
