@@ -19,6 +19,8 @@ include CONTRIBUTING.rst
 include LICENSE
 include README.rst
 
+include notebooks/media/*
+
 recursive-exclude notebooks *.ipynb
 global-exclude *.py[cod] __pycache__/* *.so *.dylib
 
