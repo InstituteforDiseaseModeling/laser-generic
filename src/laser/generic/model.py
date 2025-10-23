@@ -9,9 +9,9 @@ or multiple patches with an arbitrary connection structure.
 - click: For command-line interface utilities.
 - numpy as np: For numerical operations.
 - pandas as pd: For data handling and tabular reports.
-- laser_core.laserframe: Provides the LaserFrame class for structured data arrays.
-- laser_core.propertyset: Provides the PropertySet class for simulation parameters.
-- laser_core.random: Provides random number generator seeding utilities.
+- laser.core.laserframe: Provides the LaserFrame class for structured data arrays.
+- laser.core.propertyset: Provides the PropertySet class for simulation parameters.
+- laser.core.random: Provides random number generator seeding utilities.
 - matplotlib: For plotting results.
 - tqdm: For progress bar visualization during runs.
 """
@@ -21,16 +21,16 @@ from datetime import datetime
 import click
 import numpy as np
 import pandas as pd
-from laser_core.laserframe import LaserFrame
-from laser_core.propertyset import PropertySet
-from laser_core.random import seed as seed_prng
+from laser.core.laserframe import LaserFrame
+from laser.core.propertyset import PropertySet
+from laser.core.random import seed as seed_prng
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
 
-from laser_generic import Births
-from laser_generic import Births_ConstantPop
+from laser.generic import Births
+from laser.generic import Births_ConstantPop
 
 
 class Model:

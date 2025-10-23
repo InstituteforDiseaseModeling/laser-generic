@@ -181,3 +181,7 @@ replace = 'version: "{new_version}"'
 filename = "pyproject.toml"
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
+
+[tool.setuptools]
+packages = ["laser.generic"]
+package-dir = {"" = "src"}
