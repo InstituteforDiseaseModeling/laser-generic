@@ -7,15 +7,15 @@ from laser_core import PropertySet
 from scipy.optimize import curve_fit
 from scipy.optimize import fsolve
 
-from laser_generic import Births_ConstantPop
-from laser_generic import Model
-from laser_generic import Susceptibility
-from laser_generic import Transmission
-from laser_generic.infection import Infection
-from laser_generic.infection import Infection_SIS
-from laser_generic.utils import seed_infections_randomly
-from laser_generic.utils import seed_infections_randomly_SI
-from laser_generic.utils import set_initial_susceptibility_randomly
+from laser.generic import Births_ConstantPop
+from laser.generic import Model
+from laser.generic import Susceptibility
+from laser.generic import Transmission
+from laser.generic.infection import Infection
+from laser.generic.infection import Infection_SIS
+from laser.generic.utils import seed_infections_randomly
+from laser.generic.utils import seed_infections_randomly_SI
+from laser.generic.utils import set_initial_susceptibility_randomly
 
 
 def SI_logistic(t, beta, size, t0):

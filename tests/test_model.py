@@ -3,24 +3,24 @@ import pandas as pd
 import pytest
 from laser_core import PropertySet
 
-from laser_generic import Births
-from laser_generic import Births_ConstantPop
-from laser_generic import Births_ConstantPop_VariableBirthRate
-from laser_generic import Exposure
-from laser_generic import ImmunizationCampaign
-from laser_generic import Model
-from laser_generic import RoutineImmunization
-from laser_generic import Susceptibility
-from laser_generic.importation import Infect_Agents_In_Patch
-from laser_generic.importation import Infect_Random_Agents
-from laser_generic.infection import Infection
-from laser_generic.infection import Infection_SIS
-from laser_generic.transmission import Transmission
-from laser_generic.transmission import TransmissionSIR
-from laser_generic.utils import get_default_parameters
-from laser_generic.utils import seed_infections_in_patch
-from laser_generic.utils import seed_infections_randomly
-from laser_generic.utils import seed_infections_randomly_SI
+from laser.generic import Births
+from laser.generic import Births_ConstantPop
+from laser.generic import Births_ConstantPop_VariableBirthRate
+from laser.generic import Exposure
+from laser.generic import ImmunizationCampaign
+from laser.generic import Model
+from laser.generic import RoutineImmunization
+from laser.generic import Susceptibility
+from laser.generic.importation import Infect_Agents_In_Patch
+from laser.generic.importation import Infect_Random_Agents
+from laser.generic.infection import Infection
+from laser.generic.infection import Infection_SIS
+from laser.generic.transmission import Transmission
+from laser.generic.transmission import TransmissionSIR
+from laser.generic.utils import get_default_parameters
+from laser.generic.utils import seed_infections_in_patch
+from laser.generic.utils import seed_infections_randomly
+from laser.generic.utils import seed_infections_randomly_SI
 
 
 def assert_model_sanity(model):
