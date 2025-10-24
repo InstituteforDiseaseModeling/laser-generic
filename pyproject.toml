@@ -4,12 +4,11 @@ version = "0.0.0"
 description = "Generic, SI/SIR/SEIR/etc., disease models implemented with the LASER toolkit."
 requires-python = ">= 3.9"
 readme = "README.md"
-license = {file = "LICENSE"}
+license-files = ["LICENSE"]
 keywords = ["sir", "seir", "spatial", "modeling", "laser"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Unix",
     "Operating System :: POSIX",
     "Operating System :: Microsoft :: Windows",
@@ -41,8 +40,8 @@ maintainers = [
 
 dependencies = [
   "click",
-  # "laser-core",
-  "laser-core@git+https://github.com/InstituteforDiseaseModeling/laser.git",
+#  "laser-core",
+  "laser-core@git+https://github.com/InstituteforDiseaseModeling/laser.git@numba-dists",
   "tqdm",
   "geopandas",
   "pandas",
@@ -69,7 +68,7 @@ Changelog = "https://github.com/InstituteforDiseaseModeling/laser-generic/blob/m
 generic = "laser_generic.cli:run"
 
 [build-system]
-requires = ["setuptools>=30.3.0",]
+requires = ["setuptools>=80.9.0",]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]

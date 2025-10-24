@@ -5,11 +5,11 @@ import unittest
 from argparse import ArgumentParser
 from pathlib import Path
 
-import numba as nb
 import numpy as np
 from laser_core import PropertySet
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
+import laser_core.distributions as dists
 
 import laser_generic.models.SIS as SIS
 from laser_generic.newutils import RateMap
@@ -56,15 +56,7 @@ class Default(unittest.TestCase):
             with ts.start("Model Initialization"):
                 model = SIS.Model(scenario, params, birthrates=birthrate_map.rates, mortalityrates=mortality_map.rates)
 
-                @nb.njit(nogil=True, cache=True)
-                def infectious_duration_distribution():
-                    draw = np.random.normal(loc=infectious_duration_mean, scale=2)
-                    rounded = np.round(draw)
-                    asuint8 = np.uint8(rounded)
-                    clipped = np.maximum(1, asuint8)
-                    return clipped
-
-                model.infectious_duration_fn = infectious_duration_distribution
+                infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
                 model.pyramid = AliasedDistribution(np.full(89, 1_000))
@@ -72,8 +64,8 @@ class Default(unittest.TestCase):
                 model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SIS.Susceptible(model)
-                i = SIS.Infectious(model)
-                tx = SIS.Transmission(model)
+                i = SIS.Infectious(model, infdist)
+                tx = SIS.Transmission(model, infdist)
                 vitals = SIS.VitalDynamics(model)
                 model.components = [s, i, tx, vitals]
 
@@ -122,15 +114,7 @@ class Default(unittest.TestCase):
             with ts.start("Model Initialization"):
                 model = SIS.Model(scenario, params, birthrate_map.rates, mortality_map.rates)
 
-                @nb.njit(nogil=True, cache=True)
-                def infectious_duration_distribution():
-                    draw = np.random.normal(loc=infectious_duration_mean, scale=2)
-                    rounded = np.round(draw)
-                    asuint8 = np.uint8(rounded)
-                    clipped = np.maximum(1, asuint8)
-                    return clipped
-
-                model.infectious_duration_fn = infectious_duration_distribution
+                infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
                 model.pyramid = AliasedDistribution(np.full(89, 1_000))
@@ -138,8 +122,8 @@ class Default(unittest.TestCase):
                 model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SIS.Susceptible(model)
-                i = SIS.Infectious(model)
-                tx = SIS.Transmission(model)
+                i = SIS.Infectious(model, infdist)
+                tx = SIS.Transmission(model, infdist)
                 vitals = SIS.VitalDynamics(model)
                 model.components = [s, i, tx, vitals]
 

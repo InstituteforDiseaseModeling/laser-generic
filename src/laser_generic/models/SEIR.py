@@ -1,7 +1,6 @@
-from enum import Enum
-
 import contextily as ctx
 import geopandas as gpd
+import laser_core.distributions as dists
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numba as nb
@@ -18,21 +17,11 @@ from laser_generic.newutils import estimate_capacity
 from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
 
+from .shared import State
 from .shared import sample_dobs
 from .shared import sample_dods
 
-
-class State(Enum):
-    DECEASED = -1
-    SUSCEPTIBLE = 0
-    EXPOSED = 1
-    INFECTIOUS = 2
-    RECOVERED = 3
-
-    def __new__(cls, value):
-        obj = object.__new__(cls)
-        obj._value_ = np.int8(value)
-        return obj
+__all__ = ["Exposed", "Infectious", "Model", "Recovered", "State", "Susceptible", "Transmission", "VitalDynamics"]
 
 
 class Susceptible:
@@ -48,7 +37,13 @@ class Susceptible:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.S[tick] >= 0), "Susceptible counts must be non-negative"
+        # np.bincount where state == State.SUSCEPTIBLE.value and by nodeid should match self.model.nodes.S[tick]
+        nodeids = self.model.people.nodeid
+        states = self.model.people.state
+        assert np.all(
+            (expected := self.model.nodes.S[tick])
+            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
+        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
 
         return
 
@@ -94,7 +89,7 @@ class Susceptible:
 
 
 class Exposed:
-    def __init__(self, model):
+    def __init__(self, model, expdurdist, infdurdist, expdurmin=1, infdurmin=1):
         self.model = model
         self.model.people.add_scalar_property("etimer", dtype=np.uint8)
         self.model.nodes.add_vector_property("E", model.params.nticks + 1, dtype=np.int32)
@@ -102,9 +97,29 @@ class Exposed:
 
         self.model.nodes.E[0] = self.model.scenario.E
 
-        self.infectious_duration_fn = model.infectious_duration_fn
+        self.expdurdist = expdurdist
+        self.infdurdist = infdurdist
+        self.expdurmin = expdurmin
+        self.infdurmin = infdurmin
 
-        # TODO - allow for initial exposed seeding?
+        # convenience
+        nodeids = self.model.people.nodeid
+        states = self.model.people.state
+
+        for node in range(self.model.nodes.count):
+            nseeds = self.model.scenario.E[node]
+            if nseeds > 0:
+                i_susceptible = np.nonzero((nodeids == node) & (states == State.SUSCEPTIBLE.value))[0]
+                assert nseeds <= len(i_susceptible), (
+                    f"Node {node} has more initial exposed ({nseeds}) than available susceptible ({len(i_susceptible)})"
+                )
+                i_exposed = np.random.choice(i_susceptible, size=nseeds, replace=False)
+                self.model.people.state[i_exposed] = State.EXPOSED.value
+                samples = dists.sample_floats(self.expdurdist, np.zeros(nseeds, dtype=np.float32))
+                samples = np.round(samples)
+                samples = np.maximum(samples, self.expdurmin).astype(self.model.people.etimer.dtype)
+                self.model.people.etimer[i_exposed] = samples
+                assert np.all(self.model.people.etimer[i_exposed] > 0), "Exposed individuals should have etimer > 0"
 
         return
 
@@ -150,18 +165,18 @@ class Exposed:
 
     @staticmethod
     @nb.njit(
-        (nb.int8[:], nb.uint8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:], nb.types.FunctionType(nb.types.uint8())),
+        # (nb.int8[:], nb.uint8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:], nb.types.FunctionType(nb.types.uint8()), nb.int32),
         nogil=True,
         parallel=True,
         cache=True,
     )
-    def nb_exposed_step(states, etimers, itimers, symptomatic, nodeids, infectious_duration_fn):
+    def nb_exposed_step(states, etimers, itimers, symptomatic, nodeids, infdurdist, infdurmin):
         for i in nb.prange(len(states)):
             if states[i] == State.EXPOSED.value:
                 etimers[i] -= 1
                 if etimers[i] == 0:
                     states[i] = State.INFECTIOUS.value
-                    itimers[i] = infectious_duration_fn()
+                    itimers[i] = np.maximum(np.round(infdurdist()), infdurmin)  # Set the infection timer
                     symptomatic[nb.get_thread_id(), nodeids[i]] += 1
 
         return
@@ -178,7 +193,8 @@ class Exposed:
             self.model.people.itimer,
             symptomatic_by_node,
             self.model.people.nodeid,
-            self.infectious_duration_fn,
+            self.infdurdist,
+            self.infdurmin,
         )
         symptomatic_by_node = symptomatic_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
@@ -209,7 +225,7 @@ class Exposed:
 
 
 class Infectious:
-    def __init__(self, model):
+    def __init__(self, model, infdurdist, infdurmin=1):
         self.model = model
         self.model.people.add_scalar_property("itimer", dtype=np.uint8)
         self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.int32)
@@ -217,7 +233,8 @@ class Infectious:
 
         self.model.nodes.I[0] = self.model.scenario.I
 
-        self.infectious_duration_fn = model.infectious_duration_fn
+        self.infdurdist = infdurdist
+        self.infdurmin = infdurmin
 
         # convenience
         nodeids = self.model.people.nodeid
@@ -232,9 +249,10 @@ class Infectious:
                 )
                 i_infectious = np.random.choice(i_susceptible, size=nseeds, replace=False)
                 self.model.people.state[i_infectious] = State.INFECTIOUS.value
-                self.model.people.itimer[i_infectious] = np.array([self.infectious_duration_fn() for _ in range(nseeds)]).astype(
-                    self.model.people.itimer.dtype
-                )
+                samples = dists.sample_floats(self.infdurdist, np.zeros(nseeds, dtype=np.float32))
+                samples = np.round(samples)
+                samples = np.maximum(samples, self.infdurmin).astype(self.model.people.itimer.dtype)
+                self.model.people.itimer[i_infectious] = samples
                 assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
 
         return
@@ -390,12 +408,13 @@ class Recovered:
 
 
 class Transmission:
-    def __init__(self, model):
+    def __init__(self, model, expdurdist, expdurmin=1):
         self.model = model
         self.model.nodes.add_vector_property("forces", model.params.nticks + 1, dtype=np.float32)
         self.model.nodes.add_vector_property("incidence", model.params.nticks + 1, dtype=np.uint32)
 
-        self.exposure_duration_fn = model.exposure_duration_fn
+        self.expdurdist = expdurdist
+        self.expdurmin = expdurmin
 
         return
 
@@ -410,19 +429,20 @@ class Transmission:
 
     @staticmethod
     @nb.njit(
-        (
-            nb.int8[:],
-            nb.uint16[:],
-            nb.float32[:],
-            nb.uint32[:, :],
-            nb.uint8[:],
-            nb.types.FunctionType(nb.types.uint8()),
-        ),
+        # (
+        #     nb.int8[:],
+        #     nb.uint16[:],
+        #     nb.float32[:],
+        #     nb.uint32[:, :],
+        #     nb.uint8[:],
+        #     nb.types.FunctionType(nb.types.uint8()),
+        #     nb.int32,
+        # ),
         nogil=True,
         parallel=True,
         cache=True,
     )
-    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, exposure_duration_fn):
+    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
                 # Check for infection
@@ -430,7 +450,7 @@ class Transmission:
                 nid = nodeids[i]
                 if draw < ft[nid]:
                     states[i] = State.EXPOSED.value
-                    etimers[i] = exposure_duration_fn()
+                    etimers[i] = np.maximum(np.round(expdurdist()), expdurmin)  # Set the exposure timer
                     exp_by_node[nb.get_thread_id(), nid] += 1
 
         return
@@ -447,7 +467,7 @@ class Transmission:
 
         exp_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(
-            self.model.people.state, self.model.people.nodeid, ft, exp_by_node, self.model.people.etimer, self.exposure_duration_fn
+            self.model.people.state, self.model.people.nodeid, ft, exp_by_node, self.model.people.etimer, self.expdurdist, self.expdurmin
         )
         exp_by_node = exp_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
@@ -682,26 +702,6 @@ class Model:
     @components.setter
     def components(self, value):
         self._components = value
-
-        return
-
-    @property
-    def infectious_duration_fn(self):
-        return self._infectious_duration_fn
-
-    @infectious_duration_fn.setter
-    def infectious_duration_fn(self, value):
-        if callable(value):
-            self._infectious_duration_fn = value
-        elif isinstance(value, (list, np.ndarray)):
-            values = np.array(value)
-            assert np.all(values > 0), "All infectious duration values must be positive"
-            assert np.all(values == values.astype(int)), "All infectious duration values must be integers"
-            values = values.astype(np.uint8)
-
-            self._infectious_duration_fn = nb.njit(lambda n: np.random.choice(values, size=1), nogil=True, cache=True)
-        else:
-            raise ValueError("infectious_duration_fn must be a callable or a list/array of positive integers")
 
         return
 

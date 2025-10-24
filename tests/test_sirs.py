@@ -5,8 +5,8 @@ import unittest
 from argparse import ArgumentParser
 from pathlib import Path
 
-import numba as nb
 import numpy as np
+import laser_core.distributions as dists
 from laser_core import PropertySet
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
@@ -45,30 +45,13 @@ def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None
     with ts.start("Model Initialization"):
         model = SIRS.Model(scenario, params, birthrates=birthrates, mortalityrates=mortalityrates)
 
-        @nb.njit(nogil=True, cache=True)
-        def infectious_duration_distribution():
-            draw = np.random.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
-            rounded = np.round(draw)
-            asuint8 = np.uint8(rounded)
-            clipped = np.maximum(1, asuint8)
-            return clipped
-
-        model.infectious_duration_fn = infectious_duration_distribution
-
-        @nb.njit(nogil=True, cache=True)
-        def waning_duration_distribution():
-            draw = np.random.normal(loc=WANING_DURATION_MEAN, scale=5)
-            rounded = np.round(draw)
-            asuint8 = np.uint8(rounded)
-            clipped = np.maximum(1, asuint8)
-            return clipped
-
-        model.waning_duration_fn = waning_duration_distribution
+        infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
+        wandist = dists.normal(loc=WANING_DURATION_MEAN, scale=5)
 
         s = SIRS.Susceptible(model)
-        i = SIRS.Infectious(model)
+        i = SIRS.Infectious(model, infdist, wandist)
         r = SIRS.Recovered(model)
-        tx = SIRS.Transmission(model)
+        tx = SIRS.Transmission(model, infdist)
         if birthrates is not None or mortalityrates is not None:
             assert birthrates is not None, "Birthrates must be provided for vital dynamics."
             assert mortalityrates is not None, "Mortalityrates must be provided for vital dynamics."

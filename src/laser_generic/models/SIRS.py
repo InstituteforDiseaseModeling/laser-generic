@@ -1,7 +1,6 @@
-from enum import Enum
-
 import contextily as ctx
 import geopandas as gpd
+import laser_core.distributions as dists
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numba as nb
@@ -18,20 +17,11 @@ from laser_generic.newutils import estimate_capacity
 from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
 
+from .shared import State
 from .shared import sample_dobs
 from .shared import sample_dods
 
-
-class State(Enum):
-    DECEASED = -1
-    SUSCEPTIBLE = 0
-    INFECTIOUS = 1
-    RECOVERED = 2
-
-    def __new__(cls, value):
-        obj = object.__new__(cls)
-        obj._value_ = np.int8(value)
-        return obj
+__all__ = ["Infectious", "Model", "State", "Susceptible", "Transmission", "VitalDynamics"]
 
 
 class Susceptible:
@@ -47,7 +37,13 @@ class Susceptible:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.S[tick] >= 0), "Susceptible counts must be non-negative"
+        # np.bincount where state == State.SUSCEPTIBLE.value and by nodeid should match self.model.nodes.S[tick]
+        nodeids = self.model.people.nodeid
+        states = self.model.people.state
+        assert np.all(
+            (expected := self.model.nodes.S[tick])
+            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
+        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
 
         return
 
@@ -93,17 +89,20 @@ class Susceptible:
 
 
 class Infectious:
-    def __init__(self, model):
+    def __init__(self, model, infdurdist, wandurdist, infdurmin=1, wandurmin=1):
         self.model = model
         self.model.people.add_scalar_property("itimer", dtype=np.uint8)
-        self.model.people.add_scalar_property("rtimer", dtype=np.uint8)
+        if not hasattr(self.model.people, "rtimer"):
+            self.model.people.add_scalar_property("rtimer", dtype=np.uint8)
         self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.int32)
         self.model.nodes.add_vector_property("recovered", model.params.nticks + 1, dtype=np.uint32)
 
         self.model.nodes.I[0] = self.model.scenario.I
 
-        self.infectious_duration_fn = model.infectious_duration_fn
-        self.waning_duration_fn = model.waning_duration_fn
+        self.infdurdist = infdurdist
+        self.wandurdist = wandurdist
+        self.infdurmin = infdurmin
+        self.wandurmin = wandurmin
 
         # convenience
         nodeids = self.model.people.nodeid
@@ -118,58 +117,64 @@ class Infectious:
                 )
                 i_infectious = np.random.choice(i_susceptible, size=nseeds, replace=False)
                 self.model.people.state[i_infectious] = State.INFECTIOUS.value
-                self.model.people.itimer[i_infectious] = np.array([self.infectious_duration_fn() for _ in range(nseeds)]).astype(
-                    self.model.people.itimer.dtype
-                )
+                samples = dists.sample_floats(self.infdurdist, np.zeros(nseeds, dtype=np.float32))
+                samples = np.round(samples)
+                samples = np.maximum(self.infdurmin, samples).astype(self.model.people.itimer.dtype)
+                self.model.people.itimer[i_infectious] = samples
                 assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
 
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.I[tick] >= 0), "Infected counts must be non-negative"
-        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
+        # Check that agents with state INFECTIOUS by patch match self.model.nodes.I[tick]
+        nodeids = self.model.people.nodeid
+        states = self.model.people.state
+        assert np.all(
+            self.model.nodes.I[tick] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
+        ), "Infected census does not match infectious counts (by state)."
+
+        # Check that all infectious agents have itimer > 0
+        i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
         assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
+
+        # Check that only infectious agents have itimer > 0
         i_non_zero = np.nonzero(self.model.people.itimer > 0)[0]
-        assert np.all(self.model.people.state[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+        assert np.all(states[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
-
-        states = self.model.people.state
-        itimers = self.model.people.itimer
-
-        i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
-        assert np.all(itimers[i_infectious] > 0), "Infected individuals should have itimer > 0"
-        i_non_zero = np.nonzero(itimers > 0)[0]
-        assert np.all(states[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
-
+        # Check that agents with state INFECTIOUS by patch match self.model.nodes.I[tick+1]
         nodeids = self.model.people.nodeid
-        # nodes.I should match count of infectious by node
+        states = self.model.people.state
         assert np.all(
             self.model.nodes.I[tick + 1] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
         ), "Infected census does not match infectious counts (by state)."
-        assert np.all(self.model.nodes.I[tick + 1] == np.bincount(nodeids, itimers > 0, minlength=self.model.nodes.count)), (
-            "Infected census does not match infectious counts (by itimer)."
-        )
+
+        # Check that all infectious agents have itimer > 0
+        i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
+        assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
+
+        # Check that only infectious agents have itimer > 0
+        i_non_zero = np.nonzero(self.model.people.itimer > 0)[0]
+        assert np.all(states[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
 
         return
 
     @staticmethod
     @nb.njit(
-        (nb.int8[:], nb.uint8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:], nb.types.FunctionType(nb.types.uint8())),
+        # (nb.int8[:], nb.uint8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:], nb.types.FunctionType(nb.types.uint8()), min),
         nogil=True,
         parallel=True,
         cache=True,
     )
-    def nb_infectious_step(states, itimers, rtimers, recovered, nodeids, duration_fn):
+    def nb_infectious_step(states, itimers, rtimers, recovered, nodeids, wandurdist, wandurmin):
         for i in nb.prange(len(states)):
             if states[i] == State.INFECTIOUS.value:
                 itimers[i] -= 1
                 if itimers[i] == 0:
                     states[i] = State.RECOVERED.value
-                    rtimers[i] = duration_fn()  # Set the recovery timer
+                    rtimers[i] = np.maximum(np.round(wandurdist()), wandurmin)  # Set the recovery timer
                     recovered[nb.get_thread_id(), nodeids[i]] += 1
 
         return
@@ -192,7 +197,8 @@ class Infectious:
             self.model.people.rtimer,
             recovered_by_node,
             self.model.people.nodeid,
-            self.waning_duration_fn,
+            self.wandurdist,
+            self.wandurmin,
         )
         recovered_by_node = recovered_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
@@ -333,12 +339,14 @@ class Recovered:
 
 
 class Transmission:
-    def __init__(self, model):
+    def __init__(self, model, infdurdist, infdurmin=1):
         self.model = model
         self.model.nodes.add_vector_property("forces", model.params.nticks + 1, dtype=np.float32)
         self.model.nodes.add_vector_property("incidence", model.params.nticks + 1, dtype=np.uint32)
 
-        self.infectious_duration_fn = model.infectious_duration_fn
+        self.infdurdist = infdurdist
+        self.infdurmin = infdurmin
+
         return
 
     def prevalidate_step(self, tick: int) -> None: ...
@@ -352,19 +360,20 @@ class Transmission:
 
     @staticmethod
     @nb.njit(
-        (
-            nb.int8[:],
-            nb.uint16[:],
-            nb.float32[:],
-            nb.uint32[:, :],
-            nb.uint8[:],
-            nb.types.FunctionType(nb.types.uint8()),
-        ),
+        # (
+        #     nb.int8[:],
+        #     nb.uint16[:],
+        #     nb.float32[:],
+        #     nb.uint32[:, :],
+        #     nb.uint8[:],
+        #     nb.types.FunctionType(nb.types.uint8()),
+        #     nb.int32,
+        # ),
         nogil=True,
         parallel=True,
         cache=True,
     )
-    def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, duration_fn):
+    def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, infdurdist, infdurmin):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
                 # Check for infection
@@ -372,7 +381,7 @@ class Transmission:
                 nid = nodeids[i]
                 if draw < ft[nid]:
                     states[i] = State.INFECTIOUS.value
-                    itimers[i] = duration_fn()
+                    itimers[i] = np.maximum(np.round(infdurdist()), infdurmin)  # Set the infection timer
                     inf_by_node[nb.get_thread_id(), nid] += 1
 
         return
@@ -389,7 +398,7 @@ class Transmission:
 
         inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(
-            self.model.people.state, self.model.people.nodeid, ft, inf_by_node, self.model.people.itimer, self.infectious_duration_fn
+            self.model.people.state, self.model.people.nodeid, ft, inf_by_node, self.model.people.itimer, self.infdurdist, self.infdurmin
         )
         inf_by_node = inf_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
@@ -624,46 +633,6 @@ class Model:
     @components.setter
     def components(self, value):
         self._components = value
-
-        return
-
-    @property
-    def infectious_duration_fn(self):
-        return self._infectious_duration_fn
-
-    @infectious_duration_fn.setter
-    def infectious_duration_fn(self, value):
-        if callable(value):
-            self._infectious_duration_fn = value
-        elif isinstance(value, (list, np.ndarray)):
-            values = np.array(value)
-            assert np.all(values > 0), "All infectious duration values must be positive"
-            assert np.all(values == values.astype(int)), "All infectious duration values must be integers"
-            values = values.astype(np.uint8)
-
-            self._infectious_duration_fn = nb.njit(lambda n: np.random.choice(values, size=1), nogil=True, cache=True)
-        else:
-            raise ValueError("infectious_duration_fn must be a callable or a list/array of positive integers")
-
-        return
-
-    @property
-    def waning_duration_fn(self):
-        return self._waning_duration_fn
-
-    @waning_duration_fn.setter
-    def waning_duration_fn(self, value):
-        if callable(value):
-            self._waning_duration_fn = value
-        elif isinstance(value, (list, np.ndarray)):
-            values = np.array(value)
-            assert np.all(values > 0), "All infectious duration values must be positive"
-            assert np.all(values == values.astype(int)), "All infectious duration values must be integers"
-            values = values.astype(np.uint8)
-
-            self._waning_duration_fn = nb.njit(lambda n: np.random.choice(values, size=1), nogil=True, cache=True)
-        else:
-            raise ValueError("waning_duration_fn must be a callable or a list/array of positive integers")
 
         return
 
