@@ -49,18 +49,18 @@ def build_models(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=Non
             idist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
             wdist = dists.normal(loc=WANING_DURATION_MEAN, scale=5)
 
-        sir = SIR.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates, mortalityrates=mortalityrates)
+        sir = SIR.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
         sir.components = [SIR.Susceptible(sir), SIR.Recovered(sir), SIR.Infectious(sir, idist), SIR.Transmission(sir, idist)]
 
-        sirs = SIRS.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates, mortalityrates=mortalityrates)
+        sirs = SIRS.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
         sirs.components = [
             SIRS.Susceptible(sirs),
-            SIRS.Recovered(sirs),
+            SIRS.Recovered(sirs, wdist),
             SIRS.Infectious(sirs, idist, wdist),
             SIRS.Transmission(sirs, idist),
         ]
 
-        seir = SEIR.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates, mortalityrates=mortalityrates)
+        seir = SEIR.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
         seir.components = [
             SEIR.Susceptible(seir),
             SEIR.Recovered(seir),
@@ -69,7 +69,7 @@ def build_models(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=Non
             SEIR.Transmission(seir, edist),
         ]
 
-        seirs = SEIRS.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates, mortalityrates=mortalityrates)
+        seirs = SEIRS.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
         seirs.components = [
             SEIRS.Susceptible(seirs),
             SEIRS.Recovered(seirs, wdist),

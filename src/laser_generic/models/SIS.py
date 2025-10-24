@@ -19,77 +19,13 @@ from laser_generic.newutils import estimate_capacity
 from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
 
+from .components import Susceptible
+from .components import TransmissionSI as Transmission
 from .shared import State
 from .shared import sample_dobs
 from .shared import sample_dods
 
 __all__ = ["Infectious", "Model", "State", "Susceptible", "Transmission", "VitalDynamics"]
-
-
-class Susceptible:
-    def __init__(self, model):
-        self.model = model
-        self.model.people.add_scalar_property("nodeid", dtype=np.uint16)
-        self.model.people.add_scalar_property("state", dtype=np.int8, default=State.SUSCEPTIBLE.value)
-        self.model.nodes.add_vector_property("S", model.params.nticks + 1, dtype=np.int32)
-
-        self.model.people.nodeid[:] = np.repeat(np.arange(self.model.nodes.count, dtype=np.uint16), self.model.scenario.population)
-        self.model.nodes.S[0] = self.model.scenario.S
-
-        return
-
-    def prevalidate_step(self, tick: int) -> None:
-        # np.bincount where state == State.SUSCEPTIBLE.value and by nodeid should match self.model.nodes.S[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.S[tick])
-            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
-        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
-
-        return
-
-    def postvalidate_step(self, tick: int) -> None:
-        # Check that agents with state SUSCEPTIBLE by patch match self.model.nodes.S[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.S[tick])
-            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
-        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
-        assert np.all(self.model.nodes.S[tick + 1] == self.model.nodes.S[tick]), (
-            "Susceptible counts should not change in Susceptible.step()."
-        )
-
-        return
-
-    @validate(pre=prevalidate_step, post=postvalidate_step)
-    def step(self, tick: int) -> None:
-        # Propagate the number of susceptible individuals in each patch
-        # state(t+1) = state(t) + ∆state(t), initialize state(t+1) with state(t)
-        self.model.nodes.S[tick + 1] = self.model.nodes.S[tick]
-
-        return
-
-    def plot(self):
-        _fig, ax1 = plt.subplots()
-        for node in range(self.model.nodes.count):
-            ax1.plot(self.model.nodes.S[:, node], label=f"Node {node}")
-        ax1.set_xlabel("Tick")
-        ax1.set_ylabel("Susceptible (by Node)")
-        ax1.set_ylim(bottom=0)
-        ax1.set_title("Susceptible over Time by Node")
-        ax1.legend(loc="upper left")
-
-        ax2 = ax1.twinx()
-        ax2.plot(np.sum(self.model.nodes.S, axis=1), color="black", linestyle="--", label="Total Susceptible")
-        ax2.set_ylabel("Total Susceptible")
-        ax2.set_ylim(bottom=0)
-        ax2.legend(loc="upper right")
-
-        plt.show()
-
-        return
 
 
 class Infectious:
@@ -208,90 +144,6 @@ class Infectious:
         ax2.plot(np.sum(self.model.nodes.I, axis=1), color="black", linestyle="--", label="Total Infected")
         ax2.set_ylabel("Total Infected")
         ax2.legend(loc="upper right")
-        plt.show()
-
-        return
-
-
-class Transmission:
-    def __init__(self, model, infdurdist, infdurmin=1):
-        self.model = model
-        self.model.nodes.add_vector_property("forces", model.params.nticks + 1, dtype=np.float32)
-        self.model.nodes.add_vector_property("incidence", model.params.nticks + 1, dtype=np.uint32)
-
-        self.infdurdist = infdurdist
-        self.infdurmin = infdurmin
-
-        return
-
-    def prevalidate_step(self, tick: int) -> None: ...
-
-    def postvalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.incidence[tick] >= 0), "Incidence counts must be non-negative"
-        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
-        assert np.all(self.model.people.itimer[i_infectious] > 0), "Infectious individuals should have itimer > 0"
-
-        return
-
-    @staticmethod
-    @nb.njit(
-        # (
-        #     nb.int8[:],
-        #     nb.uint16[:],
-        #     nb.float32[:],
-        #     nb.uint32[:, :],
-        #     nb.uint8[:],
-        #     nb.types.FunctionType(nb.types.int32()),
-        #     nb.int32,
-        # ),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
-    def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, infdurdist, infdurmin):
-        for i in nb.prange(len(states)):
-            if states[i] == State.SUSCEPTIBLE.value:
-                # Check for infection
-                draw = np.random.rand()
-                nid = nodeids[i]
-                if draw < ft[nid]:
-                    states[i] = State.INFECTIOUS.value
-                    itimers[i] = np.maximum(np.round(infdurdist()), infdurmin)
-                    inf_by_node[nb.get_thread_id(), nid] += 1
-
-        return
-
-    @validate(pre=prevalidate_step, post=postvalidate_step)
-    def step(self, tick: int) -> None:
-        ft = self.model.nodes.forces[tick]
-        N = self.model.nodes.S[tick] + self.model.nodes.I[tick]
-        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / N
-        transfer = ft[:, None] * self.model.network
-        ft += transfer.sum(axis=0)
-        ft -= transfer.sum(axis=1)
-        ft = -np.expm1(-ft)  # Convert to probability of infection
-
-        inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
-        self.nb_transmission_step(
-            self.model.people.state, self.model.people.nodeid, ft, inf_by_node, self.model.people.itimer, self.infdurdist, self.infdurmin
-        )
-        inf_by_node = inf_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
-
-        # state(t+1) = state(t) + ∆state(t)
-        self.model.nodes.S[tick + 1] -= inf_by_node
-        self.model.nodes.I[tick + 1] += inf_by_node
-        # Record today's ∆
-        self.model.nodes.incidence[tick] = inf_by_node
-
-        return
-
-    def plot(self):
-        for node in range(self.model.nodes.count):
-            plt.plot(self.model.nodes.forces[:, node], label=f"Node {node}")
-        plt.xlabel("Tick")
-        plt.ylabel("Force of Infection")
-        plt.title("Force of Infection over Time by Node")
-        plt.legend()
         plt.show()
 
         return
