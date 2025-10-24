@@ -87,7 +87,7 @@ class VitalDynamics:
 
     @staticmethod
     @nb.njit(
-        (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32[:, :], nb.int32),
+        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32[:, :], nb.int32),
         nogil=True,
         parallel=True,
         cache=True,

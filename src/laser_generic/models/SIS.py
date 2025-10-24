@@ -97,7 +97,12 @@ class Infectious:
         return
 
     @staticmethod
-    @nb.njit((nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]), nogil=True, parallel=True, cache=True)
+    @nb.njit(
+        # (nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
     def nb_infectious_step(states, itimers, recovered, nodeids):
         for i in nb.prange(len(states)):
             if states[i] == State.INFECTIOUS.value:
@@ -207,7 +212,12 @@ class VitalDynamics:
         return
 
     @staticmethod
-    @nb.njit((nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32), nogil=True, parallel=True, cache=True)
+    @nb.njit(
+        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
     def nb_process_deaths(dods, states, nodeids, deceased_S, deceased_I, tick):
         for i in nb.prange(len(dods)):
             if dods[i] == tick:
