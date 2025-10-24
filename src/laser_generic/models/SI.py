@@ -35,7 +35,12 @@ class Transmission:
         return
 
     @staticmethod
-    @nb.njit((nb.int8[:], nb.uint16[:], nb.float32[:], nb.uint32[:, :]), nogil=True, parallel=True, cache=True)
+    @nb.njit(
+        # (nb.int8[:], nb.uint16[:], nb.float32[:], nb.uint32[:, :]),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
     def nb_transmission_step(states, nodeids, ft, inf_by_node):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
@@ -220,7 +225,12 @@ class VitalDynamics:
         return
 
     @staticmethod
-    @nb.njit((nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32), nogil=True, parallel=True, cache=True)
+    @nb.njit(
+        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
     def nb_process_deaths(dods, states, nodeids, delta_S, delta_I, tick):
         for i in nb.prange(len(dods)):
             if dods[i] == tick:
@@ -315,7 +325,12 @@ class ConstantPopVitalDynamics:
     def postvalidate_step(self, tick: int) -> None: ...
 
     @staticmethod
-    @nb.njit((nb.float32[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :]), nogil=True, parallel=True, cache=True)
+    @nb.njit(
+        # (nb.float32[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :]),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
     def nb_process_recycling(rates, states, nodeids, recycled, infected):
         for i in nb.prange(len(states)):
             draw = np.random.rand()

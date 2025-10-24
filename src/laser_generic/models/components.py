@@ -211,7 +211,7 @@ class Exposed:
 class InfectiousIR:
     def __init__(self, model, infdurdist, infdurmin=1):
         self.model = model
-        self.model.people.add_scalar_property("itimer", dtype=np.uint8)
+        self.model.people.add_scalar_property("itimer", dtype=np.uint16)
         self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.int32)
         self.model.nodes.add_vector_property("recovered", model.params.nticks + 1, dtype=np.uint32)
 
@@ -273,7 +273,12 @@ class InfectiousIR:
         return
 
     @staticmethod
-    @nb.njit((nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]), nogil=True, parallel=True, cache=True)
+    @nb.njit(
+        # (nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
     def nb_infectious_step(states, itimers, recovered, nodeids):
         for i in nb.prange(len(states)):
             if states[i] == State.INFECTIOUS.value:
@@ -328,9 +333,9 @@ class InfectiousIR:
 class InfectiousIRS:
     def __init__(self, model, infdurdist, wandurdist, infdurmin=1, wandurmin=1):
         self.model = model
-        self.model.people.add_scalar_property("itimer", dtype=np.uint8)
+        self.model.people.add_scalar_property("itimer", dtype=np.uint16)
         if not hasattr(self.model.people, "rtimer"):
-            self.model.people.add_scalar_property("rtimer", dtype=np.uint8)
+            self.model.people.add_scalar_property("rtimer", dtype=np.uint16)
         self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.int32)
         self.model.nodes.add_vector_property("recovered", model.params.nticks + 1, dtype=np.uint32)
 
@@ -485,7 +490,7 @@ class Recovered:
         states = self.model.people.state
 
         for node in range(self.model.nodes.count):
-            nseeds = self.model.scenario.I[node]
+            nseeds = self.model.scenario.R[node]
             if nseeds > 0:
                 i_susceptible = np.nonzero((nodeids == node) & (states == State.SUSCEPTIBLE.value))[0]
                 assert nseeds <= len(i_susceptible), (
@@ -543,7 +548,7 @@ class RecoveredRS:
     def __init__(self, model, wandurdist, wandurmin=1):
         self.model = model
         if not hasattr(self.model.people, "rtimer"):
-            self.model.people.add_scalar_property("rtimer", dtype=np.uint8)
+            self.model.people.add_scalar_property("rtimer", dtype=np.uint16)
         self.model.nodes.add_vector_property("R", model.params.nticks + 1, dtype=np.int32)
         self.model.nodes.add_vector_property("waned", model.params.nticks + 1, dtype=np.uint32)
 
@@ -557,7 +562,7 @@ class RecoveredRS:
         states = self.model.people.state
 
         for node in range(self.model.nodes.count):
-            nseeds = self.model.scenario.I[node]
+            nseeds = self.model.scenario.R[node]
             if nseeds > 0:
                 i_susceptible = np.nonzero((nodeids == node) & (states == State.SUSCEPTIBLE.value))[0]
                 assert nseeds <= len(i_susceptible), (
@@ -608,7 +613,12 @@ class RecoveredRS:
         return
 
     @staticmethod
-    @nb.njit((nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]), nogil=True, parallel=True, cache=True)
+    @nb.njit(
+        # (nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
     def nb_recovered_step(states, rtimers, waned_by_node, nodeids):
         for i in nb.prange(len(states)):
             if states[i] == State.RECOVERED.value:
