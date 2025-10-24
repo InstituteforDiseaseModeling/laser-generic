@@ -1,7 +1,6 @@
 """Components for the SI model."""
 
 import warnings
-from enum import Enum
 
 import contextily as ctx
 import geopandas as gpd
@@ -21,18 +20,9 @@ from laser_generic.newutils import estimate_capacity
 from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
 
-__all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "Susceptible", "Transmission", "VitalDynamics"]
+from .shared import State
 
-
-class State(Enum):
-    SUSCEPTIBLE = 0
-    INFECTIOUS = 2  # save space for EXPOSED
-    DECEASED = -1
-
-    def __new__(cls, value):
-        obj = object.__new__(cls)
-        obj._value_ = np.int8(value)
-        return obj
+__all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "State", "Susceptible", "Transmission", "VitalDynamics"]
 
 
 class Susceptible:
@@ -47,7 +37,16 @@ class Susceptible:
 
         return
 
-    def prevalidate_step(self, tick: int) -> None: ...
+    def prevalidate_step(self, tick: int) -> None:
+        # np.bincount where state == State.SUSCEPTIBLE.value and by nodeid should match self.model.nodes.S[tick]
+        nodeids = self.model.people.nodeid
+        states = self.model.people.state
+        assert np.all(
+            (expected := self.model.nodes.S[tick])
+            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
+        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
+
+        return
 
     def postvalidate_step(self, tick: int) -> None:
         # Check that agents with state SUSCEPTIBLE by patch match self.model.nodes.S[tick]
@@ -58,7 +57,7 @@ class Susceptible:
             == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
         ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
         assert np.all(self.model.nodes.S[tick + 1] == self.model.nodes.S[tick]), (
-            "Susceptible counts should not change outside of Transmission and VitalDynamics."
+            "Susceptible counts should not change in Susceptible.step()."
         )
 
         return

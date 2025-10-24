@@ -1,7 +1,6 @@
-from enum import Enum
-
 import contextily as ctx
 import geopandas as gpd
+import laser_core.distributions as dists
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numba as nb
@@ -18,20 +17,11 @@ from laser_generic.newutils import estimate_capacity
 from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
 
+from .shared import State
 from .shared import sample_dobs
 from .shared import sample_dods
 
-
-class State(Enum):
-    DECEASED = -1
-    SUSCEPTIBLE = 0
-    INFECTIOUS = 2  # save space for EXPOSED
-    RECOVERED = 3
-
-    def __new__(cls, value):
-        obj = object.__new__(cls)
-        obj._value_ = np.int8(value)
-        return obj
+__all__ = ["Infectious", "Model", "State", "Susceptible", "Transmission", "VitalDynamics"]
 
 
 class Susceptible:
@@ -47,7 +37,13 @@ class Susceptible:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.S[tick] >= 0), "Susceptible counts must be non-negative"
+        # np.bincount where state == State.SUSCEPTIBLE.value and by nodeid should match self.model.nodes.S[tick]
+        nodeids = self.model.people.nodeid
+        states = self.model.people.state
+        assert np.all(
+            (expected := self.model.nodes.S[tick])
+            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
+        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
 
         return
 
@@ -93,7 +89,7 @@ class Susceptible:
 
 
 class Infectious:
-    def __init__(self, model):
+    def __init__(self, model, infdurdist, infdurmin=1):
         self.model = model
         self.model.people.add_scalar_property("itimer", dtype=np.uint8)
         self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.int32)
@@ -101,7 +97,8 @@ class Infectious:
 
         self.model.nodes.I[0] = self.model.scenario.I
 
-        self.infectious_duration_fn = model.infectious_duration_fn
+        self.infdurdist = infdurdist
+        self.infdurmin = infdurmin
 
         # convenience
         nodeids = self.model.people.nodeid
@@ -116,9 +113,10 @@ class Infectious:
                 )
                 i_infectious = np.random.choice(i_susceptible, size=nseeds, replace=False)
                 self.model.people.state[i_infectious] = State.INFECTIOUS.value
-                self.model.people.itimer[i_infectious] = np.array([self.infectious_duration_fn() for _ in range(nseeds)]).astype(
-                    self.model.people.itimer.dtype
-                )
+                samples = dists.sample_floats(self.infdurdist, np.zeros(nseeds, dtype=np.float32))
+                samples = np.round(samples)
+                samples = np.maximum(samples, self.infdurmin).astype(self.model.people.itimer.dtype)
+                self.model.people.itimer[i_infectious] = samples
                 assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
 
         return
@@ -274,12 +272,14 @@ class Recovered:
 
 
 class Transmission:
-    def __init__(self, model):
+    def __init__(self, model, infdurdist, infdurmin=1):
         self.model = model
         self.model.nodes.add_vector_property("forces", model.params.nticks + 1, dtype=np.float32)
         self.model.nodes.add_vector_property("incidence", model.params.nticks + 1, dtype=np.uint32)
 
-        self.infectious_duration_fn = model.infectious_duration_fn
+        self.infdurdist = infdurdist
+        self.infdurmin = infdurmin
+
         return
 
     def prevalidate_step(self, tick: int) -> None: ...
@@ -293,19 +293,20 @@ class Transmission:
 
     @staticmethod
     @nb.njit(
-        (
-            nb.int8[:],
-            nb.uint16[:],
-            nb.float32[:],
-            nb.uint32[:, :],
-            nb.uint8[:],
-            nb.types.FunctionType(nb.types.uint8()),
-        ),
+        # (
+        #     nb.int8[:],
+        #     nb.uint16[:],
+        #     nb.float32[:],
+        #     nb.uint32[:, :],
+        #     nb.uint8[:],
+        #     nb.types.FunctionType(nb.types.uint8()),
+        #     nb.int32,
+        # ),
         nogil=True,
         parallel=True,
         cache=True,
     )
-    def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, duration_fn):
+    def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, infdurdist, infdurmin):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
                 # Check for infection
@@ -313,7 +314,7 @@ class Transmission:
                 nid = nodeids[i]
                 if draw < ft[nid]:
                     states[i] = State.INFECTIOUS.value
-                    itimers[i] = duration_fn()
+                    itimers[i] = np.maximum(np.round(infdurdist()), infdurmin)  # Set the infection timer
                     inf_by_node[nb.get_thread_id(), nid] += 1
 
         return
@@ -330,7 +331,7 @@ class Transmission:
 
         inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(
-            self.model.people.state, self.model.people.nodeid, ft, inf_by_node, self.model.people.itimer, self.infectious_duration_fn
+            self.model.people.state, self.model.people.nodeid, ft, inf_by_node, self.model.people.itimer, self.infdurdist, self.infdurmin
         )
         inf_by_node = inf_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
@@ -355,14 +356,11 @@ class Transmission:
 
 
 class VitalDynamics:
-    def __init__(self, model):
+    def __init__(self, model, birthrates, pyramid, survival):
         self.model = model
-
-        # This component requires these model properties
-        assert hasattr(self.model, "birthrates")
-        assert hasattr(self.model, "mortalityrates")
-        assert hasattr(self.model, "pyramid")
-        assert hasattr(self.model, "survival")
+        self.birthrates = birthrates
+        self.pyramid = pyramid
+        self.survival = survival
 
         # Date-Of-Birth and Date-Of-Death properties per agent
         self.model.people.add_property("dob", dtype=np.int16)
@@ -372,8 +370,6 @@ class VitalDynamics:
         self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.uint32)
 
         # Initialize starting population
-        self.pyramid = self.model.pyramid
-        self.survival = self.model.survival
         dobs = self.model.people.dob[0 : self.model.people.count]
         dods = self.model.people.dod[0 : self.model.people.count]
         sample_dobs(dobs, self.pyramid, tick=0)
@@ -454,7 +450,7 @@ class VitalDynamics:
         self.model.nodes.deaths[tick] = deceased_S + deceased_I + deceased_R  # Record
 
         # Births in one fell swoop
-        rates = np.power(1.0 + self.model.birthrates[tick] / 1000, 1.0 / 365) - 1.0
+        rates = np.power(1.0 + self.birthrates[tick] / 1000, 1.0 / 365) - 1.0
         # Use "tomorrow's" population which accounts for mortality above.
         N = self.model.nodes.S[tick + 1] + self.model.nodes.I[tick + 1] + self.model.nodes.R[tick + 1]
         births = np.round(np.random.poisson(rates * N)).astype(np.uint32)
@@ -493,7 +489,7 @@ class VitalDynamics:
 
 
 class Model:
-    def __init__(self, scenario, params, birthrates=None, mortalityrates=None, skip_capacity: bool = False):
+    def __init__(self, scenario, params, birthrates=None, skip_capacity: bool = False):
         """
         Initialize the SI model.
 
@@ -501,14 +497,12 @@ class Model:
             scenario (GeoDataFrame): The scenario data containing per patch population, initial S and I counts, and geometry.
             params (PropertySet): The parameters for the model, including 'nticks' and 'beta'.
             birthrates (np.ndarray, optional): Birth rates in CBR per patch per tick. Defaults to None.
-            mortalityrates (np.ndarray, optional): Mortality rates in count/1000 per patch per tick. Defaults to None.
             skip_capacity (bool, optional): If True, skips capacity checks. Defaults to False.
         """
         self.params = params
 
         num_nodes = max(np.unique(scenario.nodeid)) + 1
         self.birthrates = birthrates if birthrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
-        self.mortalityrates = mortalityrates if mortalityrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
         num_active = scenario.population.sum()
         if not skip_capacity:
             num_agents = estimate_capacity(self.birthrates, scenario.population).sum()
@@ -565,26 +559,6 @@ class Model:
     @components.setter
     def components(self, value):
         self._components = value
-
-        return
-
-    @property
-    def infectious_duration_fn(self):
-        return self._infectious_duration_fn
-
-    @infectious_duration_fn.setter
-    def infectious_duration_fn(self, value):
-        if callable(value):
-            self._infectious_duration_fn = value
-        elif isinstance(value, (list, np.ndarray)):
-            values = np.array(value)
-            assert np.all(values > 0), "All infectious duration values must be positive"
-            assert np.all(values == values.astype(int)), "All infectious duration values must be integers"
-            values = values.astype(np.uint8)
-
-            self._infectious_duration_fn = nb.njit(lambda n: np.random.choice(values, size=1), nogil=True, cache=True)
-        else:
-            raise ValueError("infectious_duration_fn must be a callable or a list/array of positive integers")
 
         return
 

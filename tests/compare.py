@@ -6,9 +6,9 @@ from pathlib import Path
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
-import numba as nb
 import numpy as np
 from laser_core import PropertySet
+import laser_core.distributions as dists
 
 import laser_generic.models.SIR as SIR
 import laser_generic.models.SIRS as SIRS
@@ -45,55 +45,37 @@ def build_models(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=Non
 
     with ts.start("Model Initialization"):
         with ts.start("Numba Distributions"):
-
-            @nb.njit(nogil=True, cache=True)
-            def exposure_duration_distribution():
-                draw = np.random.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
-                rounded = np.round(draw)
-                asuint8 = np.uint8(rounded)
-                clipped = np.maximum(1, asuint8)
-                return clipped
-
-            @nb.njit(nogil=True, cache=True)
-            def infectious_duration_distribution():
-                draw = np.random.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
-                rounded = np.round(draw)
-                asuint8 = np.uint8(rounded)
-                clipped = np.maximum(1, asuint8)
-                return clipped
-
-            @nb.njit(nogil=True, cache=True)
-            def waning_duration_distribution():
-                draw = np.random.normal(loc=WANING_DURATION_MEAN, scale=5)
-                rounded = np.round(draw)
-                asuint8 = np.uint8(rounded)
-                clipped = np.maximum(1, asuint8)
-                return clipped
+            edist = dists.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
+            idist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
+            wdist = dists.normal(loc=WANING_DURATION_MEAN, scale=5)
 
         sir = SIR.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates, mortalityrates=mortalityrates)
-        sir.infectious_duration_fn = infectious_duration_distribution
-        sir.components = [SIR.Susceptible(sir), SIR.Recovered(sir), SIR.Infectious(sir), SIR.Transmission(sir)]
+        sir.components = [SIR.Susceptible(sir), SIR.Recovered(sir), SIR.Infectious(sir, idist), SIR.Transmission(sir, idist)]
 
         sirs = SIRS.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates, mortalityrates=mortalityrates)
-        sirs.infectious_duration_fn = infectious_duration_distribution
-        sirs.waning_duration_fn = waning_duration_distribution
-        sirs.components = [SIRS.Susceptible(sirs), SIRS.Recovered(sirs), SIRS.Infectious(sirs), SIRS.Transmission(sirs)]
+        sirs.components = [
+            SIRS.Susceptible(sirs),
+            SIRS.Recovered(sirs),
+            SIRS.Infectious(sirs, idist, wdist),
+            SIRS.Transmission(sirs, idist),
+        ]
 
         seir = SEIR.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates, mortalityrates=mortalityrates)
-        seir.exposure_duration_fn = exposure_duration_distribution
-        seir.infectious_duration_fn = infectious_duration_distribution
-        seir.components = [SEIR.Susceptible(seir), SEIR.Recovered(seir), SEIR.Infectious(seir), SEIR.Exposed(seir), SEIR.Transmission(seir)]
+        seir.components = [
+            SEIR.Susceptible(seir),
+            SEIR.Recovered(seir),
+            SEIR.Infectious(seir, idist),
+            SEIR.Exposed(seir, edist, idist),
+            SEIR.Transmission(seir, edist),
+        ]
 
         seirs = SEIRS.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates, mortalityrates=mortalityrates)
-        seirs.exposure_duration_fn = exposure_duration_distribution
-        seirs.infectious_duration_fn = infectious_duration_distribution
-        seirs.waning_duration_fn = waning_duration_distribution
         seirs.components = [
             SEIRS.Susceptible(seirs),
-            SEIRS.Recovered(seirs),
-            SEIRS.Infectious(seirs),
-            SEIRS.Exposed(seirs),
-            SEIRS.Transmission(seirs),
+            SEIRS.Recovered(seirs, wdist),
+            SEIRS.Infectious(seirs, idist, wdist),
+            SEIRS.Exposed(seirs, edist, idist),
+            SEIRS.Transmission(seirs, edist),
         ]
 
         for model in (sir, sirs, seir, seirs):
@@ -104,7 +86,7 @@ def build_models(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=Non
 
 def main():
     POPULATION = int(1e6)
-    sir, sirs, seir, seirs = build_models(m=1, n=1, pop_fn=lambda x, y: POPULATION, init_infected=10)
+    sir, sirs, seir, seirs = build_models(m=EM, n=EN, pop_fn=lambda x, y: POPULATION, init_infected=10)
 
     models = [
         ("SIR", sir),
@@ -115,7 +97,7 @@ def main():
     for name, model in models:
         print(f"Running {name} model...")
         with ts.start(f"Run {name} Model"):
-            model.run(f"{name:<5} Model of {POPULATION} people on {EM}x{EN} grid)")
+            model.run(f"{name:<5} Model of {POPULATION * EM * EN} people on {EM}x{EN} grid)")
 
     ts.freeze()
     json.dump(ts.to_dict(scale="ms"), Path("timing_data.json").open("w"), indent=4)
@@ -181,8 +163,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--plot", action="store_true", help="Enable plotting")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose output")
-    parser.add_argument("-m", type=int, default=5, help="Number of grid rows (M)")
-    parser.add_argument("-n", type=int, default=5, help="Number of grid columns (N)")
+    parser.add_argument("-m", type=int, default=1, help="Number of grid rows (M)")
+    parser.add_argument("-n", type=int, default=1, help="Number of grid columns (N)")
     parser.add_argument("-p", type=int, default=10, help="Number of linear nodes (N)")
     parser.add_argument("--validating", action="store_true", help="Enable validating mode")
 

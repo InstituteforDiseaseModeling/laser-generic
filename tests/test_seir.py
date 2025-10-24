@@ -5,8 +5,8 @@ import unittest
 from argparse import ArgumentParser
 from pathlib import Path
 
-import numba as nb
 import numpy as np
+import laser_core.distributions as dists
 from laser_core import PropertySet
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
@@ -48,31 +48,14 @@ def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None
     with ts.start("Model Initialization"):
         model = SEIR.Model(scenario, params, birthrates=birthrates, mortalityrates=mortalityrates)
 
-        @nb.njit(nogil=True, cache=True)
-        def exposure_duration_distribution():
-            draw = np.random.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
-            rounded = np.round(draw)
-            asuint8 = np.uint8(rounded)
-            clipped = np.maximum(1, asuint8)
-            return clipped
-
-        model.exposure_duration_fn = exposure_duration_distribution
-
-        @nb.njit(nogil=True, cache=True)
-        def infectious_duration_distribution():
-            draw = np.random.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
-            rounded = np.round(draw)
-            asuint8 = np.uint8(rounded)
-            clipped = np.maximum(1, asuint8)
-            return clipped
-
-        model.infectious_duration_fn = infectious_duration_distribution
+        expdist = dists.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
+        infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
 
         s = SEIR.Susceptible(model)
-        e = SEIR.Exposed(model)
-        i = SEIR.Infectious(model)
+        e = SEIR.Exposed(model, expdist, infdist)
+        i = SEIR.Infectious(model, infdist)
         r = SEIR.Recovered(model)
-        tx = SEIR.Transmission(model)
+        tx = SEIR.Transmission(model, expdist)
         if birthrates is not None or mortalityrates is not None:
             assert birthrates is not None, "Birthrates must be provided for vital dynamics."
             assert mortalityrates is not None, "Mortalityrates must be provided for vital dynamics."

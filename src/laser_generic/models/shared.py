@@ -1,6 +1,10 @@
+from enum import Enum
+
 import numpy as np
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
+
+__all__ = ["State", "sample_dobs", "sample_dods"]
 
 
 def sample_dobs(dobs: np.ndarray, pyramid: AliasedDistribution, tick: int) -> None:
@@ -21,3 +25,16 @@ def sample_dods(dobs: np.ndarray, dods: np.ndarray, survival: KaplanMeierEstimat
     dods -= ages  # How many more days will each person live?
 
     return
+
+
+class State(Enum):
+    DECEASED = -1
+    SUSCEPTIBLE = 0
+    EXPOSED = 1
+    INFECTIOUS = 2
+    RECOVERED = 3
+
+    def __new__(cls, value):
+        obj = object.__new__(cls)
+        obj._value_ = np.int8(value)
+        return obj
