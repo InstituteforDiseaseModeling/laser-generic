@@ -1,5 +1,6 @@
 from laser_generic.newutils import TimingStats as ts  # noqa: I001
 
+import json
 import sys
 import unittest
 from argparse import ArgumentParser
@@ -13,7 +14,6 @@ from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SEIRS as SEIRS
 from laser_generic.newutils import RateMap
-from laser_generic.tstreemap import generate_d3_treemap_html
 from utils import base_maps
 from utils import stdgrid
 
@@ -239,6 +239,5 @@ if __name__ == "__main__":
     print("-" * 30)
     print(ts.to_string(scale="ms"))
 
-    treemap = Path.cwd() / "timing_treemap.html"
-    generate_d3_treemap_html(ts, treemap, title="Workflow Execution Treemap", scale="ms", width=1200, height=800)
-    print(f"✓ Created: '{treemap}'")
+    with Path("timing_data.json").open("w") as f:
+        json.dump(ts.to_dict(scale="ms"), f, indent=4)
