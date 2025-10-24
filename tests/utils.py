@@ -33,6 +33,6 @@ try:
         ctx.providers.Esri.WorldTopoMap,
         # ctx.providers.NASAGIBS.ModisTerraTrueColorCR,
     ]
-except:  # noqa: E722
-    warnings.warn("Couldn't load basemaps.")  # noqa: B028
+except Exception:
+    warnings.warn("Couldn't load basemaps.", stacklevel=2)
     base_maps = []
