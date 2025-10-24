@@ -20,73 +20,10 @@ from laser_generic.newutils import estimate_capacity
 from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
 
+from .components import Susceptible
 from .shared import State
 
 __all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "State", "Susceptible", "Transmission", "VitalDynamics"]
-
-
-class Susceptible:
-    def __init__(self, model):
-        self.model = model
-        self.model.people.add_scalar_property("nodeid", dtype=np.uint16)
-        self.model.people.add_scalar_property("state", dtype=np.int8)
-        self.model.nodes.add_vector_property("S", model.params.nticks + 1)
-
-        self.model.people.nodeid[:] = np.repeat(np.arange(self.model.nodes.count, dtype=np.uint16), self.model.scenario.population)
-        self.model.nodes.S[0] = self.model.scenario.S
-
-        return
-
-    def prevalidate_step(self, tick: int) -> None:
-        # np.bincount where state == State.SUSCEPTIBLE.value and by nodeid should match self.model.nodes.S[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.S[tick])
-            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
-        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
-
-        return
-
-    def postvalidate_step(self, tick: int) -> None:
-        # Check that agents with state SUSCEPTIBLE by patch match self.model.nodes.S[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.S[tick])
-            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
-        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
-        assert np.all(self.model.nodes.S[tick + 1] == self.model.nodes.S[tick]), (
-            "Susceptible counts should not change in Susceptible.step()."
-        )
-
-        return
-
-    @validate(pre=prevalidate_step, post=postvalidate_step)
-    def step(self, tick: int) -> None:
-        # Propagate the number of susceptible individuals in each patch
-        # state(t+1) = state(t) + ∆state(t), initialize state(t+1) with state(t)
-        self.model.nodes.S[tick + 1] = self.model.nodes.S[tick]
-
-        return
-
-    def plot(self):
-        _fig, ax1 = plt.subplots()
-        for node in range(self.model.nodes.count):
-            ax1.plot(self.model.nodes.S[:, node], label=f"Node {node}")
-        ax1.set_xlabel("Tick")
-        ax1.set_ylabel("Susceptible (by Node)")
-        ax1.set_title("Susceptible over Time by Node")
-        ax1.legend(loc="upper left")
-
-        ax2 = ax1.twinx()
-        ax2.plot(np.sum(self.model.nodes.S, axis=1), color="black", linestyle="--", label="Total Susceptible")
-        ax2.set_ylabel("Total Susceptible")
-        ax2.legend(loc="upper right")
-
-        plt.show()
-
-        return
 
 
 class Transmission:

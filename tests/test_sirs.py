@@ -45,13 +45,13 @@ def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None
     with ts.start("Model Initialization"):
         model = SIRS.Model(scenario, params, birthrates=birthrates, mortalityrates=mortalityrates)
 
-        infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
-        wandist = dists.normal(loc=WANING_DURATION_MEAN, scale=5)
+        infdurdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
+        wandurdist = dists.normal(loc=WANING_DURATION_MEAN, scale=5)
 
         s = SIRS.Susceptible(model)
-        i = SIRS.Infectious(model, infdist, wandist)
-        r = SIRS.Recovered(model)
-        tx = SIRS.Transmission(model, infdist)
+        i = SIRS.Infectious(model, infdurdist, wandurdist)
+        r = SIRS.Recovered(model, wandurdist)
+        tx = SIRS.Transmission(model, infdurdist)
         if birthrates is not None or mortalityrates is not None:
             assert birthrates is not None, "Birthrates must be provided for vital dynamics."
             assert mortalityrates is not None, "Mortalityrates must be provided for vital dynamics."
