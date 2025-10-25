@@ -9,6 +9,9 @@ Please revisit the implementation of the Numba function and the step function to
 Note the force of infection setup, ft, in the base implementation outside the Numba function.
 The modified Numba function should merely include setting the date-of-infection, doi, in addition to the base implementation.
 Again, all changes should go into age-at-infection.py and no other files.
+
+Prompt #3:
+Please import the State enum from SEIR and update the Numba compiled function to use the values of the enums rather than hardcoded integers for the states.
 """
 
 import numba as nb
@@ -16,6 +19,8 @@ import numpy as np
 
 import laser_generic.models.SEIR as SEIR
 from utils import stdgrid
+
+State = SEIR.State
 
 
 class TransmissionWithDOI(SEIR.Transmission):
@@ -28,13 +33,13 @@ class TransmissionWithDOI(SEIR.Transmission):
 
     @staticmethod
     @nb.njit(nogil=True, parallel=True, cache=True)
-    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin, tick, doi):
+    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin, tick, doi, sus_val, exp_val):
         for i in nb.prange(len(states)):
-            if states[i] == 0:  # State.SUSCEPTIBLE.value
+            if states[i] == sus_val:  # State.SUSCEPTIBLE.value
                 draw = np.random.rand()
                 nid = nodeids[i]
                 if draw < ft[nid]:
-                    states[i] = 2  # State.EXPOSED.value
+                    states[i] = exp_val  # State.EXPOSED.value
                     etimers[i] = np.maximum(np.round(expdurdist()), expdurmin)
                     exp_by_node[nb.get_thread_id(), nid] += 1
                     doi[i] = tick  # Record tick of infection
@@ -61,6 +66,8 @@ class TransmissionWithDOI(SEIR.Transmission):
             self.expdurmin,
             tick,
             self.model.people.doi,
+            State.SUSCEPTIBLE.value,
+            State.EXPOSED.value,
         )
         exp_by_node = exp_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)
         self.model.nodes.S[tick + 1] -= exp_by_node
