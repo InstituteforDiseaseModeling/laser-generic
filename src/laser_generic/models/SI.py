@@ -22,6 +22,8 @@ from laser_generic.newutils import validate
 
 from .components import Susceptible
 from .shared import State
+from .shared import sample_dobs
+from .shared import sample_dods
 
 __all__ = ["ConstantPopVitalDynamics", "Infected", "Model", "State", "Susceptible", "Transmission", "VitalDynamics"]
 
@@ -164,14 +166,11 @@ class Infected:
 
 
 class VitalDynamics:
-    def __init__(self, model):
+    def __init__(self, model, birthrates, pyramid, survival):
         self.model = model
-
-        # This component requires these model properties
-        assert hasattr(self.model, "birthrates")
-        assert hasattr(self.model, "mortalityrates")
-        assert hasattr(self.model, "pyramid")
-        assert hasattr(self.model, "survival")
+        self.birthrates = birthrates
+        self.pyramid = pyramid
+        self.survival = survival
 
         # Date-Of-Birth and Date-Of-Death properties per agent
         self.model.people.add_property("dob", dtype=np.int16)
@@ -181,18 +180,10 @@ class VitalDynamics:
         self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.uint32)
 
         # Initialize starting population
-        self.pyramid = self.model.pyramid
-        dobs = self.model.people.dob
-        # Get years of age sampled from the population pyramid
-        dobs[:] = self.pyramid.sample(self.model.people.count).astype(np.int16)  # Fit in np.int16
-        dobs *= 365  # Convert years to days
-        dobs += np.random.randint(0, 365, size=len(dobs))  # add some noise within the year
-        dods = self.model.people.dod
-        dods[:] = self.model.survival.predict_age_at_death(dobs).astype(np.int16)  # Fit in np.int16
-        dods -= dobs  # How many more days will each person live?
-        # pyramid.sample actually returned ages. Turn them into dobs by treating them
-        # as days before today (t = 0). dobs = 0 - dobs == dobs = -dobs
-        dobs *= -1
+        dobs = self.model.people.dob[0 : self.model.people.count]
+        dods = self.model.people.dod[0 : self.model.people.count]
+        sample_dobs(dobs, self.pyramid, tick=0)
+        sample_dods(dobs, dods, self.survival, tick=0)
 
         return
 
@@ -203,24 +194,26 @@ class VitalDynamics:
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        nbirths = self.model.birthrates[tick].sum()
+        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
+
+        nbirths = self.model.births[tick].sum()
         assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
         istart = self._cpeople
         iend = self.model.people.count
-        # Assert that number of births by patch matches self.model.birthrates[tick]
+        # Assert that number of births by patch matches self.model.births[tick]
         birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
-        assert np.all(birth_counts == self.model.birthrates[tick]), "Birth counts by patch mismatch"
+        assert np.all(birth_counts == self.model.births[tick]), "Birth counts by patch mismatch"
         assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
         assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
 
-        ndeaths = self.model.mortalityrates[tick].sum()
+        ndeaths = self.model.deaths[tick].sum()
         deceased = self.model.people.state == State.DECEASED.value
         assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
-        # Assert that new deaths by patch matches self.model.mortalityrates[tick]
+        # Assert that new deaths by patch matches self.model.deaths[tick]
         prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.nodes.count)
         now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.nodes.count)
         death_counts = now - prv
-        assert np.all(death_counts == self.model.mortalityrates[tick]), "Death counts by patch mismatch"
+        assert np.all(death_counts == self.model.deaths[tick]), "Death counts by patch mismatch"
 
         return
 
@@ -277,18 +270,18 @@ class VitalDynamics:
 
     def plot(self):
         _fig, ax1 = plt.subplots(figsize=(16, 12))
-        birthrates = np.sum(self.model.birthrates, axis=1)
-        mortalityrates = np.sum(self.model.mortalityrates, axis=1)
-        ax1.plot(birthrates, label="Daily Birth Rates", color="green")
-        ax1.plot(mortalityrates, label="Daily Mortality Rates", color="red")
+        births = np.sum(self.model.nodes.births, axis=1)
+        deaths = np.sum(self.model.nodes.deaths, axis=1)
+        ax1.plot(births, label="Daily Births", color="green")
+        ax1.plot(deaths, label="Daily Deaths", color="red")
         ax1.set_xlabel("Tick")
         ax1.set_ylabel("Count")
-        ax1.set_title("Birth Rates and Mortality Rates Over Time")
+        ax1.set_title("Births and Deaths Over Time")
         ax1.legend(loc="upper left")
 
         ax2 = ax1.twinx()
-        ax2.plot(np.cumsum(birthrates), color="tab:green", linestyle="--", label="Cumulative Birth Rates")
-        ax2.plot(np.cumsum(mortalityrates), color="tab:red", linestyle="--", label="Cumulative Mortality Rates")
+        ax2.plot(np.cumsum(births), color="tab:green", linestyle="--", label="Cumulative Births")
+        ax2.plot(np.cumsum(deaths), color="tab:red", linestyle="--", label="Cumulative Deaths")
         ax2.set_ylabel("Cumulative Count")
         ax2.legend(loc="upper right")
         plt.show()
@@ -297,26 +290,29 @@ class VitalDynamics:
 
 
 class ConstantPopVitalDynamics:
-    def __init__(self, model):
+    def __init__(self, model, birthrates=None, mortalityrates=None):
         self.model = model
         self.model.nodes.add_vector_property("births", model.params.nticks + 1, dtype=np.uint32)
         self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.uint32)
 
-        if hasattr(self.model, "birthrates"):
-            birthrates = self.model.birthrates
+        if birthrates is not None:
+            self.birthrates = birthrates
         else:
-            birthrates = RateMap.from_scalar(0.0, model.params.nticks, model.nodes.count).rates
+            self.birthrates = RateMap.from_scalar(0.0, model.nodes.count, model.params.nticks).rates
             warnings.warn("No birthrates found in model; defaulting to zero birthrates.", stacklevel=2)
 
-        if hasattr(self.model, "mortalityrates"):
-            mortalityrates = self.model.mortalityrates
+        if mortalityrates is not None:
+            self.mortalityrates = mortalityrates
         else:
-            mortalityrates = RateMap.from_scalar(0.0, model.params.nticks, model.nodes.count).rates
+            self.mortalityrates = RateMap.from_scalar(0.0, model.nodes.count, model.params.nticks).rates
             warnings.warn("No mortalityrates found in model; defaulting to zero mortalityrates.", stacklevel=2)
 
-        self.rates = np.maximum(birthrates, mortalityrates)
+        # We will use the larger of birthrates or mortalityrates for recycling
+        self.rates = np.maximum(self.birthrates, self.mortalityrates)
 
-        assert self.rates.shape == (self.model.params.nticks, self.model.nodes.count), "Births/deaths array shape mismatch"
+        assert self.rates.shape == (self.model.params.nticks, self.model.nodes.count), (
+            f"Births ({self.birthrates.shape})/deaths ({self.mortalityrates.shape}) array shape mismatch, expected ({self.model.params.nticks}, {self.model.nodes.count})"
+        )
 
         return
 
@@ -381,22 +377,20 @@ class ConstantPopVitalDynamics:
 
 
 class Model:
-    def __init__(self, scenario, params, birthrates=None, mortalityrates=None, skip_capacity: bool = False):
+    def __init__(self, scenario, params, birthrates=None, skip_capacity: bool = False):
         """
         Initialize the SI model.
 
         Args:
             scenario (GeoDataFrame): The scenario data containing per patch population, initial S and I counts, and geometry.
             params (PropertySet): The parameters for the model, including 'nticks' and 'beta'.
-            birthrates (np.ndarray, optional): Birth counts per patch per tick. Defaults to None.
-            deaths (np.ndarray, optional): Death counts per patch per tick. Defaults to None.
+            birthrates (np.ndarray, optional): Birth rates in CBR per patch per tick. Defaults to None.
             skip_capacity (bool, optional): If True, skips capacity checks. Defaults to False.
         """
         self.params = params
 
         num_nodes = max(np.unique(scenario.nodeid)) + 1
         self.birthrates = birthrates if birthrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
-        self.mortalityrates = mortalityrates if mortalityrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
         num_active = scenario.population.sum()
         if not skip_capacity:
             num_agents = estimate_capacity(self.birthrates, scenario.population).sum()
@@ -434,7 +428,6 @@ class Model:
         self.basemap_provider = ctx.providers.Esri.WorldImagery
 
         self._components = []
-        # self.on_birth = PubSub("on_birth")
 
         return
 
@@ -509,11 +502,22 @@ class Model:
 
             plt.show()
 
-        # Plot active population (S + I) and total deceased over time
+        pops = {
+            pop[0]: (pop[1], pop[2])
+            for pop in [
+                ("S", "Susceptible", "blue"),
+                ("E", "Exposed", "purple"),
+                ("I", "Infectious", "orange"),
+                ("R", "Recovered", "green"),
+            ]
+            if hasattr(self.nodes, pop[0])
+        }
+
         _fig, ax1 = plt.subplots(figsize=(10, 6))
-        active_population = self.nodes.S + self.nodes.I
+        active_population = sum([getattr(self.nodes, p) for p in pops])
         total_active = np.sum(active_population, axis=1)
-        ax1.plot(total_active, label="Active Population (S + I)", color="blue")
+        sumstr = " + ".join(p for p in pops)
+        ax1.plot(total_active, label=f"Active Population ({sumstr})", color="blue")
         ax1.set_xlabel("Tick")
         ax1.set_ylabel("Active Population", color="blue")
         ax1.tick_params(axis="y", labelcolor="blue")
@@ -534,16 +538,15 @@ class Model:
         plt.tight_layout()
         plt.show()
 
-        # Plot total S and total I over time
+        # Plot total pops over time
         _fig, ax1 = plt.subplots(figsize=(10, 6))
-        total_S = np.sum(self.nodes.S, axis=1)
-        total_I = np.sum(self.nodes.I, axis=1)
-        ax1.plot(total_S, label="Total Susceptible (S)", color="blue")
-        ax1.plot(total_I, label="Total Infectious (I)", color="orange")
+        totals = [(p, np.sum(getattr(self.nodes, p), axis=1)) for p in pops]
+        for pop, total in totals:
+            ax1.plot(total, label=f"Total {pops[pop][0]} ({pop})", color=pops[pop][1])
         ax1.set_xlabel("Tick")
         ax1.set_ylabel("Count")
         ax1.legend(loc="upper right")
-        plt.title("Total Susceptible and Infectious Over Time")
+        plt.title("Total Populations Over Time")
         plt.tight_layout()
         plt.show()
 

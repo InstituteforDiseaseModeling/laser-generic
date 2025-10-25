@@ -253,7 +253,7 @@ class Model:
                 gdf_merc = gdf.to_crs(epsg=3857)
                 pop = gdf_merc["population"].values
                 # Plot the basemap and shape outlines
-                _fig, ax = plt.subplots(figsize=(8, 8))
+                _fig, ax = plt.subplots(figsize=(16, 12))
                 bounds = gdf_merc.total_bounds  # [minx, miny, maxx, maxy]
                 xmid = (bounds[0] + bounds[2]) / 2
                 ymid = (bounds[1] + bounds[3]) / 2
@@ -286,11 +286,22 @@ class Model:
 
             plt.show()
 
-        # Plot active population (S + I + R) and total deceased over time
+        pops = {
+            pop[0]: (pop[1], pop[2])
+            for pop in [
+                ("S", "Susceptible", "blue"),
+                ("E", "Exposed", "purple"),
+                ("I", "Infectious", "orange"),
+                ("R", "Recovered", "green"),
+            ]
+            if hasattr(self.nodes, pop[0])
+        }
+
         _fig, ax1 = plt.subplots(figsize=(10, 6))
-        active_population = self.nodes.S + self.nodes.I + self.nodes.R
+        active_population = sum([getattr(self.nodes, p) for p in pops])
         total_active = np.sum(active_population, axis=1)
-        ax1.plot(total_active, label="Active Population (S + I + R)", color="blue")
+        sumstr = " + ".join(p for p in pops)
+        ax1.plot(total_active, label=f"Active Population ({sumstr})", color="blue")
         ax1.set_xlabel("Tick")
         ax1.set_ylabel("Active Population", color="blue")
         ax1.tick_params(axis="y", labelcolor="blue")
@@ -311,18 +322,15 @@ class Model:
         plt.tight_layout()
         plt.show()
 
-        # Plot total S, total I, total R over time
+        # Plot total pops over time
         _fig, ax1 = plt.subplots(figsize=(10, 6))
-        total_S = np.sum(self.nodes.S, axis=1)
-        total_I = np.sum(self.nodes.I, axis=1)
-        total_R = np.sum(self.nodes.R, axis=1)
-        ax1.plot(total_S, label="Total Susceptible (S)", color="blue")
-        ax1.plot(total_I, label="Total Infectious (I)", color="orange")
-        ax1.plot(total_R, label="Total Recovered (R)", color="green")
+        totals = [(p, np.sum(getattr(self.nodes, p), axis=1)) for p in pops]
+        for pop, total in totals:
+            ax1.plot(total, label=f"Total {pops[pop][0]} ({pop})", color=pops[pop][1])
         ax1.set_xlabel("Tick")
         ax1.set_ylabel("Count")
         ax1.legend(loc="upper right")
-        plt.title("Total Susceptible and Infectious Over Time")
+        plt.title("Total Populations Over Time")
         plt.tight_layout()
         plt.show()
 

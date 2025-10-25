@@ -184,7 +184,7 @@ if __name__ == "__main__":
         "--r0",
         type=float,
         default=1.386,
-        help="Basic reproduction number (R0) [1.151 for 25% attack fraction, 1.386=50%, and 1.848=75%]",
+        help="Basic reproduction number (R0) [1.151 for 25%% attack fraction, 1.386=50%%, and 1.848=75%%]",
     )
 
     parser.add_argument("-g", "--grid", action="store_true", help="Run grid test")
