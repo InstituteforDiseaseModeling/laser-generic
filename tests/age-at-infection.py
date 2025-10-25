@@ -1,14 +1,21 @@
 """
-Prompt:
+Prompt #1:
 Let's create an SEIR model with a custom Transmission component, based on SEIR.Transmission, which add a "doi" property to the people in the model, implements a new Numba-compiled function to run transmission including storing the current tick in doi when an agent is infected, and overriding the step() function to call this new Numba function with all the previous properties plus the current tick and the doi property array.
 Please implement in age-at-infection.py but you can reference code from test_seir.py and the implementation of TransmissionSE in components.py that the base SEIR model uses for Transmission.
 Do not modify code in any other file at this time.
+
+Prompt #2:
+Please revisit the implementation of the Numba function and the step function to more closely mirror the implementation in the base class, TransmissionSE in components.py.
+Note the force of infection setup, ft, in the base implementation outside the Numba function.
+The modified Numba function should merely include setting the date-of-infection, doi, in addition to the base implementation.
+Again, all changes should go into age-at-infection.py and no other files.
 """
 
 import numba as nb
 import numpy as np
 
 import laser_generic.models.SEIR as SEIR
+from utils import stdgrid
 
 
 class TransmissionWithDOI(SEIR.Transmission):
@@ -21,40 +28,45 @@ class TransmissionWithDOI(SEIR.Transmission):
 
     @staticmethod
     @nb.njit(nogil=True, parallel=True, cache=True)
-    def nb_transmission_step(states, etimers, nodeids, network, expdurdist, expdurmin, tick, doi):
-        n_people = states.shape[0]
-        n_nodes = network.shape[0]
-        # For each node, calculate force of infection
-        force = np.zeros(n_nodes, dtype=np.float32)
-        for i in range(n_nodes):
-            # Example: force proportional to exposed in node
-            force[i] = 0.0
-            for j in range(n_nodes):
-                force[i] += network[i, j] * (states[j] == 2)  # 2 = EXPOSED (adjust as needed)
-        # For each person, determine infection
-        for i in nb.prange(n_people):
-            if states[i] == 0:  # 0 = SUSCEPTIBLE
-                node = nodeids[i]
-                # Draw random for infection
-                if np.random.rand() < force[node]:
-                    states[i] = 2  # EXPOSED
-                    etimers[i] = max(expdurdist(), expdurmin)
+    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin, tick, doi):
+        for i in nb.prange(len(states)):
+            if states[i] == 0:  # State.SUSCEPTIBLE.value
+                draw = np.random.rand()
+                nid = nodeids[i]
+                if draw < ft[nid]:
+                    states[i] = 2  # State.EXPOSED.value
+                    etimers[i] = np.maximum(np.round(expdurdist()), expdurmin)
+                    exp_by_node[nb.get_thread_id(), nid] += 1
                     doi[i] = tick  # Record tick of infection
+        return
 
     def step(self, tick: int) -> None:
-        # Call the custom Numba transmission step
+        ft = self.model.nodes.forces[tick]
+        N = self.model.nodes.S[tick] + self.model.nodes.E[tick] + (I := self.model.nodes.I[tick])  # noqa: E741
+        if hasattr(self.model.nodes, "R"):
+            N += self.model.nodes.R[tick]
+        ft[:] = self.model.params.beta * I / N
+        transfer = ft[:, None] * self.model.network
+        ft += transfer.sum(axis=0)
+        ft -= transfer.sum(axis=1)
+        ft = -np.expm1(-ft)
+        exp_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(
             self.model.people.state,
-            self.model.people.etimer,
             self.model.people.nodeid,
-            self.model.network,
+            ft,
+            exp_by_node,
+            self.model.people.etimer,
             self.expdurdist,
             self.expdurmin,
             tick,
             self.model.people.doi,
         )
-        # Optionally, update node-level exposed counts, etc. as in base class
-        # ...existing code...
+        exp_by_node = exp_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)
+        self.model.nodes.S[tick + 1] -= exp_by_node
+        self.model.nodes.E[tick + 1] += exp_by_node
+        self.model.nodes.incidence[tick] = exp_by_node
+        return
 
 
 # Example usage in a test or simulation setup:
@@ -69,10 +81,15 @@ if __name__ == "__main__":
     EXPOSED_DURATION_SHAPE = 4.5
     EXPOSED_DURATION_SCALE = 1.0
 
-    scenario = ...  # Build scenario as in test_seir.py
+    scenario = stdgrid()  # Build scenario as in test_seir.py
+    scenario["S"] = scenario["population"] - 10
+    scenario["E"] = 0
+    scenario["I"] = 10
+    scenario["R"] = 0
     params = PropertySet({"nticks": NTICKS, "beta": R0 / INFECTIOUS_DURATION_MEAN})
     model = SEIR.Model(scenario, params)
-    expdist = dists.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
+    # expdist = dists.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
+    expdist = dists.normal(loc=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
     infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
     s = SEIR.Susceptible(model)
     e = SEIR.Exposed(model, expdist, infdist)
@@ -82,3 +99,7 @@ if __name__ == "__main__":
     model.components = [s, r, i, e, tx]
     model.run()
     # After run, model.people.doi contains tick of infection for each agent
+
+    model.plot()
+
+    print("done.")
