@@ -12,6 +12,14 @@ Again, all changes should go into age-at-infection.py and no other files.
 
 Prompt #3:
 Please import the State enum from SEIR and update the Numba compiled function to use the values of the enums rather than hardcoded integers for the states.
+
+Interlude
+
+Prompt #4:
+Our infections are dying out. We need an Importation component which will periodically infect some susceptible agents in each node.
+This component should take a value representing that period, e.g., 30 days or ticks, and an array with the number of new infections per node.
+On the given day(s), the component should look at the current number of susceptible agents in each node, the target number of infections, and probabilistically infect that number of susceptible agents in each node.
+Like the Transmission component, the step() function of this Importation component will have some NumPy code to calculate the per node probability of infection for susceptible agents and a Numba compiled function to process all the agents in parallel.
 """
 
 import numba as nb
@@ -77,6 +85,58 @@ class TransmissionWithDOI(SEIR.Transmission):
         return
 
 
+class Importation:
+    def __init__(self, model, period, new_infections_per_node):
+        self.model = model
+        self.period = period  # e.g., 30 (days/ticks)
+        self.new_infections_per_node = np.array(new_infections_per_node, dtype=np.int32)
+        self.state_enum = State
+
+    @staticmethod
+    @nb.njit(nogil=True, parallel=True, cache=True)
+    def nb_importation_step(states, nodeids, etimers, doi, tick, prob_per_node, exp_val):
+        for i in nb.prange(len(states)):
+            if states[i] == State.SUSCEPTIBLE.value:
+                nid = nodeids[i]
+                if np.random.rand() < prob_per_node[nid]:
+                    states[i] = exp_val
+                    etimers[i] = 1  # or use a distribution if desired
+                    doi[i] = tick
+        return
+
+    def step(self, tick: int) -> None:
+        # Only act on scheduled ticks
+        if tick % self.period != 0:
+            return
+        # For each node, determine susceptible agents
+        nodeids = self.model.people.nodeid
+        states = self.model.people.state
+        etimers = self.model.people.etimer
+        doi = self.model.people.doi
+        n_nodes = self.model.nodes.count
+        sus_counts = np.bincount(nodeids[states == self.state_enum.SUSCEPTIBLE.value], minlength=n_nodes)
+        # Calculate per-node probability to achieve target infections
+        prob_per_node = np.zeros(n_nodes, dtype=np.float32)
+        for nid in range(n_nodes):
+            target = self.new_infections_per_node[nid]
+            sus = sus_counts[nid]
+            if sus > 0 and target > 0:
+                prob_per_node[nid] = min(1.0, target / sus)
+            else:
+                prob_per_node[nid] = 0.0
+        self.nb_importation_step(
+            states,
+            nodeids,
+            etimers,
+            doi,
+            tick,
+            prob_per_node,
+            self.state_enum.EXPOSED.value,
+        )
+        # Optionally update node-level exposed counts
+        return
+
+
 # Example usage in a test or simulation setup:
 if __name__ == "__main__":
     # Build a model as in test_seir.py, but use TransmissionWithDOI
@@ -107,10 +167,13 @@ if __name__ == "__main__":
     i = SEIR.Infectious(model, infdist)
     r = SEIR.Recovered(model)
     tx = TransmissionWithDOI(model, expdist)
+    importation_period = 30
+    new_infections_per_node = [5] * model.nodes.count  # Infect 5 agents per node every period
+    importation = Importation(model, importation_period, new_infections_per_node)
     pyramid = AliasedDistribution(np.full(89, 1_000))
     survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
     vitals = SEIR.VitalDynamics(model, birthrates_map.rates, pyramid, survival)
-    model.components = [s, r, i, e, tx, vitals]
+    model.components = [s, r, i, e, tx, vitals, importation]
     label = f"SEIR with DOI (N={model.people.count:,}, Nodes={model.nodes.count:,})"
     model.run(label)
     # After run, model.people.doi contains tick of infection for each agent
