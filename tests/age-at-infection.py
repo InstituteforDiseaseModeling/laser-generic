@@ -16,8 +16,11 @@ Please import the State enum from SEIR and update the Numba compiled function to
 
 import numba as nb
 import numpy as np
+from laser_core.demographics import AliasedDistribution
+from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SEIR as SEIR
+from laser_generic.newutils import RateMap
 from utils import stdgrid
 
 State = SEIR.State
@@ -27,19 +30,19 @@ class TransmissionWithDOI(SEIR.Transmission):
     def __init__(self, model, expdurdist, expdurmin=1):
         super().__init__(model, expdurdist, expdurmin)
         # Add 'doi' property to people (default 0, dtype=int32)
-        self.model.people.add_scalar_property("doi", dtype=np.int32)
+        self.model.people.add_scalar_property("doi", dtype=np.int16)
         # Optionally initialize to -1 to indicate never infected
         self.model.people.doi[:] = -1
 
     @staticmethod
     @nb.njit(nogil=True, parallel=True, cache=True)
-    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin, tick, doi, sus_val, exp_val):
+    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin, tick, doi):
         for i in nb.prange(len(states)):
-            if states[i] == sus_val:  # State.SUSCEPTIBLE.value
+            if states[i] == State.SUSCEPTIBLE.value:
                 draw = np.random.rand()
                 nid = nodeids[i]
                 if draw < ft[nid]:
-                    states[i] = exp_val  # State.EXPOSED.value
+                    states[i] = State.EXPOSED.value
                     etimers[i] = np.maximum(np.round(expdurdist()), expdurmin)
                     exp_by_node[nb.get_thread_id(), nid] += 1
                     doi[i] = tick  # Record tick of infection
@@ -66,8 +69,6 @@ class TransmissionWithDOI(SEIR.Transmission):
             self.expdurmin,
             tick,
             self.model.people.doi,
-            State.SUSCEPTIBLE.value,
-            State.EXPOSED.value,
         )
         exp_by_node = exp_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)
         self.model.nodes.S[tick + 1] -= exp_by_node
@@ -82,19 +83,22 @@ if __name__ == "__main__":
     import laser_core.distributions as dists
     from laser_core import PropertySet
 
-    NTICKS = 365
-    R0 = 1.386
+    NTICKS = 3650
+    R0 = 10  # measles-ish 1.386
     INFECTIOUS_DURATION_MEAN = 7.0
     EXPOSED_DURATION_SHAPE = 4.5
     EXPOSED_DURATION_SCALE = 1.0
 
-    scenario = stdgrid()  # Build scenario as in test_seir.py
-    scenario["S"] = scenario["population"] - 10
+    scenario = stdgrid(5, 5)  # Build scenario as in test_seir.py
+    init_susceptible = np.round(scenario.population / (R0 - 1)).astype(np.int32)  # 1/R0 already recovered
+    init_infected = np.round(0.04 * scenario.population).astype(np.int32)  # 4% prevalence
+    scenario["S"] = init_susceptible
     scenario["E"] = 0
-    scenario["I"] = 10
-    scenario["R"] = 0
+    scenario["I"] = init_infected
+    scenario["R"] = scenario.population - init_susceptible - init_infected
     params = PropertySet({"nticks": NTICKS, "beta": R0 / INFECTIOUS_DURATION_MEAN})
-    model = SEIR.Model(scenario, params)
+    birthrates_map = RateMap.from_scalar(35, nsteps=NTICKS, nnodes=len(scenario))
+    model = SEIR.Model(scenario, params, birthrates=birthrates_map.rates)
     # expdist = dists.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
     expdist = dists.normal(loc=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
     infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
@@ -103,10 +107,23 @@ if __name__ == "__main__":
     i = SEIR.Infectious(model, infdist)
     r = SEIR.Recovered(model)
     tx = TransmissionWithDOI(model, expdist)
-    model.components = [s, r, i, e, tx]
-    model.run()
+    pyramid = AliasedDistribution(np.full(89, 1_000))
+    survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
+    vitals = SEIR.VitalDynamics(model, birthrates_map.rates, pyramid, survival)
+    model.components = [s, r, i, e, tx, vitals]
+    label = f"SEIR with DOI (N={model.people.count:,}, Nodes={model.nodes.count:,})"
+    model.run(label)
     # After run, model.people.doi contains tick of infection for each agent
 
     model.plot()
+
+    # # Plot histogram of age at infection. Exclude those never infected (doi == -1)
+    # i_infected = model.people.doi != -1
+    # aoi = model.people.doi[i_infected] - model.people.dob[i_infected]
+    # plt.hist(aoi, bins=range(aoi.min(), aoi.max() + 1), alpha=0.7)
+    # plt.xlabel("Age at Infection (Days)")
+    # plt.ylabel("Number of Infections")
+    # plt.title(label)
+    # plt.show()
 
     print("done.")
