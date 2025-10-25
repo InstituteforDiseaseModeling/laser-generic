@@ -45,8 +45,6 @@ class Default(unittest.TestCase):
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
             birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
-            cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
             R0 = 1.2
             infectious_duration_mean = 7.0
@@ -54,19 +52,19 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIS.Model(scenario, params, birthrates=birthrate_map.rates, mortalityrates=mortality_map.rates)
+                model = SIS.Model(scenario, params, birthrates=birthrate_map.rates)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
-                model.pyramid = AliasedDistribution(np.full(89, 1_000))
+                pyramid = AliasedDistribution(np.full(89, 1_000))
                 # The survival function will return the probability of surviving past each age.
-                model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
+                survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SIS.Susceptible(model)
                 i = SIS.Infectious(model, infdist)
                 tx = SIS.Transmission(model, infdist)
-                vitals = SIS.VitalDynamics(model)
+                vitals = SIS.VitalDynamics(model, birthrate_map.rates, pyramid, survival)
                 model.components = [s, i, tx, vitals]
 
                 model.validating = VALIDATING
@@ -103,8 +101,6 @@ class Default(unittest.TestCase):
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
             birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
-            cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
-            mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
             R0 = 1.2
             infectious_duration_mean = 7.0
@@ -112,19 +108,19 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIS.Model(scenario, params, birthrate_map.rates, mortality_map.rates)
+                model = SIS.Model(scenario, params, birthrate_map.rates)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
-                model.pyramid = AliasedDistribution(np.full(89, 1_000))
+                pyramid = AliasedDistribution(np.full(89, 1_000))
                 # The survival function will return the probability of surviving past each age.
-                model.survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
+                survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SIS.Susceptible(model)
                 i = SIS.Infectious(model, infdist)
                 tx = SIS.Transmission(model, infdist)
-                vitals = SIS.VitalDynamics(model)
+                vitals = SIS.VitalDynamics(model, birthrate_map.rates, pyramid, survival)
                 model.components = [s, i, tx, vitals]
 
                 model.validating = VALIDATING

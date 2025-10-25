@@ -155,14 +155,11 @@ class Infectious:
 
 
 class VitalDynamics:
-    def __init__(self, model):
+    def __init__(self, model, birthrates, pyramid, survival):
         self.model = model
-
-        # This component requires these model properties
-        assert hasattr(self.model, "birthrates")
-        assert hasattr(self.model, "mortalityrates")
-        assert hasattr(self.model, "pyramid")
-        assert hasattr(self.model, "survival")
+        self.birthrates = birthrates
+        self.pyramid = pyramid
+        self.survival = survival
 
         # Date-Of-Birth and Date-Of-Death properties per agent
         self.model.people.add_property("dob", dtype=np.int16)
@@ -172,8 +169,6 @@ class VitalDynamics:
         self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.uint32)
 
         # Initialize starting population
-        self.pyramid = self.model.pyramid
-        self.survival = self.model.survival
         dobs = self.model.people.dob[0 : self.model.people.count]
         dods = self.model.people.dod[0 : self.model.people.count]
         sample_dobs(dobs, self.pyramid, tick=0)
@@ -247,7 +242,7 @@ class VitalDynamics:
         self.model.nodes.deaths[tick] = deceased_S + deceased_I  # Record
 
         # Births in one fell swoop
-        rates = np.power(1.0 + self.model.birthrates[tick] / 1000, 1.0 / 365) - 1.0
+        rates = np.power(1.0 + self.birthrates[tick] / 1000, 1.0 / 365) - 1.0
         # Use "tomorrow's" population which accounts for mortality above.
         N = self.model.nodes.S[tick + 1] + self.model.nodes.I[tick + 1]
         births = np.round(np.random.poisson(rates * N)).astype(np.uint32)
@@ -286,7 +281,7 @@ class VitalDynamics:
 
 
 class Model:
-    def __init__(self, scenario, params, birthrates=None, mortalityrates=None, skip_capacity: bool = False):
+    def __init__(self, scenario, params, birthrates=None, skip_capacity: bool = False):
         """
         Initialize the SI model.
 
@@ -294,14 +289,12 @@ class Model:
             scenario (GeoDataFrame): The scenario data containing per patch population, initial S and I counts, and geometry.
             params (PropertySet): The parameters for the model, including 'nticks' and 'beta'.
             birthrates (np.ndarray, optional): Birth rates in CBR per patch per tick. Defaults to None.
-            mortalityrates (np.ndarray, optional): Mortality rates in count/1000 per patch per tick. Defaults to None.
             skip_capacity (bool, optional): If True, skips capacity checks. Defaults to False.
         """
         self.params = params
 
         num_nodes = max(np.unique(scenario.nodeid)) + 1
         self.birthrates = birthrates if birthrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
-        self.mortalityrates = mortalityrates if mortalityrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
         num_active = scenario.population.sum()
         if not skip_capacity:
             num_agents = estimate_capacity(self.birthrates, scenario.population).sum()
@@ -380,7 +373,7 @@ class Model:
                 gdf_merc = gdf.to_crs(epsg=3857)
                 pop = gdf_merc["population"].values
                 # Plot the basemap and shape outlines
-                _fig, ax = plt.subplots(figsize=(8, 8))
+                _fig, ax = plt.subplots(figsize=(16, 12))
                 bounds = gdf_merc.total_bounds  # [minx, miny, maxx, maxy]
                 xmid = (bounds[0] + bounds[2]) / 2
                 ymid = (bounds[1] + bounds[3]) / 2
@@ -413,11 +406,22 @@ class Model:
 
             plt.show()
 
-        # Plot active population (S + I) and total deceased over time
+        pops = {
+            pop[0]: (pop[1], pop[2])
+            for pop in [
+                ("S", "Susceptible", "blue"),
+                ("E", "Exposed", "purple"),
+                ("I", "Infectious", "orange"),
+                ("R", "Recovered", "green"),
+            ]
+            if hasattr(self.nodes, pop[0])
+        }
+
         _fig, ax1 = plt.subplots(figsize=(10, 6))
-        active_population = self.nodes.S + self.nodes.I
+        active_population = sum([getattr(self.nodes, p) for p in pops])
         total_active = np.sum(active_population, axis=1)
-        ax1.plot(total_active, label="Active Population (S + I)", color="blue")
+        sumstr = " + ".join(p for p in pops)
+        ax1.plot(total_active, label=f"Active Population ({sumstr})", color="blue")
         ax1.set_xlabel("Tick")
         ax1.set_ylabel("Active Population", color="blue")
         ax1.tick_params(axis="y", labelcolor="blue")
@@ -438,16 +442,15 @@ class Model:
         plt.tight_layout()
         plt.show()
 
-        # Plot total S and total I over time
+        # Plot total pops over time
         _fig, ax1 = plt.subplots(figsize=(10, 6))
-        total_S = np.sum(self.nodes.S, axis=1)
-        total_I = np.sum(self.nodes.I, axis=1)
-        ax1.plot(total_S, label="Total Susceptible (S)", color="blue")
-        ax1.plot(total_I, label="Total Infectious (I)", color="orange")
+        totals = [(p, np.sum(getattr(self.nodes, p), axis=1)) for p in pops]
+        for pop, total in totals:
+            ax1.plot(total, label=f"Total {pops[pop][0]} ({pop})", color=pops[pop][1])
         ax1.set_xlabel("Tick")
         ax1.set_ylabel("Count")
         ax1.legend(loc="upper right")
-        plt.title("Total Susceptible and Infectious Over Time")
+        plt.title("Total Populations Over Time")
         plt.tight_layout()
         plt.show()
 

@@ -29,7 +29,7 @@ INFECTIOUS_DURATION_MEAN = 7.0
 WANING_DURATION_MEAN = 30.0
 
 
-def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None, mortalityrates=None, pyramid=None, survival=None):
+def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None, pyramid=None, survival=None):
     scenario = stdgrid(M=m, N=n, population_fn=pop_fn)
     scenario["S"] = scenario["population"]
     assert np.all(scenario["S"] >= init_infected), "Initial susceptible population must be >= initial infected"
@@ -43,7 +43,7 @@ def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None
     params = PropertySet({"nticks": NTICKS, "beta": beta})
 
     with ts.start("Model Initialization"):
-        model = SIRS.Model(scenario, params, birthrates=birthrates, mortalityrates=mortalityrates)
+        model = SIRS.Model(scenario, params, birthrates=birthrates)
 
         infdurdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
         wandurdist = dists.normal(loc=WANING_DURATION_MEAN, scale=5)
@@ -52,12 +52,11 @@ def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None
         i = SIRS.Infectious(model, infdurdist, wandurdist)
         r = SIRS.Recovered(model, wandurdist)
         tx = SIRS.Transmission(model, infdurdist)
-        if birthrates is not None or mortalityrates is not None:
+        if birthrates is not None:
             assert birthrates is not None, "Birthrates must be provided for vital dynamics."
-            assert mortalityrates is not None, "Mortalityrates must be provided for vital dynamics."
-            model.pyramid = pyramid
-            model.survival = survival
-            vitals = SIRS.VitalDynamics(model)
+            assert pyramid is not None, "Pyramid must be provided for vital dynamics."
+            assert survival is not None, "Survival function must be provided for vital dynamics."
+            vitals = SIRS.VitalDynamics(model, birthrates, pyramid, survival)
             # Recovered has to run _before_ Infectious to move people correctly (Infectious updates model.nodes.R)
             model.components = [s, r, i, tx, vitals]
         else:
@@ -93,8 +92,6 @@ class Default(unittest.TestCase):
             with ts.start("setup"):
                 cbr = np.random.uniform(5, 35, EM * EN)  # CBR = per 1,000 per year
                 birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
-                cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
-                mortality_map = RateMap.from_scalar(cdr, nnodes=EM * EN, nsteps=NTICKS)
 
                 pyramid = AliasedDistribution(np.full(89, 1_000))  # [0, 88] with equal probability
                 survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())  # equal probability each year
@@ -106,7 +103,6 @@ class Default(unittest.TestCase):
                     init_infected=10,
                     init_recovered=0,
                     birthrates=birthrate_map.rates,
-                    mortalityrates=mortality_map.rates,
                     pyramid=pyramid,
                     survival=survival,
                 )
@@ -131,8 +127,6 @@ class Default(unittest.TestCase):
             with ts.start("setup"):
                 cbr = np.random.uniform(5, 35, PEE)  # CBR = per 1,000 per year
                 birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
-                cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
-                mortality_map = RateMap.from_scalar(cdr, nnodes=PEE, nsteps=NTICKS)
 
                 pyramid = AliasedDistribution(np.full(89, 1_000))  # [0, 88] with equal probability
                 survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())  # equal probability each year
@@ -144,7 +138,6 @@ class Default(unittest.TestCase):
                     init_infected=10,
                     init_recovered=0,
                     birthrates=birthrate_map.rates,
-                    mortalityrates=mortality_map.rates,
                     pyramid=pyramid,
                     survival=survival,
                 )
@@ -179,7 +172,7 @@ if __name__ == "__main__":
         "--r0",
         type=float,
         default=1.386,
-        help="Basic reproduction number (R0) [1.151 for 25% attack fraction, 1.386=50%, and 1.848=75%]",
+        help="Basic reproduction number (R0) [1.151 for 25%% attack fraction, 1.386=50%%, and 1.848=75%%]",
     )
     parser.add_argument("-i", "--infdur", type=float, default=7.0, help="Mean infectious duration in days")
     parser.add_argument("-w", "--wandur", type=float, default=30.0, help="Mean waning duration in days")
