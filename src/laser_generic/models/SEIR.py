@@ -133,6 +133,12 @@ class VitalDynamics:
             self.model.people.nodeid[istart:iend] = np.repeat(np.arange(self.model.nodes.count, dtype=np.uint16), births)
             # State.SUSCEPTIBLE.value is the default
             # self.model.people.state[istart:iend] = State.SUSCEPTIBLE.value
+
+            dobs = self.model.people.dob[istart:iend]
+            dods = self.model.people.dod[istart:iend]
+            dobs[:] = tick
+            sample_dods(dobs, dods, self.survival, tick=tick)
+
             # state(t+1) = state(t) + ∆state(t)
             self.model.nodes.S[tick + 1] += births
             # Record today's ∆

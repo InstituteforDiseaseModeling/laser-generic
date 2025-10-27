@@ -86,54 +86,49 @@ class TransmissionWithDOI(SEIR.Transmission):
 
 
 class Importation:
-    def __init__(self, model, period, new_infections_per_node):
+    def __init__(self, model, period, new_infections, infdurdist):
         self.model = model
         self.period = period  # e.g., 30 (days/ticks)
-        self.new_infections_per_node = np.array(new_infections_per_node, dtype=np.int32)
-        self.state_enum = State
+        self.new_infections = np.array(new_infections, dtype=np.int32)
+        self.infdurdist = infdurdist
 
     @staticmethod
     @nb.njit(nogil=True, parallel=True, cache=True)
-    def nb_importation_step(states, nodeids, etimers, doi, tick, prob_per_node, exp_val):
+    def nb_importation_step(states, probabilities, nodeids, itimers, infdurdist, inf_by_node):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
-                nid = nodeids[i]
-                if np.random.rand() < prob_per_node[nid]:
-                    states[i] = exp_val
-                    etimers[i] = 1  # or use a distribution if desired
-                    doi[i] = tick
+                if np.random.rand() < probabilities[nodeids[i]]:
+                    states[i] = State.INFECTIOUS.value
+                    itimers[i] = infdurdist()
+                    inf_by_node[nb.get_thread_id(), nodeids[i]] += 1
+
         return
 
     def step(self, tick: int) -> None:
         # Only act on scheduled ticks
         if tick % self.period != 0:
             return
-        # For each node, determine susceptible agents
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        etimers = self.model.people.etimer
-        doi = self.model.people.doi
-        n_nodes = self.model.nodes.count
-        sus_counts = np.bincount(nodeids[states == self.state_enum.SUSCEPTIBLE.value], minlength=n_nodes)
+
         # Calculate per-node probability to achieve target infections
-        prob_per_node = np.zeros(n_nodes, dtype=np.float32)
-        for nid in range(n_nodes):
-            target = self.new_infections_per_node[nid]
-            sus = sus_counts[nid]
-            if sus > 0 and target > 0:
-                prob_per_node[nid] = min(1.0, target / sus)
-            else:
-                prob_per_node[nid] = 0.0
+
+        susceptible = self.model.nodes.S[tick]
+        non_zero = np.nonzero(susceptible)[0]
+        probabilities = np.zeros_like(susceptible, dtype=np.float32)
+        probabilities[non_zero] = np.minimum(self.new_infections[non_zero] / susceptible[non_zero], 1.0)
+        # TODO - did we actually calculate a rate? Should we map to a probability with -np.expm1(-rate)?
+
         self.nb_importation_step(
-            states,
-            nodeids,
-            etimers,
-            doi,
-            tick,
-            prob_per_node,
-            self.state_enum.EXPOSED.value,
+            self.model.people.state,
+            probabilities,
+            self.model.people.nodeid,
+            self.model.people.itimer,
+            self.infdurdist,
+            inf_by_node := np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32),
         )
-        # Optionally update node-level exposed counts
+        inf_by_node = inf_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)
+        self.model.nodes.S[tick + 1] -= inf_by_node
+        self.model.nodes.I[tick + 1] += inf_by_node
+
         return
 
 
@@ -150,8 +145,9 @@ if __name__ == "__main__":
     EXPOSED_DURATION_SCALE = 1.0
 
     scenario = stdgrid(5, 5)  # Build scenario as in test_seir.py
-    init_susceptible = np.round(scenario.population / (R0 - 1)).astype(np.int32)  # 1/R0 already recovered
-    init_infected = np.round(0.04 * scenario.population).astype(np.int32)  # 4% prevalence
+    init_susceptible = np.round(scenario.population / R0).astype(np.int32)  # 1/R0 already recovered
+    equilibrium_prevalence = 9000 / 12_000_000
+    init_infected = np.round(equilibrium_prevalence * scenario.population).astype(np.int32)
     scenario["S"] = init_susceptible
     scenario["E"] = 0
     scenario["I"] = init_infected
@@ -167,9 +163,7 @@ if __name__ == "__main__":
     i = SEIR.Infectious(model, infdist)
     r = SEIR.Recovered(model)
     tx = TransmissionWithDOI(model, expdist)
-    importation_period = 30
-    new_infections_per_node = [5] * model.nodes.count  # Infect 5 agents per node every period
-    importation = Importation(model, importation_period, new_infections_per_node)
+    importation = Importation(model, period=30, new_infections=[5] * model.nodes.count, infdurdist=infdist)
     pyramid = AliasedDistribution(np.full(89, 1_000))
     survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
     vitals = SEIR.VitalDynamics(model, birthrates_map.rates, pyramid, survival)
@@ -178,15 +172,18 @@ if __name__ == "__main__":
     model.run(label)
     # After run, model.people.doi contains tick of infection for each agent
 
-    model.plot()
+    # model.plot()
 
-    # # Plot histogram of age at infection. Exclude those never infected (doi == -1)
-    # i_infected = model.people.doi != -1
-    # aoi = model.people.doi[i_infected] - model.people.dob[i_infected]
-    # plt.hist(aoi, bins=range(aoi.min(), aoi.max() + 1), alpha=0.7)
-    # plt.xlabel("Age at Infection (Days)")
-    # plt.ylabel("Number of Infections")
-    # plt.title(label)
-    # plt.show()
+    # Let's look at people infected in the last year of the simulation, doi >= NTICKS - 365
+    recent_infections = (model.people.doi >= (NTICKS - 365)) & (model.people.doi != -1)
+    aoi_recent = model.people.doi[recent_infections] - model.people.dob[recent_infections]
+    import matplotlib.pyplot as plt
+
+    plt.hist(aoi_recent, bins=range(aoi_recent.min(), aoi_recent.max() + 1), alpha=0.7)
+    plt.xlabel("Age at Infection (Days)")
+    plt.ylabel("Number of Infections")
+    plt.title(label)
+    plt.tight_layout()
+    plt.show()
 
     print("done.")
