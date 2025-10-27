@@ -20,7 +20,7 @@
 
     Full details on all classes and functions.
 
-    [:octicons-arrow-right-24: API reference](autoapi/laser_generic/index.md)
+    [:octicons-arrow-right-24: API reference](reference/laser-generic.md)
 
 -   :material-new-box:{ .lg .middle } __What's new__
 
