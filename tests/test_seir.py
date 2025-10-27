@@ -28,7 +28,6 @@ R0 = 1.386  # final attack fraction of 50%
 EXPOSED_DURATION_SHAPE = 4.5
 EXPOSED_DURATION_SCALE = 1.0
 INFECTIOUS_DURATION_MEAN = 7.0
-WANING_DURATION_MEAN = 30.0
 
 
 def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None, pyramid=None, survival=None):
@@ -181,7 +180,7 @@ if __name__ == "__main__":
         help="Basic reproduction number (R0) [1.151 for 25%% attack fraction, 1.386=50%%, and 1.848=75%%]",
     )
     parser.add_argument("-i", "--infdur", type=float, default=7.0, help="Mean infectious duration in days")
-    parser.add_argument("-w", "--wandur", type=float, default=30.0, help="Mean waning duration in days")
+    parser.add_argument("-e", "--expdur", type=float, default=4.5, help="Mean exposure duration in days")
 
     parser.add_argument("-g", "--grid", action="store_true", help="Run grid test")
     parser.add_argument("-l", "--linear", action="store_true", help="Run linear test")
@@ -198,7 +197,7 @@ if __name__ == "__main__":
     NTICKS = args.ticks
     R0 = args.r0
     INFECTIOUS_DURATION_MEAN = args.infdur
-    WANING_DURATION_MEAN = args.wandur
+    EXPOSURE_DURATION_MEAN = args.expdur
 
     EM = args.m
     EN = args.n
