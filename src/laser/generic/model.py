@@ -21,14 +21,14 @@ from datetime import datetime
 import click
 import numpy as np
 import pandas as pd
-from laser.core.laserframe import LaserFrame
-from laser.core.propertyset import PropertySet
-from laser.core.random import seed as seed_prng
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
 
+from laser.core.laserframe import LaserFrame
+from laser.core.propertyset import PropertySet
+from laser.core.random import seed as seed_prng
 from laser.generic import Births
 from laser.generic import Births_ConstantPop
 
