@@ -210,6 +210,206 @@ class Exposed:
         return
 
 
+class InfectiousSI:
+    """Infectious component for an SI model - no recovery."""
+
+    def __init__(self, model):
+        self.model = model
+        self.model.nodes.add_vector_property("I", model.params.nticks + 1)
+
+        # convenience
+        nodeids = self.model.people.nodeid
+        populations = self.model.scenario.population.values
+
+        for node in range(self.model.nodes.count):
+            citizens = np.nonzero(nodeids == node)[0]
+            assert len(citizens) == populations[node], f"Found {len(citizens)} citizens in node {node} but expected {populations[node]}"
+            nseeds = self.model.scenario.I[node]
+            assert nseeds <= len(citizens), f"Node {node} has more initial infected ({nseeds}) than population ({len(citizens)})"
+            if nseeds > 0:
+                indices = np.random.choice(citizens, size=nseeds, replace=False)
+                self.model.people.state[indices] = State.INFECTIOUS.value
+
+        self.model.nodes.I[0] = self.model.scenario.I
+        assert np.all(self.model.nodes.S[0] + self.model.nodes.I[0] == self.model.scenario.population), (
+            "Initial S + I does not equal population"
+        )
+
+        return
+
+    def prevalidate_step(self, tick: int) -> None: ...
+
+    def postvalidate_step(self, tick: int) -> None:
+        nodeids = self.model.people.nodeid
+        state = self.model.people.state
+        assert np.all(
+            (expected := self.model.nodes.I[tick])
+            == (actual := np.bincount(nodeids, state == State.INFECTIOUS.value, minlength=self.model.nodes.count))
+        ), f"Infected census does not match infected counts.\nExpected: {expected}\nActual: {actual}"
+        assert np.all(self.model.nodes.I[tick + 1] == self.model.nodes.I[tick]), (
+            "Infected counts should not change outside of Transmission and VitalDynamics."
+        )
+
+        return
+
+    @validate(pre=prevalidate_step, post=postvalidate_step)
+    def step(self, tick: int) -> None:
+        """Step function for the Infected component.
+
+        Args:
+            tick (int): The current tick of the simulation.
+        """
+        # Propagate the number of infected individuals in each patch
+        # state(t+1) = state(t) + ∆state(t), initialize state(t+1) with state(t)
+        self.model.nodes.I[tick + 1] = self.model.nodes.I[tick]
+
+        return
+
+    def plot(self):
+        _fig, ax1 = plt.subplots()
+        for node in range(self.model.nodes.count):
+            ax1.plot(self.model.nodes.I[:, node], label=f"Node {node}")
+        ax1.set_xlabel("Tick")
+        ax1.set_ylabel("Infected (by Node)")
+        ax1.set_title("Infected over Time by Node")
+        ax1.legend(loc="upper left")
+
+        ax2 = ax1.twinx()
+        ax2.plot(np.sum(self.model.nodes.I, axis=1), color="black", linestyle="--", label="Total Infected")
+        ax2.set_ylabel("Total Infected")
+        ax2.legend(loc="upper right")
+
+        plt.show()
+
+        return
+
+
+class InfectiousIS:
+    def __init__(self, model, infdurdist, infdurmin=1):
+        self.model = model
+        self.model.people.add_scalar_property("itimer", dtype=np.uint8)
+        self.model.nodes.add_vector_property("I", model.params.nticks + 1, dtype=np.int32)
+        self.model.nodes.add_vector_property("recovered", model.params.nticks + 1, dtype=np.uint32)
+
+        self.infdurdist = infdurdist
+        self.infdurmin = infdurmin
+
+        # convenience
+        nodeids = self.model.people.nodeid
+        populations = self.model.scenario.population.values
+
+        for node in range(self.model.nodes.count):
+            nseeds = self.model.scenario.I[node]
+            if nseeds > 0:
+                i_citizens = np.nonzero(nodeids == node)[0]
+                assert len(i_citizens) == populations[node], (
+                    f"Found {len(i_citizens)} citizens in node {node} but expected {populations[node]}"
+                )
+                assert nseeds <= len(i_citizens), f"Node {node} has more initial infectious ({nseeds}) than population ({len(i_citizens)})"
+                i_infectious = np.random.choice(i_citizens, size=nseeds, replace=False)
+                self.model.people.state[i_infectious] = State.INFECTIOUS.value
+                samples = dists.sample_floats(self.infdurdist, np.zeros(nseeds, dtype=np.int32))
+                samples = np.round(samples)
+                samples = np.maximum(samples, self.infdurmin).astype(self.model.people.itimer.dtype)
+                self.model.people.itimer[i_infectious] = samples
+                assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
+
+        self.model.nodes.I[0] = self.model.scenario.I
+        assert np.all(self.model.nodes.S[0] + self.model.nodes.I[0] == self.model.scenario.population), (
+            "Initial S + I does not equal population"
+        )
+
+        return
+
+    def prevalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.I[tick] >= 0), "Infected counts must be non-negative"
+        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
+        assert np.all(self.model.people.itimer[i_infectious] > 0), "Infected individuals should have itimer > 0"
+        i_non_zero = np.nonzero(self.model.people.itimer > 0)[0]
+        assert np.all(self.model.people.state[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
+
+        states = self.model.people.state
+        itimers = self.model.people.itimer
+
+        i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
+        assert np.all(itimers[i_infectious] > 0), "Infected individuals should have itimer > 0"
+        i_non_zero = np.nonzero(itimers > 0)[0]
+        assert np.all(states[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+
+        nodeids = self.model.people.nodeid
+        # nodes.I should match count of infectious by node
+        assert np.all(
+            self.model.nodes.I[tick + 1] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
+        ), "Infected census does not match infectious counts (by state)."
+        assert np.all(self.model.nodes.I[tick + 1] == np.bincount(nodeids, itimers > 0, minlength=self.model.nodes.count)), (
+            "Infected census does not match infectious counts (by itimer)."
+        )
+
+        return
+
+    @staticmethod
+    @nb.njit(
+        # (nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
+    def nb_infectious_step(states, itimers, recovered, nodeids):
+        for i in nb.prange(len(states)):
+            if states[i] == State.INFECTIOUS.value:
+                itimers[i] -= 1
+                if itimers[i] == 0:
+                    states[i] = State.SUSCEPTIBLE.value
+                    recovered[nb.get_thread_id(), nodeids[i]] += 1
+
+        return
+
+    @validate(pre=prevalidate_step, post=postvalidate_step)
+    def step(self, tick: int) -> None:
+        """Step function for the Infected component.
+
+        Args:
+            tick (int): The current tick of the simulation.
+        """
+        # Propagate the number of infectious individuals in each patch
+        # state(t+1) = state(t) + ∆state(t), initialize state(t+1) with state(t)
+        self.model.nodes.I[tick + 1] = self.model.nodes.I[tick]
+
+        recovered_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
+        self.nb_infectious_step(self.model.people.state, self.model.people.itimer, recovered_by_node, self.model.people.nodeid)
+        recovered_by_node = recovered_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
+
+        # state(t+1) = state(t) + ∆state(t)
+        self.model.nodes.S[tick + 1] += recovered_by_node
+        self.model.nodes.I[tick + 1] -= recovered_by_node
+        # Record today's ∆
+        self.model.nodes.recovered[tick] = recovered_by_node
+
+        return
+
+    def plot(self):
+        _fig, ax1 = plt.subplots()
+        for node in range(self.model.nodes.count):
+            ax1.plot(self.model.nodes.I[:, node], label=f"Node {node}")
+        ax1.set_xlabel("Tick")
+        ax1.set_ylabel("Infected (by Node)")
+        ax1.set_title("Infected over Time by Node")
+        ax1.legend(loc="upper left")
+
+        ax2 = ax1.twinx()
+        ax2.plot(np.sum(self.model.nodes.I, axis=1), color="black", linestyle="--", label="Total Infected")
+        ax2.set_ylabel("Total Infected")
+        ax2.legend(loc="upper right")
+        plt.show()
+
+        return
+
+
 class InfectiousIR:
     def __init__(self, model, infdurdist, infdurmin=1):
         self.model = model
@@ -677,6 +877,73 @@ class RecoveredRS:
         ax2.set_ylabel("Count")
         ax2.set_title("Total Recovered and Total Waned Over Time")
         ax2.legend(loc="upper right")
+        plt.show()
+
+        return
+
+
+class TransmissionSIX:
+    """Transmission component for a model S -> I and no recovery."""
+
+    def __init__(self, model):
+        self.model = model
+        self.model.nodes.add_vector_property("forces", model.params.nticks + 1, dtype=np.float32)
+        self.model.nodes.add_vector_property("incidence", model.params.nticks + 1, dtype=np.uint32)
+
+        return
+
+    @staticmethod
+    @nb.njit(
+        # (nb.int8[:], nb.uint16[:], nb.float32[:], nb.uint32[:, :]),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
+    def nb_transmission_step(states, nodeids, ft, inf_by_node):
+        for i in nb.prange(len(states)):
+            if states[i] == State.SUSCEPTIBLE.value:
+                # Check for infection
+                draw = np.random.rand()
+                nid = nodeids[i]
+                if draw < ft[nid]:
+                    states[i] = State.INFECTIOUS.value
+                    inf_by_node[nb.get_thread_id(), nid] += 1
+
+        return
+
+    def step(self, tick: int) -> None:
+        ft = self.model.nodes.forces[tick]
+        N = self.model.nodes.S[tick] + self.model.nodes.I[tick]
+        ft[:] = self.model.params.beta * self.model.nodes.I[tick] / N
+        transfer = ft[:, None] * self.model.network
+        ft += transfer.sum(axis=0)
+        ft -= transfer.sum(axis=1)
+        ft = -np.expm1(-ft)  # Convert to probability of infection
+
+        inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
+        self.nb_transmission_step(
+            self.model.people.state,
+            self.model.people.nodeid,
+            ft,
+            inf_by_node,
+        )
+        inf_by_node = inf_by_node.sum(axis=0)  # Sum over threads
+
+        # state(t+1) = state(t) + ∆state(t)
+        self.model.nodes.S[tick + 1] -= inf_by_node
+        self.model.nodes.I[tick + 1] += inf_by_node
+        # Record today's ∆
+        self.model.nodes.incidence[tick] = inf_by_node
+
+        return
+
+    def plot(self):
+        for node in range(self.model.nodes.count):
+            plt.plot(self.model.nodes.forces[:-1, node], label=f"Node {node}")
+        plt.xlabel("Tick")
+        plt.ylabel("Force of Infection")
+        plt.title("Force of Infection over Time by Node")
+        plt.legend()
         plt.show()
 
         return

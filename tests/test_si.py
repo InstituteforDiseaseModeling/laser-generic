@@ -48,7 +48,7 @@ class Default(unittest.TestCase):
                 survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SI.Susceptible(model)
-                i = SI.Infected(model)
+                i = SI.Infectious(model)
                 tx = SI.Transmission(model)
                 vitals = SI.VitalDynamics(model, birthrate_map.values, pyramid=pyramid, survival=survival)
                 model.components = [s, i, tx, vitals]
@@ -91,7 +91,7 @@ class Default(unittest.TestCase):
                 survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
 
                 s = SI.Susceptible(model)
-                i = SI.Infected(model)
+                i = SI.Infectious(model)
                 tx = SI.Transmission(model)
                 vitals = SI.VitalDynamics(model, birthrate_map.values, pyramid=pyramid, survival=survival)
                 model.components = [s, i, tx, vitals]
@@ -130,7 +130,7 @@ class Default(unittest.TestCase):
 
                 model.components = [
                     SI.Susceptible(model),
-                    SI.Infected(model),
+                    SI.Infectious(model),
                     # Send in zero mortality rates to prevent warning.
                     SI.ConstantPopVitalDynamics(
                         model, birthrate_map.values, ValuesMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1).values
