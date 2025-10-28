@@ -14,8 +14,8 @@ from laser_core.migration import gravity
 from laser_core.migration import row_normalizer
 from tqdm import tqdm
 
-from laser_generic.newutils import RateMap
 from laser_generic.newutils import TimingStats as ts
+from laser_generic.newutils import ValuesMap
 from laser_generic.newutils import estimate_capacity
 from laser_generic.newutils import get_centroids
 from laser_generic.newutils import validate
@@ -298,13 +298,13 @@ class ConstantPopVitalDynamics:
         if birthrates is not None:
             self.birthrates = birthrates
         else:
-            self.birthrates = RateMap.from_scalar(0.0, model.nodes.count, model.params.nticks).rates
+            self.birthrates = ValuesMap.from_scalar(0.0, model.nodes.count, model.params.nticks).values
             warnings.warn("No birthrates found in model; defaulting to zero birthrates.", stacklevel=2)
 
         if mortalityrates is not None:
             self.mortalityrates = mortalityrates
         else:
-            self.mortalityrates = RateMap.from_scalar(0.0, model.nodes.count, model.params.nticks).rates
+            self.mortalityrates = ValuesMap.from_scalar(0.0, model.nodes.count, model.params.nticks).values
             warnings.warn("No mortalityrates found in model; defaulting to zero mortalityrates.", stacklevel=2)
 
         # We will use the larger of birthrates or mortalityrates for recycling
@@ -390,7 +390,7 @@ class Model:
         self.params = params
 
         num_nodes = max(np.unique(scenario.nodeid)) + 1
-        self.birthrates = birthrates if birthrates is not None else RateMap.from_scalar(0, num_nodes, self.params.nticks).rates
+        self.birthrates = birthrates if birthrates is not None else ValuesMap.from_scalar(0, num_nodes, self.params.nticks).values
         num_active = scenario.population.sum()
         if not skip_capacity:
             num_agents = estimate_capacity(self.birthrates, scenario.population).sum()
