@@ -12,7 +12,7 @@ from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SI as SI
-from laser_generic.newutils import RateMap
+from laser_generic.newutils import ValuesMap
 from laser_generic.newutils import grid
 from utils import base_maps
 from utils import stdgrid
@@ -34,12 +34,12 @@ class Default(unittest.TestCase):
             scenario["I"] = 10
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
-            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
 
             params = PropertySet({"nticks": NTICKS, "beta": 1.0 / 32})
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, params, birthrate_map.rates)
+                model = SI.Model(scenario, params, birthrate_map.values)
                 model.validating = VALIDATING
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
@@ -50,7 +50,7 @@ class Default(unittest.TestCase):
                 s = SI.Susceptible(model)
                 i = SI.Infected(model)
                 tx = SI.Transmission(model)
-                vitals = SI.VitalDynamics(model, birthrate_map.rates, pyramid=pyramid, survival=survival)
+                vitals = SI.VitalDynamics(model, birthrate_map.values, pyramid=pyramid, survival=survival)
                 model.components = [s, i, tx, vitals]
 
             model.run(f"SI Grid ({model.people.count:,}/{model.nodes.count:,})")
@@ -77,12 +77,12 @@ class Default(unittest.TestCase):
             scenario["I"] = 10
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
-            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
 
             params = PropertySet({"nticks": NTICKS, "beta": 1.0 / 32})
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, params, birthrate_map.rates)
+                model = SI.Model(scenario, params, birthrate_map.values)
                 model.validating = VALIDATING
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
@@ -93,7 +93,7 @@ class Default(unittest.TestCase):
                 s = SI.Susceptible(model)
                 i = SI.Infected(model)
                 tx = SI.Transmission(model)
-                vitals = SI.VitalDynamics(model, birthrate_map.rates, pyramid=pyramid, survival=survival)
+                vitals = SI.VitalDynamics(model, birthrate_map.values, pyramid=pyramid, survival=survival)
                 model.components = [s, i, tx, vitals]
 
             model.run(f"SI Linear ({model.people.count:,}/{model.nodes.count:,})")
@@ -122,10 +122,10 @@ class Default(unittest.TestCase):
             scenario["I"] = init_inf
             parameters = PropertySet({"seed": 2, "nticks": NTICKS, "verbose": True, "beta": 0.04, "cbr": 400})
 
-            birthrate_map = RateMap.from_scalar(parameters.cbr, nsteps=parameters.nticks, nnodes=1)
+            birthrate_map = ValuesMap.from_scalar(parameters.cbr, nsteps=parameters.nticks, nnodes=1)
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, parameters, birthrate_map.rates, skip_capacity=True)
+                model = SI.Model(scenario, parameters, birthrate_map.values, skip_capacity=True)
                 model.validating = VALIDATING
 
                 model.components = [
@@ -133,7 +133,7 @@ class Default(unittest.TestCase):
                     SI.Infected(model),
                     # Send in zero mortality rates to prevent warning.
                     SI.ConstantPopVitalDynamics(
-                        model, birthrate_map.rates, RateMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1).rates
+                        model, birthrate_map.values, ValuesMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1).values
                     ),
                     SI.Transmission(model),
                 ]

@@ -28,7 +28,7 @@ from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SEIR as SEIR
-from laser_generic.newutils import RateMap
+from laser_generic.newutils import ValuesMap
 from utils import stdgrid
 
 State = SEIR.State
@@ -51,7 +51,7 @@ class TransmissionWithDOI(SEIR.Transmission):
                 nid = nodeids[i]
                 if draw < ft[nid]:
                     states[i] = State.EXPOSED.value
-                    etimers[i] = np.maximum(np.round(expdurdist()), expdurmin)
+                    etimers[i] = np.maximum(np.round(expdurdist(tick, nid)), expdurmin)
                     exp_by_node[nb.get_thread_id(), nid] += 1
                     doi[i] = tick  # Record tick of infection
         return
@@ -94,13 +94,14 @@ class Importation:
 
     @staticmethod
     @nb.njit(nogil=True, parallel=True, cache=True)
-    def nb_importation_step(states, probabilities, nodeids, itimers, infdurdist, inf_by_node):
+    def nb_importation_step(states, probabilities, nodeids, itimers, infdurdist, inf_by_node, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
-                if np.random.rand() < probabilities[nodeids[i]]:
+                nid = nodeids[i]
+                if np.random.rand() < probabilities[nid]:
                     states[i] = State.INFECTIOUS.value
-                    itimers[i] = infdurdist()
-                    inf_by_node[nb.get_thread_id(), nodeids[i]] += 1
+                    itimers[i] = infdurdist(tick, nid)
+                    inf_by_node[nb.get_thread_id(), nid] += 1
 
         return
 
@@ -124,6 +125,7 @@ class Importation:
             self.model.people.itimer,
             self.infdurdist,
             inf_by_node := np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32),
+            tick,
         )
         inf_by_node = inf_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)
         self.model.nodes.S[tick + 1] -= inf_by_node
@@ -153,8 +155,8 @@ if __name__ == "__main__":
     scenario["I"] = init_infected
     scenario["R"] = scenario.population - init_susceptible - init_infected
     params = PropertySet({"nticks": NTICKS, "beta": R0 / INFECTIOUS_DURATION_MEAN})
-    birthrates_map = RateMap.from_scalar(35, nsteps=NTICKS, nnodes=len(scenario))
-    model = SEIR.Model(scenario, params, birthrates=birthrates_map.rates)
+    birthrates_map = ValuesMap.from_scalar(35, nsteps=NTICKS, nnodes=len(scenario))
+    model = SEIR.Model(scenario, params, birthrates=birthrates_map.values)
     # expdist = dists.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
     expdist = dists.normal(loc=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
     infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
@@ -166,9 +168,9 @@ if __name__ == "__main__":
     importation = Importation(model, period=30, new_infections=[5] * model.nodes.count, infdurdist=infdist)
     pyramid = AliasedDistribution(np.full(89, 1_000))
     survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
-    vitals = SEIR.VitalDynamics(model, birthrates_map.rates, pyramid, survival)
+    vitals = SEIR.VitalDynamics(model, birthrates_map.values, pyramid, survival)
     model.components = [s, r, i, e, tx, vitals, importation]
-    label = f"SEIR with DOI (N={model.people.count:,}, Nodes={model.nodes.count:,})"
+    label = f"SEIR with DOI ({model.people.count:,} agents in {model.nodes.count:,} nodes)"
     model.run(label)
     # After run, model.people.doi contains tick of infection for each agent
 

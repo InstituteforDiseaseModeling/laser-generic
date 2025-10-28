@@ -13,7 +13,7 @@ from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SEIRS as SEIRS
-from laser_generic.newutils import RateMap
+from laser_generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid
 
@@ -98,7 +98,7 @@ class Default(unittest.TestCase):
         with ts.start("test_grid"):
             with ts.start("setup"):
                 cbr = np.random.uniform(5, 35, EM * EN)  # CBR = per 1,000 per year
-                birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+                birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
 
                 pyramid = AliasedDistribution(np.full(89, 1_000))  # [0, 88] with equal probability
                 survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())  # equal probability each year
@@ -109,7 +109,7 @@ class Default(unittest.TestCase):
                     lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
                     init_infected=10,
                     init_recovered=0,
-                    birthrates=birthrate_map.rates,
+                    birthrates=birthrate_map.values,
                     pyramid=pyramid,
                     survival=survival,
                 )
@@ -133,7 +133,7 @@ class Default(unittest.TestCase):
         with ts.start("test_linear"):
             with ts.start("setup"):
                 cbr = np.random.uniform(5, 35, PEE)  # CBR = per 1,000 per year
-                birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+                birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
 
                 pyramid = AliasedDistribution(np.full(89, 1_000))  # [0, 88] with equal probability
                 survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())  # equal probability each year
@@ -144,7 +144,7 @@ class Default(unittest.TestCase):
                     lambda x, y: int(np.random.uniform(10_000, 1_000_000)),
                     init_infected=10,
                     init_recovered=0,
-                    birthrates=birthrate_map.rates,
+                    birthrates=birthrate_map.values,
                     pyramid=pyramid,
                     survival=survival,
                 )

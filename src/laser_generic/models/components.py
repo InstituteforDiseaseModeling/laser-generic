@@ -154,14 +154,15 @@ class Exposed:
         parallel=True,
         cache=True,
     )
-    def nb_exposed_step(states, etimers, itimers, symptomatic, nodeids, infdurdist, infdurmin):
+    def nb_exposed_step(states, etimers, itimers, symptomatic, nodeids, infdurdist, infdurmin, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.EXPOSED.value:
                 etimers[i] -= 1
                 if etimers[i] == 0:
                     states[i] = State.INFECTIOUS.value
-                    itimers[i] = np.maximum(np.round(infdurdist()), infdurmin)  # Set the infection timer
-                    symptomatic[nb.get_thread_id(), nodeids[i]] += 1
+                    nid = nodeids[i]
+                    itimers[i] = np.maximum(np.round(infdurdist(tick, nid)), infdurmin)  # Set the infection timer
+                    symptomatic[nb.get_thread_id(), nid] += 1
 
         return
 
@@ -179,6 +180,7 @@ class Exposed:
             self.model.people.nodeid,
             self.infdurdist,
             self.infdurmin,
+            tick,
         )
         symptomatic_by_node = symptomatic_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
@@ -410,14 +412,15 @@ class InfectiousIRS:
         parallel=True,
         cache=True,
     )
-    def nb_infectious_step(states, itimers, rtimers, recovered, nodeids, wandurdist, wandurmin):
+    def nb_infectious_step(states, itimers, rtimers, recovered, nodeids, wandurdist, wandurmin, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.INFECTIOUS.value:
                 itimers[i] -= 1
                 if itimers[i] == 0:
                     states[i] = State.RECOVERED.value
-                    rtimers[i] = np.maximum(np.round(wandurdist()), wandurmin)  # Set the recovery timer
-                    recovered[nb.get_thread_id(), nodeids[i]] += 1
+                    nid = nodeids[i]
+                    rtimers[i] = np.maximum(np.round(wandurdist(tick, nid)), wandurmin)  # Set the recovery timer
+                    recovered[nb.get_thread_id(), nid] += 1
 
         return
 
@@ -441,6 +444,7 @@ class InfectiousIRS:
             self.model.people.nodeid,
             self.wandurdist,
             self.wandurmin,
+            tick,
         )
         recovered_by_node = recovered_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
@@ -713,7 +717,7 @@ class TransmissionSI:
         parallel=True,
         cache=True,
     )
-    def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, infdurdist, infdurmin):
+    def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, infdurdist, infdurmin, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
                 # Check for infection
@@ -721,7 +725,7 @@ class TransmissionSI:
                 nid = nodeids[i]
                 if draw < ft[nid]:
                     states[i] = State.INFECTIOUS.value
-                    itimers[i] = np.maximum(np.round(infdurdist()), infdurmin)  # Set the infection timer
+                    itimers[i] = np.maximum(np.round(infdurdist(tick, nid)), infdurmin)  # Set the infection timer
                     inf_by_node[nb.get_thread_id(), nid] += 1
 
         return
@@ -744,7 +748,14 @@ class TransmissionSI:
 
         inf_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(
-            self.model.people.state, self.model.people.nodeid, ft, inf_by_node, self.model.people.itimer, self.infdurdist, self.infdurmin
+            self.model.people.state,
+            self.model.people.nodeid,
+            ft,
+            inf_by_node,
+            self.model.people.itimer,
+            self.infdurdist,
+            self.infdurmin,
+            tick,
         )
         inf_by_node = inf_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
@@ -803,7 +814,7 @@ class TransmissionSE:
         parallel=True,
         cache=True,
     )
-    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin):
+    def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
                 # Check for infection
@@ -811,7 +822,7 @@ class TransmissionSE:
                 nid = nodeids[i]
                 if draw < ft[nid]:
                     states[i] = State.EXPOSED.value
-                    etimers[i] = np.maximum(np.round(expdurdist()), expdurmin)  # Set the exposure timer
+                    etimers[i] = np.maximum(np.round(expdurdist(tick, nid)), expdurmin)  # Set the exposure timer
                     exp_by_node[nb.get_thread_id(), nid] += 1
 
         return
@@ -833,7 +844,14 @@ class TransmissionSE:
 
         exp_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32)
         self.nb_transmission_step(
-            self.model.people.state, self.model.people.nodeid, ft, exp_by_node, self.model.people.etimer, self.expdurdist, self.expdurmin
+            self.model.people.state,
+            self.model.people.nodeid,
+            ft,
+            exp_by_node,
+            self.model.people.etimer,
+            self.expdurdist,
+            self.expdurmin,
+            tick,
         )
         exp_by_node = exp_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 

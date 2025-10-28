@@ -13,7 +13,7 @@ from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SIR as SIR
-from laser_generic.newutils import RateMap
+from laser_generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid
 
@@ -75,16 +75,16 @@ class Default(unittest.TestCase):
             scenario["R"] = 0
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
-            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
             # cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
-            # mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
+            # mortality_map = ValuesMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
             infectious_duration_mean = 7.0
             beta = R0 / infectious_duration_mean
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIR.Model(scenario, params, birthrates=birthrate_map.rates)
+                model = SIR.Model(scenario, params, birthrates=birthrate_map.values)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
@@ -97,7 +97,7 @@ class Default(unittest.TestCase):
                 i = SIR.Infectious(model, infdist)
                 r = SIR.Recovered(model)
                 tx = SIR.Transmission(model, infdist)
-                vitals = SIR.VitalDynamics(model, birthrates=birthrate_map.rates, pyramid=pyramid, survival=survival)
+                vitals = SIR.VitalDynamics(model, birthrates=birthrate_map.values, pyramid=pyramid, survival=survival)
                 # Recovered has to run _before_ Infectious to move people correctly (Infectious updates model.nodes.R)
                 model.components = [s, r, i, tx, vitals]
 
@@ -126,16 +126,16 @@ class Default(unittest.TestCase):
             scenario["R"] = 0
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
-            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
             # cdr = 1_000 / 60  # CDR = per 1,000 per year (assuming life expectancy of 60 years)
-            # mortality_map = RateMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
+            # mortality_map = ValuesMap.from_scalar(cdr, nnodes=len(scenario), nsteps=NTICKS)
 
             infectious_duration_mean = 7.0
             beta = R0 / infectious_duration_mean
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIR.Model(scenario, params, birthrates=birthrate_map.rates)
+                model = SIR.Model(scenario, params, birthrates=birthrate_map.values)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
@@ -148,7 +148,7 @@ class Default(unittest.TestCase):
                 i = SIR.Infectious(model, infdist)
                 r = SIR.Recovered(model)
                 tx = SIR.Transmission(model, infdist)
-                vitals = SIR.VitalDynamics(model, birthrates=birthrate_map.rates, pyramid=pyramid, survival=survival)
+                vitals = SIR.VitalDynamics(model, birthrates=birthrate_map.values, pyramid=pyramid, survival=survival)
                 # Recovered has to run _before_ Infectious to move people correctly (Infectious updates model.nodes.R)
                 model.components = [s, r, i, tx, vitals]
 

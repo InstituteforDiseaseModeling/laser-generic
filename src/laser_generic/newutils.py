@@ -1,5 +1,4 @@
 import time
-import warnings
 from typing import ClassVar
 
 import geopandas as gpd
@@ -8,10 +7,10 @@ from pyproj import Transformer
 from shapely.geometry import Point
 from shapely.geometry import Polygon
 
-__all__ = ["PubSub", "RateMap", "TimingStats", "estimate_capacity", "get_centroids", "grid"]
+__all__ = ["TimingStats", "ValuesMap", "estimate_capacity", "get_centroids", "grid"]
 
 
-class RateMap:
+class ValuesMap:
     def __init__(self, nnodes: int, nsteps: int):
         self._nnodes = nnodes
         self._nsteps = nsteps
@@ -19,56 +18,52 @@ class RateMap:
         return
 
     @staticmethod
-    def from_scalar(scalar: float, nnodes: int, nsteps: int) -> "RateMap":
+    def from_scalar(scalar: float, nnodes: int, nsteps: int) -> "ValuesMap":
         assert scalar >= 0.0, "scalar must be non-negative"
         assert nnodes > 0, "nnodes must be greater than 0"
         assert nsteps > 0, "nsteps must be greater than 0"
-        instance = RateMap(nnodes=nnodes, nsteps=nsteps)
+        instance = ValuesMap(nnodes=nnodes, nsteps=nsteps)
         tmp = np.array([[scalar]], dtype=np.float32)
         instance._data = np.broadcast_to(tmp, (nsteps, nnodes))
 
         return instance
 
     @staticmethod
-    def from_timeseries(data: np.ndarray, nnodes: int) -> "RateMap":
+    def from_timeseries(data: np.ndarray, nnodes: int) -> "ValuesMap":
         assert all(data >= 0.0), "data must be non-negative"
         assert len(data.shape) == 1, "data must be a 1D array"
         assert data.shape[0] > 0, "data must have at least one element"
         assert nnodes > 0, "nnodes must be greater than 0"
         nsteps = data.shape[0]
-        instance = RateMap(nnodes=nnodes, nsteps=nsteps)
+        instance = ValuesMap(nnodes=nnodes, nsteps=nsteps)
         instance._data = np.broadcast_to(data[:, None], (nsteps, nnodes))
 
         return instance
 
     @staticmethod
-    def from_nodes(data: np.ndarray, nsteps: int) -> "RateMap":
+    def from_nodes(data: np.ndarray, nsteps: int) -> "ValuesMap":
         assert all(data >= 0.0), "data must be non-negative"
         assert len(data.shape) == 1, "data must be a 1D array"
         assert data.shape[0] > 0, "data must have at least one element"
         assert nsteps > 0, "nsteps must be greater than 0"
         nnodes = data.shape[0]
-        instance = RateMap(nnodes=nnodes, nsteps=nsteps)
+        instance = ValuesMap(nnodes=nnodes, nsteps=nsteps)
         instance._data = np.broadcast_to(data[None, :], (nsteps, nnodes))
 
         return instance
 
     @staticmethod
-    def from_array(data: np.ndarray, writeable: bool = False) -> "RateMap":
+    def from_array(data: np.ndarray, writeable: bool = False) -> "ValuesMap":
         assert all(data >= 0.0), "data must be non-negative"
         assert len(data.shape) == 2, "data must be a 2D array"
         assert data.shape[0] > 0, "data must have at least one row"
         assert data.shape[1] > 0, "data must have at least one column"
         nsteps, nnodes = data.shape
-        instance = RateMap(nnodes=nnodes, nsteps=nsteps)
+        instance = ValuesMap(nnodes=nnodes, nsteps=nsteps)
         instance._data = data.astype(np.float32)
         instance._data.flags.writeable = writeable
 
         return instance
-
-    @property
-    def rates(self):
-        return self._data
 
     @property
     def nnodes(self):
@@ -77,6 +72,14 @@ class RateMap:
     @property
     def nsteps(self):
         return self._nsteps
+
+    @property
+    def shape(self):
+        return self._data.shape
+
+    @property
+    def values(self):
+        return self._data
 
 
 def grid(M=5, N=5, node_size_km=10, population_fn=None, origin_x=0, origin_y=0):
@@ -294,54 +297,6 @@ def validate(pre, post):
         return wrapper
 
     return decorator
-
-
-class PubSub:
-    def __init__(self, fn_name):
-        self._subscriptions = []
-        self._fn_name = fn_name
-        self.ts = TimingStats
-        return
-
-    def __add__(self, component):
-        if component in self._subscriptions:
-            warnings.warn(f"{component.__class__.__name__} already subscribed.", stacklevel=2)
-            return self
-
-        callback = getattr(component, self._fn_name) if hasattr(component, self._fn_name) else None
-
-        if callback is None:
-            warnings.warn(f"{component.__class__.__name__}.{self._fn_name}() missing.", stacklevel=2)
-            return self
-
-        if not callable(callback):
-            warnings.warn(f"{component.__class__.__name__}.{self._fn_name} is not callable.", stacklevel=2)
-            return self
-
-        self._subscriptions += [component]
-
-        return self
-
-    def __sub__(self, component):
-        if component not in self._subscriptions:
-            warnings.warn(f"{component.__class__.__name__} not subscribed.", stacklevel=2)
-            return
-
-        self._subscriptions.remove(component)
-
-        return self
-
-    @property
-    def subscriptions(self):
-        return [getattr(component, self._fn_name) for component in self._subscriptions]
-
-    def trigger(self, *args):
-        for component in self._subscriptions:
-            callback = getattr(component, self._fn_name)
-            with self.ts.start(f"{component.__class__.__name__}.{self._fn_name}()"):
-                callback(*args)
-
-        return
 
 
 def get_centroids(gdf: gpd.GeoDataFrame) -> np.ndarray:

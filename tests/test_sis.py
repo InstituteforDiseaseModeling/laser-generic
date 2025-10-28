@@ -13,7 +13,7 @@ from laser_core.demographics import KaplanMeierEstimator
 import laser_core.distributions as dists
 
 import laser_generic.models.SIS as SIS
-from laser_generic.newutils import RateMap
+from laser_generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid
 
@@ -44,7 +44,7 @@ class Default(unittest.TestCase):
             scenario["I"] = 10
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
-            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
 
             R0 = 1.2
             infectious_duration_mean = 7.0
@@ -52,7 +52,7 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIS.Model(scenario, params, birthrates=birthrate_map.rates)
+                model = SIS.Model(scenario, params, birthrates=birthrate_map.values)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
@@ -64,7 +64,7 @@ class Default(unittest.TestCase):
                 s = SIS.Susceptible(model)
                 i = SIS.Infectious(model, infdist)
                 tx = SIS.Transmission(model, infdist)
-                vitals = SIS.VitalDynamics(model, birthrate_map.rates, pyramid, survival)
+                vitals = SIS.VitalDynamics(model, birthrate_map.values, pyramid, survival)
                 model.components = [s, i, tx, vitals]
 
                 model.validating = VALIDATING
@@ -100,7 +100,7 @@ class Default(unittest.TestCase):
             scenario["I"] = 10
 
             cbr = np.random.uniform(5, 35, len(scenario))  # CBR = per 1,000 per year
-            birthrate_map = RateMap.from_nodes(cbr, nsteps=NTICKS)
+            birthrate_map = ValuesMap.from_nodes(cbr, nsteps=NTICKS)
 
             R0 = 1.2
             infectious_duration_mean = 7.0
@@ -108,7 +108,7 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIS.Model(scenario, params, birthrate_map.rates)
+                model = SIS.Model(scenario, params, birthrate_map.values)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
@@ -120,7 +120,7 @@ class Default(unittest.TestCase):
                 s = SIS.Susceptible(model)
                 i = SIS.Infectious(model, infdist)
                 tx = SIS.Transmission(model, infdist)
-                vitals = SIS.VitalDynamics(model, birthrate_map.rates, pyramid, survival)
+                vitals = SIS.VitalDynamics(model, birthrate_map.values, pyramid, survival)
                 model.components = [s, i, tx, vitals]
 
                 model.validating = VALIDATING
