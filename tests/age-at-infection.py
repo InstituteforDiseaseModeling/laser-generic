@@ -22,12 +22,14 @@ On the given day(s), the component should look at the current number of suscepti
 Like the Transmission component, the step() function of this Importation component will have some NumPy code to calculate the per node probability of infection for susceptible agents and a Numba compiled function to process all the agents in parallel.
 """
 
+import matplotlib.pyplot as plt
 import numba as nb
 import numpy as np
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SEIR as SEIR
+from laser_generic.models.model import Model
 from laser_generic.newutils import ValuesMap
 from utils import stdgrid
 
@@ -142,9 +144,10 @@ if __name__ == "__main__":
 
     NTICKS = 3650
     R0 = 10  # measles-ish 1.386
-    INFECTIOUS_DURATION_MEAN = 7.0
-    EXPOSED_DURATION_SHAPE = 4.5
+    EXPOSED_DURATION_MEAN = 4.5
     EXPOSED_DURATION_SCALE = 1.0
+    INFECTIOUS_DURATION_MEAN = 7.0
+    INFECTIOUS_DURATION_SCALE = 2.0
 
     scenario = stdgrid(5, 5)  # Build scenario as in test_seir.py
     init_susceptible = np.round(scenario.population / R0).astype(np.int32)  # 1/R0 already recovered
@@ -154,22 +157,28 @@ if __name__ == "__main__":
     scenario["E"] = 0
     scenario["I"] = init_infected
     scenario["R"] = scenario.population - init_susceptible - init_infected
+
     params = PropertySet({"nticks": NTICKS, "beta": R0 / INFECTIOUS_DURATION_MEAN})
     birthrates_map = ValuesMap.from_scalar(35, nsteps=NTICKS, nnodes=len(scenario))
-    model = SEIR.Model(scenario, params, birthrates=birthrates_map.values)
-    # expdist = dists.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
-    expdist = dists.normal(loc=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
-    infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
+
+    model = Model(scenario, params, birthrates=birthrates_map.values)
+
+    expdist = dists.normal(loc=EXPOSED_DURATION_MEAN, scale=EXPOSED_DURATION_SCALE)
+    infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=INFECTIOUS_DURATION_SCALE)
+
     s = SEIR.Susceptible(model)
     e = SEIR.Exposed(model, expdist, infdist)
     i = SEIR.Infectious(model, infdist)
     r = SEIR.Recovered(model)
     tx = TransmissionWithDOI(model, expdist)
     importation = Importation(model, period=30, new_infections=[5] * model.nodes.count, infdurdist=infdist)
+
     pyramid = AliasedDistribution(np.full(89, 1_000))
     survival = KaplanMeierEstimator(np.full(89, 1_000).cumsum())
     vitals = SEIR.VitalDynamics(model, birthrates_map.values, pyramid, survival)
+
     model.components = [s, r, i, e, tx, vitals, importation]
+
     label = f"SEIR with DOI ({model.people.count:,} agents in {model.nodes.count:,} nodes)"
     model.run(label)
     # After run, model.people.doi contains tick of infection for each agent
@@ -179,7 +188,6 @@ if __name__ == "__main__":
     # Let's look at people infected in the last year of the simulation, doi >= NTICKS - 365
     recent_infections = (model.people.doi >= (NTICKS - 365)) & (model.people.doi != -1)
     aoi_recent = model.people.doi[recent_infections] - model.people.dob[recent_infections]
-    import matplotlib.pyplot as plt
 
     plt.hist(aoi_recent, bins=range(aoi_recent.min(), aoi_recent.max() + 1), alpha=0.7)
     plt.xlabel("Age at Infection (Days)")

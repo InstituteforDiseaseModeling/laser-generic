@@ -13,6 +13,7 @@ from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SIR as SIR
+from laser_generic.models.model import Model
 from laser_generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid
@@ -40,7 +41,7 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIR.Model(scenario, params)
+                model = Model(scenario, params)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
@@ -84,7 +85,7 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIR.Model(scenario, params, birthrates=birthrate_map.values)
+                model = Model(scenario, params, birthrates=birthrate_map.values)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 
@@ -135,7 +136,7 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": beta})
 
             with ts.start("Model Initialization"):
-                model = SIR.Model(scenario, params, birthrates=birthrate_map.values)
+                model = Model(scenario, params, birthrates=birthrate_map.values)
 
                 infdist = dists.normal(loc=infectious_duration_mean, scale=2)
 

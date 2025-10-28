@@ -14,6 +14,7 @@ import laser_generic.models.SIR as SIR
 import laser_generic.models.SIRS as SIRS
 import laser_generic.models.SEIR as SEIR
 import laser_generic.models.SEIRS as SEIRS
+from laser_generic.models.model import Model
 from utils import stdgrid
 
 EM = 10
@@ -49,10 +50,10 @@ def build_models(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=Non
             idist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
             wdist = dists.normal(loc=WANING_DURATION_MEAN, scale=5)
 
-        sir = SIR.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
+        sir = Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
         sir.components = [SIR.Susceptible(sir), SIR.Recovered(sir), SIR.Infectious(sir, idist), SIR.Transmission(sir, idist)]
 
-        sirs = SIRS.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
+        sirs = Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
         sirs.components = [
             SIRS.Susceptible(sirs),
             SIRS.Recovered(sirs, wdist),
@@ -60,7 +61,7 @@ def build_models(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=Non
             SIRS.Transmission(sirs, idist),
         ]
 
-        seir = SEIR.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
+        seir = Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
         seir.components = [
             SEIR.Susceptible(seir),
             SEIR.Recovered(seir),
@@ -69,7 +70,7 @@ def build_models(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=Non
             SEIR.Transmission(seir, edist),
         ]
 
-        seirs = SEIRS.Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
+        seirs = Model(gpd.GeoDataFrame(scenario), params, birthrates=birthrates)
         seirs.components = [
             SEIRS.Susceptible(seirs),
             SEIRS.Recovered(seirs, wdist),
@@ -133,7 +134,7 @@ def do_plots(sir, sirs, seir, seirs, overlay=True):
     ]
 
     if overlay:
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(16, 9), dpi=200)
         for model, label, style in active:
             plot_model(plt.gca(), model, label, style)
         plt.title("Comparison of SIR, SIRS, SEIR, and SEIRS Models")
@@ -142,7 +143,7 @@ def do_plots(sir, sirs, seir, seirs, overlay=True):
         plt.legend()
         plt.grid(True)
     else:
-        _fig, axs = plt.subplots(2, 2, figsize=(14, 10))
+        _fig, axs = plt.subplots(2, 2, figsize=(16, 9), dpi=200)
         for i, (model, label, style) in enumerate(active):
             plot_model(axs[i // 2, i % 2], model, label, style)
             axs[i // 2, i % 2].set_title(f"{label} Model")

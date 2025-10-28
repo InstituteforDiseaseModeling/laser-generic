@@ -13,6 +13,7 @@ from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SEIR as SEIR
+from laser_generic.models.model import Model
 from laser_generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid
@@ -45,7 +46,7 @@ def build_model(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=None
     params = PropertySet({"nticks": NTICKS, "beta": beta})
 
     with ts.start("Model Initialization"):
-        model = SEIR.Model(scenario, params, birthrates=birthrates)
+        model = Model(scenario, params, birthrates=birthrates)
 
         expdist = dists.gamma(shape=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
         infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
