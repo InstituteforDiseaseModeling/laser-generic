@@ -12,6 +12,7 @@ from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
 import laser_generic.models.SI as SI
+from laser_generic.models.model import Model
 from laser_generic.newutils import ValuesMap
 from laser_generic.newutils import grid
 from utils import base_maps
@@ -39,7 +40,7 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": 1.0 / 32})
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, params, birthrate_map.values)
+                model = Model(scenario, params, birthrate_map.values)
                 model.validating = VALIDATING
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
@@ -82,7 +83,7 @@ class Default(unittest.TestCase):
             params = PropertySet({"nticks": NTICKS, "beta": 1.0 / 32})
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, params, birthrate_map.values)
+                model = Model(scenario, params, birthrate_map.values)
                 model.validating = VALIDATING
 
                 # Sampling this pyramid will return indices in [0, 88] with equal probability.
@@ -125,7 +126,7 @@ class Default(unittest.TestCase):
             birthrate_map = ValuesMap.from_scalar(parameters.cbr, nsteps=parameters.nticks, nnodes=1)
 
             with ts.start("Model Initialization"):
-                model = SI.Model(scenario, parameters, birthrate_map.values, skip_capacity=True)
+                model = Model(scenario, parameters, birthrate_map.values, skip_capacity=True)
                 model.validating = VALIDATING
 
                 model.components = [

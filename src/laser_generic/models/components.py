@@ -6,6 +6,8 @@ import numpy as np
 from laser_generic.newutils import validate
 
 from .shared import State
+from .shared import sample_dobs
+from .shared import sample_dods
 
 
 class Susceptible:
@@ -1138,5 +1140,320 @@ class TransmissionSE:
         plt.title("Force of Infection over Time by Node")
         plt.legend()
         plt.show()
+
+        return
+
+
+class VitalDynamicsBase:
+    def __init__(self, model, birthrates, pyramid, survival):
+        self.model = model
+        self.birthrates = birthrates
+        self.pyramid = pyramid
+        self.survival = survival
+
+        # Date-Of-Birth and Date-Of-Death properties per agent
+        self.model.people.add_property("dob", dtype=np.int16)
+        self.model.people.add_property("dod", dtype=np.int16)
+        # birth and death statistics per node
+        self.model.nodes.add_vector_property("births", model.params.nticks + 1, dtype=np.uint32)
+        self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.uint32)
+
+        # Initialize starting population
+        dobs = self.model.people.dob[0 : self.model.people.count]
+        dods = self.model.people.dod[0 : self.model.people.count]
+        sample_dobs(dobs, self.pyramid, tick=0)
+        sample_dods(dobs, dods, self.survival, tick=0)
+
+        return
+
+    def prevalidate_step(self, tick: int) -> None:
+        self._cpeople = self.model.people.count
+        self._deceased = self.model.people.state == State.DECEASED.value
+
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
+
+        nbirths = self.model.births[tick].sum()
+        assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
+        istart = self._cpeople
+        iend = self.model.people.count
+        # Assert that number of births by patch matches self.model.births[tick]
+        birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
+        assert np.all(birth_counts == self.model.births[tick]), "Birth counts by patch mismatch"
+        assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
+        assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
+
+        ndeaths = self.model.deaths[tick].sum()
+        deceased = self.model.people.state == State.DECEASED.value
+        assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
+        # Assert that new deaths by patch matches self.model.deaths[tick]
+        prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.nodes.count)
+        now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.nodes.count)
+        death_counts = now - prv
+        assert np.all(death_counts == self.model.deaths[tick]), "Death counts by patch mismatch"
+
+        return
+
+    def step(self, tick: int) -> None:
+        raise NotImplementedError("VitalDynamicsBase is an abstract base class and cannot be stepped directly.")
+
+    def _births(self, tick: int) -> None:
+        rates = np.power(1.0 + self.model.birthrates[tick] / 1000, 1.0 / 365) - 1.0
+        # Use "tomorrow's" population which accounts for mortality above.
+        N = self.model.nodes.S[tick + 1] + self.model.nodes.I[tick + 1]
+        births = np.round(np.random.poisson(rates * N)).astype(np.uint32)
+        tbirths = births.sum()
+        if tbirths > 0:
+            istart, iend = self.model.people.add(tbirths)
+            self.model.people.nodeid[istart:iend] = np.repeat(np.arange(self.model.nodes.count, dtype=np.uint16), births)
+            # State.SUSCEPTIBLE.value is the default
+            # self.model.people.state[istart:iend] = State.SUSCEPTIBLE.value
+
+            dobs = self.model.people.dob[istart:iend]
+            dods = self.model.people.dod[istart:iend]
+            dobs[:] = tick
+            sample_dods(dobs, dods, self.survival, tick=tick)
+
+            # state(t+1) = state(t) + ∆state(t)
+            self.model.nodes.S[tick + 1] += births
+            # Record today's ∆
+            self.model.nodes.births[tick] = births
+
+        return
+
+    def plot(self):
+        _fig, ax1 = plt.subplots(figsize=(16, 9), dpi=200)
+        births = np.sum(self.model.nodes.births, axis=1)
+        deaths = np.sum(self.model.nodes.deaths, axis=1)
+        ax1.plot(births, label="Daily Births", color="green")
+        ax1.plot(deaths, label="Daily Deaths", color="red")
+        ax1.set_xlabel("Tick")
+        ax1.set_ylabel("Count")
+        ax1.set_title("Births and Deaths Over Time")
+        ax1.legend(loc="upper left")
+
+        ax2 = ax1.twinx()
+        ax2.plot(np.cumsum(births), color="tab:green", linestyle="--", label="Cumulative Births")
+        ax2.plot(np.cumsum(deaths), color="tab:red", linestyle="--", label="Cumulative Deaths")
+        ax2.set_ylabel("Cumulative Count")
+        ax2.legend(loc="upper right")
+        plt.show()
+
+        return
+
+
+class VitalDynamicsSI(VitalDynamicsBase):
+    def __init__(self, model, birthrates, pyramid, survival):
+        super().__init__(model, birthrates, pyramid, survival)
+
+        return
+
+    @staticmethod
+    @nb.njit(
+        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
+    def nb_process_deaths(dods, states, nodeids, delta_S, delta_I, tick):
+        for i in nb.prange(len(dods)):
+            if dods[i] == tick:
+                if states[i] == State.SUSCEPTIBLE.value:
+                    delta_S[nb.get_thread_id(), nodeids[i]] -= 1
+                else:
+                    delta_I[nb.get_thread_id(), nodeids[i]] -= 1
+                states[i] = State.DECEASED.value
+
+        return
+
+    @validate(pre=VitalDynamicsBase.prevalidate_step, post=VitalDynamicsBase.postvalidate_step)
+    def step(self, tick: int) -> None:
+        # Do mortality first, then births
+        delta_S = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        delta_I = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        self.nb_process_deaths(self.model.people.dod, self.model.people.state, self.model.people.nodeid, delta_S, delta_I, tick)
+        # Combine thread results
+        delta_S = delta_S.sum(axis=0).astype(self.model.nodes.S.dtype)
+        delta_I = delta_I.sum(axis=0).astype(self.model.nodes.I.dtype)
+        # state(t+1) = state(t) + ∆state(t)
+        self.model.nodes.S[tick + 1] += delta_S  # delta_S is negative or zero
+        self.model.nodes.I[tick + 1] += delta_I  # delta_I is negative or zero
+        # Record today's ∆
+        self.model.nodes.deaths[tick] = -(delta_S + delta_I)  # Record
+
+        self._births(tick)
+
+        return
+
+
+class VitalDynamicsSIR(VitalDynamicsBase):
+    def __init__(self, model, birthrates, pyramid, survival):
+        super().__init__(model, birthrates, pyramid, survival)
+
+        return
+
+    def prevalidate_step(self, tick: int) -> None:
+        self._cpeople = self.model.people.count
+        self._deceased = self.model.people.state == State.DECEASED.value
+
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
+
+        nbirths = self.model.births[tick].sum()
+        assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
+        istart = self._cpeople
+        iend = self.model.people.count
+        # Assert that number of births by patch matches self.model.births[tick]
+        birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
+        assert np.all(birth_counts == self.model.births[tick]), "Birth counts by patch mismatch"
+        assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
+        assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
+
+        ndeaths = self.model.deaths[tick].sum()
+        deceased = self.model.people.state == State.DECEASED.value
+        assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
+        # Assert that new deaths by patch matches self.model.deaths[tick]
+        prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.nodes.count)
+        now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.nodes.count)
+        death_counts = now - prv
+        assert np.all(death_counts == self.model.deaths[tick]), "Death counts by patch mismatch"
+
+        return
+
+    @staticmethod
+    @nb.njit(
+        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32[:, :], nb.int32),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
+    def nb_process_deaths(dods, states, nodeids, deceased_S, deceased_I, deceased_R, tick):
+        for i in nb.prange(len(dods)):
+            if dods[i] == tick:
+                state = states[i]
+                if state >= 0:  # Ignore already deceased
+                    if state == State.SUSCEPTIBLE.value:
+                        deceased_S[nb.get_thread_id(), nodeids[i]] += 1
+                    elif state == State.INFECTIOUS.value:
+                        deceased_I[nb.get_thread_id(), nodeids[i]] += 1
+                    else:  # if state == State.RECOVERED.value:
+                        deceased_R[nb.get_thread_id(), nodeids[i]] += 1
+                    states[i] = State.DECEASED.value
+
+        return
+
+    @validate(pre=prevalidate_step, post=postvalidate_step)
+    def step(self, tick: int) -> None:
+        # Do mortality first, then births
+        deceased_S = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        deceased_I = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        deceased_R = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        self.nb_process_deaths(
+            self.model.people.dod, self.model.people.state, self.model.people.nodeid, deceased_S, deceased_I, deceased_R, tick
+        )
+        # Combine thread results
+        deceased_S = deceased_S.sum(axis=0).astype(self.model.nodes.S.dtype)
+        deceased_I = deceased_I.sum(axis=0).astype(self.model.nodes.I.dtype)
+        deceased_R = deceased_R.sum(axis=0).astype(self.model.nodes.R.dtype)
+        # state(t+1) = state(t) + ∆state(t)
+        self.model.nodes.S[tick + 1] -= deceased_S
+        self.model.nodes.I[tick + 1] -= deceased_I
+        self.model.nodes.R[tick + 1] -= deceased_R
+        # Record today's ∆
+        self.model.nodes.deaths[tick] = deceased_S + deceased_I + deceased_R  # Record
+
+        self._births(tick)
+
+        return
+
+
+class VitalDynamicsSEIR(VitalDynamicsBase):
+    def __init__(self, model, birthrates, pyramid, survival):
+        super().__init__(model, birthrates, pyramid, survival)
+
+        return
+
+    def prevalidate_step(self, tick: int) -> None:
+        self._cpeople = self.model.people.count
+        self._deceased = self.model.people.state == State.DECEASED.value
+
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
+
+        nbirths = self.model.births[tick].sum()
+        assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
+        istart = self._cpeople
+        iend = self.model.people.count
+        # Assert that number of births by patch matches self.model.births[tick]
+        birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
+        assert np.all(birth_counts == self.model.births[tick]), "Birth counts by patch mismatch"
+        assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
+        assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
+
+        ndeaths = self.model.deaths[tick].sum()
+        deceased = self.model.people.state == State.DECEASED.value
+        assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
+        # Assert that new deaths by patch matches self.model.deaths[tick]
+        prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.nodes.count)
+        now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.nodes.count)
+        death_counts = now - prv
+        assert np.all(death_counts == self.model.deaths[tick]), "Death counts by patch mismatch"
+
+        return
+
+    @staticmethod
+    @nb.njit(
+        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32[:, :], nb.int32),
+        nogil=True,
+        parallel=True,
+        cache=True,
+    )
+    def nb_process_deaths(dods, states, nodeids, deceased_S, deceased_E, deceased_I, deceased_R, tick):
+        for i in nb.prange(len(dods)):
+            if dods[i] == tick:
+                state = states[i]
+                if state >= 0:  # Ignore already deceased
+                    if state == State.SUSCEPTIBLE.value:
+                        deceased_S[nb.get_thread_id(), nodeids[i]] += 1
+                    elif state == State.EXPOSED.value:
+                        deceased_E[nb.get_thread_id(), nodeids[i]] += 1
+                    elif state == State.INFECTIOUS.value:
+                        deceased_I[nb.get_thread_id(), nodeids[i]] += 1
+                    else:  # if state == State.RECOVERED.value:
+                        deceased_R[nb.get_thread_id(), nodeids[i]] += 1
+                    states[i] = State.DECEASED.value
+
+        return
+
+    @validate(pre=prevalidate_step, post=postvalidate_step)
+    def step(self, tick: int) -> None:
+        # Do mortality first, then births
+        deceased_S = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        deceased_E = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        deceased_I = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        deceased_R = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        self.nb_process_deaths(
+            self.model.people.dod, self.model.people.state, self.model.people.nodeid, deceased_S, deceased_E, deceased_I, deceased_R, tick
+        )
+        # Combine thread results
+        deceased_S = deceased_S.sum(axis=0).astype(self.model.nodes.S.dtype)
+        deceased_E = deceased_E.sum(axis=0).astype(self.model.nodes.E.dtype)
+        deceased_I = deceased_I.sum(axis=0).astype(self.model.nodes.I.dtype)
+        deceased_R = deceased_R.sum(axis=0).astype(self.model.nodes.R.dtype)
+        # state(t+1) = state(t) + ∆state(t)
+        self.model.nodes.S[tick + 1] -= deceased_S
+        self.model.nodes.E[tick + 1] -= deceased_E
+        self.model.nodes.I[tick + 1] -= deceased_I
+        self.model.nodes.R[tick + 1] -= deceased_R
+        # Record today's ∆
+        self.model.nodes.deaths[tick] = deceased_S + deceased_E + deceased_I + deceased_R  # Record
+
+        self._births(tick)
 
         return
