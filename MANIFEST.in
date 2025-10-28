@@ -20,6 +20,9 @@ include LICENSE
 include README.rst
 
 recursive-exclude notebooks *.ipynb
+recursive-exclude notebooks/media *.svg
+recursive-exclude notebooks/media *.png
+
 global-exclude *.py[cod] __pycache__/* *.so *.dylib
 
 exclude CLAUDE.md
