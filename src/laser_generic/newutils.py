@@ -11,6 +11,20 @@ __all__ = ["TimingStats", "ValuesMap", "estimate_capacity", "get_centroids", "gr
 
 
 class ValuesMap:
+    """
+    A class to efficiently represent values mapped over nodes and time steps.
+
+    Arguments:
+        nnodes (int): Number of nodes.
+        nsteps (int): Number of time steps.
+
+    Methods to create ValuesMap from different data sources:
+        - from_scalar(scalar: float, nnodes: int, nsteps: int)
+        - from_timeseries(data: np.ndarray, nnodes: int)
+        - from_nodes(data: np.ndarray, nsteps: int)
+        - from_array(data: np.ndarray, writeable: bool = False)
+    """
+
     def __init__(self, nnodes: int, nsteps: int):
         self._nnodes = nnodes
         self._nsteps = nsteps
@@ -19,6 +33,17 @@ class ValuesMap:
 
     @staticmethod
     def from_scalar(scalar: float, nnodes: int, nsteps: int) -> "ValuesMap":
+        """
+        Create a ValuesMap with the same scalar value for all nodes and time steps.
+
+        Args:
+            scalar (float): The scalar value to fill the map.
+            nnodes (int): Number of nodes.
+            nsteps (int): Number of time steps.
+
+        Returns:
+            ValuesMap: The created ValuesMap instance.
+        """
         assert scalar >= 0.0, "scalar must be non-negative"
         assert nnodes > 0, "nnodes must be greater than 0"
         assert nsteps > 0, "nsteps must be greater than 0"
@@ -30,6 +55,20 @@ class ValuesMap:
 
     @staticmethod
     def from_timeseries(data: np.ndarray, nnodes: int) -> "ValuesMap":
+        """
+        Create a ValuesMap from a time series array for all nodes.
+
+        All nodes have the same time series data.
+
+        nsteps is inferred from the length of data.
+
+        Args:
+            data (np.ndarray): 1D array of time series data.
+            nnodes (int): Number of nodes.
+
+        Returns:
+            ValuesMap: The created ValuesMap instance.
+        """
         assert all(data >= 0.0), "data must be non-negative"
         assert len(data.shape) == 1, "data must be a 1D array"
         assert data.shape[0] > 0, "data must have at least one element"
@@ -42,6 +81,20 @@ class ValuesMap:
 
     @staticmethod
     def from_nodes(data: np.ndarray, nsteps: int) -> "ValuesMap":
+        """
+        Create a ValuesMap from a nodes array for all time steps.
+
+        All time steps have the same node data.
+
+        nnodes is inferred from the length of data.
+
+        Args:
+            data (np.ndarray): 1D array of node data.
+            nsteps (int): Number of time steps.
+
+        Returns:
+            ValuesMap: The created ValuesMap instance.
+        """
         assert all(data >= 0.0), "data must be non-negative"
         assert len(data.shape) == 1, "data must be a 1D array"
         assert data.shape[0] > 0, "data must have at least one element"
@@ -54,6 +107,16 @@ class ValuesMap:
 
     @staticmethod
     def from_array(data: np.ndarray, writeable: bool = False) -> "ValuesMap":
+        """
+        Create a ValuesMap from a 2D array of data.
+
+        Args:
+            data (np.ndarray): 2D array of shape (nsteps, nnodes).
+            writeable (bool): If True, the underlying data array is writeable and can be modified during simulation. Default is False.
+
+        Returns:
+            ValuesMap: The created ValuesMap instance.
+        """
         assert all(data >= 0.0), "data must be non-negative"
         assert len(data.shape) == 2, "data must be a 2D array"
         assert data.shape[0] > 0, "data must have at least one row"
@@ -67,18 +130,22 @@ class ValuesMap:
 
     @property
     def nnodes(self):
+        """Number of nodes."""
         return self._nnodes
 
     @property
     def nsteps(self):
+        """Number of time steps."""
         return self._nsteps
 
     @property
     def shape(self):
+        """Shape of the underlying data array (nsteps, nnodes)."""
         return self._data.shape
 
     @property
     def values(self):
+        """Underlying data array of shape (nsteps, nnodes)."""
         return self._data
 
 
@@ -132,6 +199,16 @@ def grid(M=5, N=5, node_size_km=10, population_fn=None, origin_x=0, origin_y=0):
 
 
 def estimate_capacity(birthrates: np.ndarray, initial_pop: np.ndarray) -> np.ndarray:
+    """
+    Estimate the carrying capacity of each node given birthrates and initial population.
+
+    Args:
+        birthrates (np.ndarray): 2D array of shape (nticks, nnodes) with CBR (birthrates per 1000 individuals per year) in effect at each tick.
+        initial_pop (np.ndarray): 1D array of shape (nnodes,) with initial population per node.
+
+    Returns:
+        np.ndarray: 1D array of shape (nnodes,) with estimated final population count per node.
+    """
     nticks, nnodes = birthrates.shape
     assert len(initial_pop) == nnodes, "initial_pop length must match number of nodes in birthrates_map"
     estimate = initial_pop.copy()
@@ -149,7 +226,9 @@ def estimate_capacity(birthrates: np.ndarray, initial_pop: np.ndarray) -> np.nda
 
 
 class TimingContext:
-    def __init__(self, label: str, stats: "TimingStats", parent: dict) -> None:
+    """Internal class for timing context management."""
+
+    def __init__(self, label: str, stats: "TimingStats", parent: dict) -> None:  # type: ignore
         self.label = label
         self.stats = stats
         self.parent = parent
@@ -188,6 +267,10 @@ class TimingContext:
 
 
 class _TimingStats:
+    """
+    Internal class for managing timing statistics.
+    """
+
     def __init__(self) -> None:
         self.frozen = False
         self.context = {}
@@ -197,6 +280,7 @@ class _TimingStats:
         return
 
     def start(self, label: str) -> TimingContext:
+        """Create a timing context with the given label."""
         assert self.frozen is False
 
         if label not in self.context:
@@ -214,6 +298,7 @@ class _TimingStats:
         return
 
     def freeze(self) -> None:
+        """Freeze the timing statistics."""
         assert self.frozen is False
         self.root.__exit__(None, None, None)
         self.frozen = True
@@ -283,13 +368,19 @@ TimingStats = _TimingStats()
 
 
 def validate(pre, post):
+    """
+    Decorator to add pre- and post-validation to a method.
+
+    Calls the given pre- and post-validation methods if the model or component is in validating mode.
+    """
+
     def decorator(func):
         def wrapper(self, tick: int, *args, **kwargs):
-            if pre and self.model.validating:
+            if pre and (getattr(self.model, "validating", False) or getattr(self, "validating", False)):
                 with TimingStats.start(pre.__name__):
                     getattr(self, pre.__name__)(tick)
             result = func(self, tick, *args, **kwargs)
-            if post and self.model.validating:
+            if post and (getattr(self.model, "validating", False) or getattr(self, "validating", False)):
                 with TimingStats.start(post.__name__):
                     getattr(self, post.__name__)(tick)
             return result

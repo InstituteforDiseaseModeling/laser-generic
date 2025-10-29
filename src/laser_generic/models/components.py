@@ -11,6 +11,10 @@ from .shared import sample_dods
 
 
 class Susceptible:
+    """
+    Simple Susceptible component suitable for all models (SI/SIS/SIR/SIRS/SEIR/SEIRS).
+    """
+
     def __init__(self, model):
         self.model = model
         self.model.people.add_scalar_property("nodeid", dtype=np.uint16)
@@ -61,6 +65,13 @@ class Susceptible:
 
 
 class Exposed:
+    """
+    Simple Exposed component for an SEIR/SEIRS model - includes incubation period.
+
+    Agents transition from Exposed to Infectious when their incubation timer (etimer) expires.
+    Tracks number of agents becoming infectious each tick in `model.nodes.symptomatic`.
+    """
+
     def __init__(self, model, expdurdist, infdurdist, expdurmin=1, infdurmin=1):
         self.model = model
         self.model.people.add_scalar_property("etimer", dtype=np.uint16)
@@ -184,7 +195,11 @@ class Exposed:
 
 
 class InfectiousSI:
-    """Infectious component for an SI model - no recovery."""
+    """
+    Infectious component for an SI model - no recovery.
+
+    Agents remain in the Infectious state indefinitely (no recovery).
+    """
 
     def __init__(self, model):
         self.model = model
@@ -254,6 +269,13 @@ class InfectiousSI:
 
 
 class InfectiousIS:
+    """
+    Infectious component for an SIS model - includes infectious duration.
+
+    Agents transition from Infectious back to Susceptible after the infectious period (itimer).
+    Tracks number of agents recovering each tick in `model.nodes.recovered`.
+    """
+
     def __init__(self, model, infdurdist, infdurmin=1):
         self.model = model
         self.model.people.add_scalar_property("itimer", dtype=np.uint16)
@@ -365,6 +387,13 @@ class InfectiousIS:
 
 
 class InfectiousIR:
+    """
+    Infectious component for an SIR/SEIR model - includes infectious duration, no waning immunity in recovered state.
+
+    Agents transition from Infectious to Recovered after the infectious period (itimer).
+    Tracks number of agents recovering each tick in `model.nodes.recovered`.
+    """
+
     def __init__(self, model, infdurdist, infdurmin=1):
         self.model = model
         self.model.people.add_scalar_property("itimer", dtype=np.uint16)
@@ -480,6 +509,14 @@ class InfectiousIR:
 
 
 class InfectiousIRS:
+    """
+    Infectious component for an SIRS/SEIRS model - includes infectious duration and waning immunity.
+
+    Agents transition from Infectious to Recovered after the infectious period (itimer).
+    Set the waning immunity timer (rtimer) upon recovery.
+    Tracks number of agents recovering each tick in `model.nodes.recovered`.
+    """
+
     def __init__(self, model, infdurdist, wandurdist, infdurmin=1, wandurmin=1):
         self.model = model
         self.model.people.add_scalar_property("itimer", dtype=np.uint16)
@@ -610,6 +647,12 @@ class InfectiousIRS:
 
 
 class Recovered:
+    """
+    Simple Recovered component for an SIR/SEIR model - no waning immunity.
+
+    Agents remain in the Recovered state indefinitely (no waning immunity).
+    """
+
     def __init__(self, model):
         self.model = model
         self.model.nodes.add_vector_property("R", model.params.nticks + 1, dtype=np.int32)
@@ -670,6 +713,13 @@ class Recovered:
 
 
 class RecoveredRS:
+    """
+    Recovered component for an SIRS/SEIRS model - includes waning immunity.
+
+    Agents transition from Recovered back to Susceptible after the waning immunity period (rtimer).
+    Tracks number of agents losing immunity each tick in `model.nodes.waned`.
+    """
+
     def __init__(self, model, wandurdist, wandurmin=1):
         self.model = model
         if not hasattr(self.model.people, "rtimer"):
@@ -795,7 +845,12 @@ class RecoveredRS:
 
 
 class TransmissionSIX:
-    """Transmission component for a model S -> I and no recovery."""
+    """
+    Transmission component for a model S -> I and no recovery.
+
+    Agents transition from Susceptible to Infectious based on force of infection.
+    Tracks number of new infections each tick in `model.nodes.incidence`.
+    """
 
     def __init__(self, model):
         self.model = model
@@ -878,7 +933,23 @@ class TransmissionSIX:
 
 
 class TransmissionSI:
+    """
+    Transmission component for an SIS/SIR/SIRS model with S -> I transition and infectious duration.
+
+    Agents transition from Susceptible to Infectious based on force of infection.
+    Sets newly infectious agents' infection timers (itimer) based on `infdurdist` and `infdurmin`.
+    Tracks number of new infections each tick in `model.nodes.incidence`.
+    """
+
     def __init__(self, model, infdurdist, infdurmin=1):
+        """
+        Initializes the TransmissionSI component.
+
+        Args:
+            model: The epidemiological model instance.
+            infdurdist: A function that returns the infectious duration for a given tick and node.
+            infdurmin: Minimum infectious duration.
+        """
         self.model = model
         self.model.nodes.add_vector_property("forces", model.params.nticks + 1, dtype=np.float32)
         self.model.nodes.add_vector_property("incidence", model.params.nticks + 1, dtype=np.int32)
@@ -971,7 +1042,23 @@ class TransmissionSI:
 
 
 class TransmissionSE:
+    """
+    Transmission component for an SIER/SIERS model with S -> E transition and incubation duration.
+
+    Agents transition from Susceptible to Exposed based on force of infection.
+    Sets newly exposed agents' infection timers (etimer) based on `expdurdist` and `expdurmin`.
+    Tracks number of new infections each tick in `model.nodes.incidence`.
+    """
+
     def __init__(self, model, expdurdist, expdurmin=1):
+        """
+        Initializes the TransmissionSE component.
+
+        Args:
+            model: The epidemiological model instance.
+            expdurdist: A function that returns the incubation duration for a given tick and node.
+            expdurmin: Minimum incubation duration.
+        """
         self.model = model
         self.model.nodes.add_vector_property("forces", model.params.nticks + 1, dtype=np.float32)
         self.model.nodes.add_vector_property("incidence", model.params.nticks + 1, dtype=np.int32)
@@ -1063,7 +1150,29 @@ class TransmissionSE:
 
 
 class VitalDynamicsBase:
+    """
+    Base class for Vital Dynamics components (births and deaths).
+
+    Args:
+        model: The epidemiological model instance.
+        birthrates: Array of birth rates, CBR, in effect for each tick and node.
+        pyramid (AliasedDistribution): Age pyramid distribution for sampling date of birth.
+        survival (KaplanMeierEstimator): Survival curve for sampling date of death.
+        states: List of states to consider for population counts (default: ["S", "E", "I", "R"]).
+    """
+
     def __init__(self, model, birthrates, pyramid, survival, states=None):
+        """
+        Initializes the VitalDynamicsBase component.
+
+        Args:
+
+            model: The epidemiological model instance.
+            birthrates: Array of birth rates, CBR, in effect for each tick and node.
+            pyramid (AliasedDistribution): Age pyramid distribution for sampling date of birth.
+            survival (KaplanMeierEstimator): Survival curve for sampling date of death.
+            states: List of states to consider for population counts (default: ["S", "E", "I", "R"]).
+        """
         self.model = model
         self.birthrates = birthrates
         self.pyramid = pyramid
@@ -1157,6 +1266,7 @@ class VitalDynamicsBase:
 
         for component in self.model.components:
             if hasattr(component, "on_birth") and callable(component.on_birth):
+                # TODO - account for time here in TimingStatistics
                 component.on_birth(istart, iend, tick)
 
         return
@@ -1183,6 +1293,10 @@ class VitalDynamicsBase:
 
 
 class VitalDynamicsSI(VitalDynamicsBase):
+    """
+    Vital dynamics component for an SI/SIS model with just S and I states - includes births and deaths.
+    """
+
     def __init__(self, model, birthrates, pyramid, survival):
         super().__init__(model, birthrates, pyramid, survival)
 
@@ -1224,6 +1338,10 @@ class VitalDynamicsSI(VitalDynamicsBase):
 
 
 class VitalDynamicsSIR(VitalDynamicsBase):
+    """
+    Vital dynamics component for an SIR/SIRS model with S, I, and R states - includes births and deaths.
+    """
+
     def __init__(self, model, birthrates, pyramid, survival):
         super().__init__(model, birthrates, pyramid, survival)
 
@@ -1274,6 +1392,10 @@ class VitalDynamicsSIR(VitalDynamicsBase):
 
 
 class VitalDynamicsSEIR(VitalDynamicsBase):
+    """
+    Vital dynamics component for an SEIR/SEIRS model with S, E, I, and R states - includes births and deaths.
+    """
+
     def __init__(self, model, birthrates, pyramid, survival):
         super().__init__(model, birthrates, pyramid, survival)
 
@@ -1332,6 +1454,7 @@ class VitalDynamicsSEIR(VitalDynamicsBase):
 
 
 def _check_flow_vs_census(flow, people, state, name):
+    """Compare a given flow vector against the census counts by state."""
     assert np.all(flow == (_actual := np.bincount(people.nodeid, people.state == state.value, len(flow)))), (
         f"{name} census does not match {name} counts (by state)."
     )
@@ -1339,11 +1462,13 @@ def _check_flow_vs_census(flow, people, state, name):
 
 
 def _check_unchanged(previous, current, name):
+    """Check that a given array is unchanged after a step."""
     assert np.all(current == previous), f"{name} should be unchanged after step()."
     return
 
 
 def _check_timer_active(states, value, timers, state_name, timer_name):
+    """Check that individuals in a given state have active (greater than zero) timers."""
     assert np.all(_test := (timers[states == value] > 0)), (
         f"{state_name} individuals should have {timer_name} > 0 ({timers[states == value].min()=})"
     )
@@ -1351,6 +1476,7 @@ def _check_timer_active(states, value, timers, state_name, timer_name):
 
 
 def _check_state_timer_consistency(states, value, timers, state_name, timer_name):
+    """Check that only live individuals in a given state have active (greater than zero) timers."""
     alive = states != State.DECEASED.value
     active = timers > 0
     assert np.all(_test := (states[alive & active] == value)), f"Only {state_name} individuals should have {timer_name} > 0."
