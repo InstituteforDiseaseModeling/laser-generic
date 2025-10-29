@@ -23,27 +23,13 @@ class Susceptible:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        # np.bincount where state == State.SUSCEPTIBLE.value and by nodeid should match self.model.nodes.S[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.S[tick])
-            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
-        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
+        _check_flow_vs_census(self.model.nodes.S[tick], self.model.people, State.SUSCEPTIBLE, "Susceptible")
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        # Check that agents with state SUSCEPTIBLE by patch match self.model.nodes.S[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.S[tick])
-            == (actual := np.bincount(nodeids, states == State.SUSCEPTIBLE.value, minlength=self.model.nodes.count))
-        ), f"Susceptible census does not match susceptible counts.\nExpected: {expected}\nActual: {actual}"
-        assert np.all(self.model.nodes.S[tick + 1] == self.model.nodes.S[tick]), (
-            "Susceptible counts should not change in Susceptible.step()."
-        )
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_unchanged(self.model.nodes.S[tick], self.model.nodes.S[tick + 1], "Susceptible counts")
 
         return
 
@@ -112,63 +98,25 @@ class Exposed:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        # Note that we check exposed counts before the step (tick), so we check self.model.nodes.E[tick]
+        _check_flow_vs_census(self.model.nodes.E[tick], self.model.people, State.EXPOSED, "Exposed")
+        _check_timer_active(self.model.people.state, State.EXPOSED.value, self.model.people.etimer, "Exposed", "etimer")
+        _check_state_timer_consistency(self.model.people.state, State.EXPOSED.value, self.model.people.etimer, "Exposed", "etimer")
 
-        # Make sure flow based accounting (faster) matches census based accounting (slower)
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(self.model.nodes.E[tick] == np.bincount(nodeids, states == State.EXPOSED.value, minlength=self.model.nodes.count)), (
-            "Exposed census does not match exposed counts (by state)."
-        )
-
-        # Don't need this since np.bincount can't (shouldn't) return negative counts
-        # assert np.all(self.model.nodes.E[tick] >= 0), "Exposed counts must be non-negative"
-
-        i_exposed = np.nonzero(self.model.people.state == State.EXPOSED.value)[0]
-        assert np.all(self.model.people.etimer[i_exposed] > 0), (
-            f"Exposed individuals should currently have etimer > 0 ({self.model.people.etimer[i_exposed].min()=})"
-        )
         alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.etimer > 0
-        alive_and_active = alive & active
-        assert np.all(self.model.people.state[alive_and_active] == State.EXPOSED.value), "Only exposed individuals should have etimer > 0."
-
         self.etimers_one = (alive) & (self.model.people.etimer == 1)
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        # Note that we check exposed counts after the step (tick), so we check self.model.nodes.E[tick+1]
+        _check_flow_vs_census(self.model.nodes.E[tick + 1], self.model.people, State.EXPOSED, "Exposed")
+        _check_timer_active(self.model.people.state, State.EXPOSED.value, self.model.people.etimer, "Exposed", "etimer")
+        _check_state_timer_consistency(self.model.people.state, State.EXPOSED.value, self.model.people.etimer, "Exposed", "etimer")
 
-        # Make sure flow based accounting (faster) matches census based accounting (slower)
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            self.model.nodes.E[tick + 1] == np.bincount(nodeids, states == State.EXPOSED.value, minlength=self.model.nodes.count)
-        ), "Exposed census does not match exposed counts (by state)."
-
-        # Don't need this since np.bincount can't (shouldn't) return negative counts
-        # assert np.all(self.model.nodes.E[tick+1] >= 0), "Exposed counts must be non-negative"
-
-        i_exposed = np.nonzero(self.model.people.state == State.EXPOSED.value)[0]
-        assert np.all(self.model.people.etimer[i_exposed] > 0), (
-            f"Exposed individuals should currently have etimer > 0 ({self.model.people.etimer[i_exposed].min()=})"
-        )
-        alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.etimer > 0
-        alive_and_active = alive & active
-        assert np.all(self.model.people.state[alive_and_active] == State.EXPOSED.value), "Only exposed individuals should have etimer > 0."
-
-        # Check that everyone who had etimer == 1 before the step is now infectious
         assert np.all(self.model.people.state[self.etimers_one] == State.INFECTIOUS.value), (
             "Individuals with etimer == 1 before should now be infectious."
         )
-        # Check that everyone who had etimer == 1 before the step now has etimer == 0
         assert np.all(self.model.people.etimer[self.etimers_one] == 0), "Individuals with etimer == 1 before should now have etimer == 0."
-        # check that everyone who had etimer == 1 before the step now has itimer > 0
-        assert np.all(self.model.people.itimer[self.etimers_one] > 0), (
-            f"Individuals with etimer == 1 before should now have itimer > 0 ({self.model.people.itimer[self.etimers_one].min()=})"
-        )
+        assert np.all(self.model.people.itimer[self.etimers_one] > 0), "Individuals with etimer == 1 before should now have itimer > 0."
 
         return
 
@@ -262,18 +210,14 @@ class InfectiousSI:
 
         return
 
-    def prevalidate_step(self, tick: int) -> None: ...
+    def prevalidate_step(self, tick: int) -> None:
+        _check_flow_vs_census(self.model.nodes.I[tick], self.model.people, State.INFECTIOUS, "Infectious")
+
+        return
 
     def postvalidate_step(self, tick: int) -> None:
-        nodeids = self.model.people.nodeid
-        state = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.I[tick])
-            == (actual := np.bincount(nodeids, state == State.INFECTIOUS.value, minlength=self.model.nodes.count))
-        ), f"Infected census does not match infected counts.\nExpected: {expected}\nActual: {actual}"
-        assert np.all(self.model.nodes.I[tick + 1] == self.model.nodes.I[tick]), (
-            "Infected counts should not change outside of Transmission and VitalDynamics."
-        )
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
+        _check_unchanged(self.model.nodes.I[tick], self.model.nodes.I[tick + 1], "Infected counts")
 
         return
 
@@ -349,41 +293,16 @@ class InfectiousIS:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.I[tick] >= 0), "Infected counts must be non-negative"
-        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
-        assert np.all(self.model.people.itimer[i_infectious] > 0), (
-            f"Infected individuals should have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
-        )
-        alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.itimer > 0
-        alive_and_active = alive & active
-        assert np.all(self.model.people.state[alive_and_active] == State.INFECTIOUS.value), (
-            "Only infectious individuals should have itimer > 0"
-        )
+        _check_flow_vs_census(self.model.nodes.I[tick], self.model.people, State.INFECTIOUS, "Infectious")
+        _check_timer_active(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
+        _check_state_timer_consistency(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
-
-        states = self.model.people.state
-        itimers = self.model.people.itimer
-
-        i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
-        assert np.all(itimers[i_infectious] > 0), f"Infected individuals should have itimer > 0 ({itimers[i_infectious].min()=})"
-        alive = self.model.people.state != State.DECEASED.value
-        active = itimers > 0
-        alive_and_active = alive & active
-        assert np.all(states[alive_and_active] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
-
-        nodeids = self.model.people.nodeid
-        # nodes.I should match count of infectious by node
-        assert np.all(
-            self.model.nodes.I[tick + 1] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
-        ), "Infected census does not match infectious counts (by state)."
-        assert np.all(self.model.nodes.I[tick + 1] == np.bincount(nodeids, alive_and_active, minlength=self.model.nodes.count)), (
-            "Infected census does not match infectious counts (by itimer)."
-        )
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
+        _check_timer_active(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
+        _check_state_timer_consistency(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
 
         return
 
@@ -481,62 +400,23 @@ class InfectiousIR:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        # Note that we check infectious counts before the step (tick), so we check self.model.nodes.I[tick]
+        _check_flow_vs_census(self.model.nodes.I[tick], self.model.people, State.INFECTIOUS, "Infectious")
+        _check_timer_active(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
+        _check_state_timer_consistency(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
 
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        # Make sure that flow based accounting (faster) matches census based accounting (slower)
-        assert np.all(
-            self.model.nodes.I[tick] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
-        ), "Infectious census does not match infectious counts (by state)."
-
-        # Don't need this since np.bincount can't (shouldn't) return negative counts
-        # assert np.all(self.model.nodes.I[tick] >= 0), "Infectious counts must be non-negative"
-
-        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
-        assert np.all(self.model.people.itimer[i_infectious] > 0), (
-            f"Infectious individuals should have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
-        )
         alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.itimer > 0
-        alive_and_active = alive & active
-        assert np.all(self.model.people.state[alive_and_active] == State.INFECTIOUS.value), (
-            "Only infectious individuals should have itimer > 0."
-        )
-
         self.itimers_one = (alive) & (self.model.people.itimer == 1)
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        # Note that we check infectious counts after the step (tick), so we check self.model.nodes.I[tick+1]
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
+        _check_timer_active(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
+        _check_state_timer_consistency(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
 
-        # Make sure flow based accounting (faster) matches census based accounting (slower)
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            self.model.nodes.I[tick + 1] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
-        ), "Infectious census does not match infectious counts (by state)."
-
-        # Don't need this since np.bincount can't (shouldn't) return negative counts
-        # assert np.all(self.model.nodes.I[tick+1] >= 0), "Infectious counts must be non-negative"
-
-        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
-        assert np.all(self.model.people.itimer[i_infectious] > 0), (
-            f"Infectious individuals should currently have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
-        )
-        alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.itimer > 0
-        alive_and_active = alive & active
-        assert np.all(self.model.people.state[alive_and_active] == State.INFECTIOUS.value), (
-            "Only infectious individuals should have itimer > 0."
-        )
-
-        # Check that everyone who had itimer == 1 before the step is now recovered
         assert np.all(self.model.people.state[self.itimers_one] == State.RECOVERED.value), (
             "Individuals with itimer == 1 before should now be recovered."
         )
-        # Check that everyone who had itimer == 1 before the step now has itimer == 0
         assert np.all(self.model.people.itimer[self.itimers_one] == 0), "Individuals with itimer == 1 before should now have itimer == 0."
 
         return
@@ -639,46 +519,16 @@ class InfectiousIRS:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        # Check that agents with state INFECTIOUS by patch match self.model.nodes.I[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            self.model.nodes.I[tick] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
-        ), "Infected census does not match infectious counts (by state)."
-
-        # Check that all infectious agents have itimer > 0
-        i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
-        assert np.all(self.model.people.itimer[i_infectious] > 0), (
-            f"Infected individuals should have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
-        )
-
-        # Check that only infectious agents have itimer > 0
-        alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.itimer > 0
-        alive_and_active = alive & active
-        assert np.all(states[alive_and_active] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0."
+        _check_flow_vs_census(self.model.nodes.I[tick], self.model.people, State.INFECTIOUS, "Infectious")
+        _check_timer_active(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
+        _check_state_timer_consistency(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        # Check that agents with state INFECTIOUS by patch match self.model.nodes.I[tick+1]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            self.model.nodes.I[tick + 1] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
-        ), "Infected census does not match infectious counts (by state)."
-
-        # Check that all infectious agents have itimer > 0
-        i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
-        assert np.all(self.model.people.itimer[i_infectious] > 0), (
-            f"Infected individuals should have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
-        )
-
-        # Check that only infectious agents have itimer > 0
-        alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.itimer > 0
-        alive_and_active = alive & active
-        assert np.all(states[alive_and_active] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
+        _check_timer_active(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
+        _check_state_timer_consistency(self.model.people.state, State.INFECTIOUS.value, self.model.people.itimer, "Infectious", "itimer")
 
         return
 
@@ -783,25 +633,13 @@ class Recovered:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        # np.bincount where state == State.RECOVERED.value and by nodeid should match self.model.nodes.R[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.R[tick])
-            == (actual := np.bincount(nodeids, states == State.RECOVERED.value, minlength=self.model.nodes.count))
-        ), f"Recovered census does not match recovered counts.\nExpected: {expected}\nActual: {actual}"
+        _check_flow_vs_census(self.model.nodes.R[tick], self.model.people, State.RECOVERED, "Recovered")
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        # Check that agents with state RECOVERED by patch match self.model.nodes.R[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            (expected := self.model.nodes.R[tick])
-            == (actual := np.bincount(nodeids, states == State.RECOVERED.value, minlength=self.model.nodes.count))
-        ), f"Recovered census does not match recovered counts.\nExpected: {expected}\nActual: {actual}"
-        assert np.all(self.model.nodes.R[tick + 1] == self.model.nodes.R[tick]), "Recovered counts should not change in Recovered.step()."
+        _check_flow_vs_census(self.model.nodes.R[tick + 1], self.model.people, State.RECOVERED, "Recovered")
+        _check_unchanged(self.model.nodes.R[tick], self.model.nodes.R[tick + 1], "Recovered counts")
 
         return
 
@@ -868,43 +706,24 @@ class RecoveredRS:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        # Check that agents with state RECOVERED by patch match self.model.nodes.R[tick]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            self.model.nodes.R[tick] == np.bincount(nodeids, states == State.RECOVERED.value, minlength=self.model.nodes.count)
-        ), "Recovered census does not match recovered counts (by state)."
-        # Don't need this since np.bincount can't (shouldn't) return negative counts
-        # assert np.all(self.model.nodes.R[tick] >= 0), "Recovered counts must be non-negative"
+        _check_flow_vs_census(self.model.nodes.S[tick], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.R[tick], self.model.people, State.RECOVERED, "Recovered")
+        _check_timer_active(self.model.people.state, State.RECOVERED.value, self.model.people.rtimer, "Recovered", "rtimer")
+        _check_state_timer_consistency(self.model.people.state, State.RECOVERED.value, self.model.people.rtimer, "Recovered", "rtimer")
 
         alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.rtimer > 0
-        alive_and_active = alive & active
-        assert np.all(states[alive_and_active] == State.RECOVERED.value), "Only recovered individuals should have rtimer > 0."
-        i_recovered = np.nonzero(states == State.RECOVERED.value)[0]
-        assert np.all(self.model.people.rtimer[i_recovered] > 0), (
-            f"Recovered individuals should currently have rtimer > 0 ({self.model.people.rtimer[i_recovered].min()=})"
-        )
+        self.rtimers_one = (alive) & (self.model.people.rtimer == 1)
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        # Check that agents with state RECOVERED by patch match self.model.nodes.R[tick+1]
-        nodeids = self.model.people.nodeid
-        states = self.model.people.state
-        assert np.all(
-            self.model.nodes.R[tick + 1] == np.bincount(nodeids, states == State.RECOVERED.value, minlength=self.model.nodes.count)
-        ), "Recovered census does not match recovered counts (by state)."
-        # Don't need this since np.bincount can't (shouldn't) return negative counts
-        # assert np.all(self.model.nodes.R[tick] >= 0), "Recovered counts must be non-negative"
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.R[tick + 1], self.model.people, State.RECOVERED, "Recovered")
+        _check_timer_active(self.model.people.state, State.RECOVERED.value, self.model.people.rtimer, "Recovered", "rtimer")
+        _check_state_timer_consistency(self.model.people.state, State.RECOVERED.value, self.model.people.rtimer, "Recovered", "rtimer")
 
-        alive = self.model.people.state != State.DECEASED.value
-        active = self.model.people.rtimer > 0
-        alive_and_active = alive & active
-        assert np.all(states[alive_and_active] == State.RECOVERED.value), "Only recovered individuals should have rtimer > 0."
-        i_recovered = np.nonzero(states == State.RECOVERED.value)[0]
-        assert np.all(self.model.people.rtimer[i_recovered] > 0), (
-            f"Recovered individuals should currently have rtimer > 0 ({self.model.people.rtimer[i_recovered].min()=})"
+        assert np.all(self.model.people.state[self.rtimers_one] == State.SUSCEPTIBLE.value), (
+            "Individuals with rtimer == 1 before should now be susceptible."
         )
 
         return
@@ -1004,6 +823,22 @@ class TransmissionSIX:
 
         return
 
+    def prevalidate_step(self, tick: int) -> None:
+        _check_flow_vs_census(self.model.nodes.S[tick], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.I[tick], self.model.people, State.INFECTIOUS, "Infectious")
+
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
+
+        I = self.model.nodes.I  # noqa: E741
+        assert np.all(self.model.nodes.incidence[tick] == (I[tick + 1] - I[tick])), "Incidence does not match change in Infectious counts"
+
+        return
+
+    @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         ft = self.model.nodes.forces[tick]
         N = self.model.nodes.S[tick] + self.model.nodes.I[tick]
@@ -1053,32 +888,26 @@ class TransmissionSI:
 
         return
 
-    def prevalidate_step(self, tick: int) -> None: ...
+    def prevalidate_step(self, tick: int) -> None:
+        # Check ahead because I->R and R->S transitions may have happened meaning S[tick] and I[tick] are "out of date"
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
+
+        self.prv_inext = self.model.nodes.I[tick + 1].copy()
+
+        return
 
     def postvalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.incidence[tick] >= 0), "Incidence counts must be non-negative"
-        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
-        assert np.all(self.model.people.itimer[i_infectious] > 0), (
-            f"Infectious individuals should have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
-        )
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
+
+        Inext = self.model.nodes.I[tick + 1]
+        assert np.all(self.model.nodes.incidence[tick] == (Inext - self.prv_inext)), "Incidence does not match change in Infectious counts"
 
         return
 
     @staticmethod
-    @nb.njit(
-        # (
-        #     nb.int8[:],
-        #     nb.uint16[:],
-        #     nb.float32[:],
-        #     nb.uint32[:, :],
-        #     nb.uint8[:],
-        #     nb.types.FunctionType(nb.types.uint8()),
-        #     nb.int32,
-        # ),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
+    @nb.njit(nogil=True, parallel=True, cache=True)
     def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, infdurdist, infdurmin, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
@@ -1152,32 +981,26 @@ class TransmissionSE:
 
         return
 
-    def prevalidate_step(self, tick: int) -> None: ...
+    def prevalidate_step(self, tick: int) -> None:
+        # Check ahead because E->I and R->S transitions may have happened meaning S[tick] and E[tick] are "out of date"
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.E[tick + 1], self.model.people, State.EXPOSED, "Exposed")
+
+        self.prv_enext = self.model.nodes.E[tick + 1].copy()
+
+        return
 
     def postvalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.incidence[tick] >= 0), "Incidence counts must be non-negative"
-        i_infectious = np.nonzero(self.model.people.state == State.INFECTIOUS.value)[0]
-        assert np.all(self.model.people.itimer[i_infectious] > 0), (
-            f"Infectious individuals should have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
-        )
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.E[tick + 1], self.model.people, State.EXPOSED, "Exposed")
+
+        Enext = self.model.nodes.E[tick + 1]
+        assert np.all(self.model.nodes.incidence[tick] == (Enext - self.prv_enext)), "Incidence does not match change in Exposed counts"
 
         return
 
     @staticmethod
-    @nb.njit(
-        # (
-        #     nb.int8[:],
-        #     nb.uint16[:],
-        #     nb.float32[:],
-        #     nb.uint32[:, :],
-        #     nb.uint8[:],
-        #     nb.types.FunctionType(nb.types.uint8()),
-        #     nb.int32,
-        # ),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
+    @nb.njit(nogil=True, parallel=True, cache=True)
     def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
@@ -1263,33 +1086,44 @@ class VitalDynamicsBase:
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        self._cpeople = self.model.people.count
-        self._deceased = self.model.people.state == State.DECEASED.value
+        self.prv_count = self.model.people.count
+        self.prv_dead = self.model.people.state == State.DECEASED.value
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
-
         nbirths = self.model.nodes.births[tick].sum()
-        assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
-        istart = self._cpeople
+        assert self.model.people.count == self.prv_count + nbirths, "Population count mismatch after births"
+
+        istart = self.prv_count
         iend = self.model.people.count
-        # Assert that number of births by patch matches self.model.nodes.births[tick]
         birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
         assert np.all(birth_counts == self.model.nodes.births[tick]), "Birth counts by patch mismatch"
         assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
+
         if hasattr(self.model.people, "itimer"):
             assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
 
         ndeaths = self.model.nodes.deaths[tick].sum()
         deceased = self.model.people.state == State.DECEASED.value
-        assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
-        # Assert that new deaths by patch matches self.model.nodes.deaths[tick]
-        prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.nodes.count)
+        assert ndeaths == deceased.sum() - self.prv_dead.sum(), "Death counts mismatch"
+
+        prv = np.bincount(self.model.people.nodeid[0 : self.prv_count][self.prv_dead], minlength=self.model.nodes.count)
         now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.nodes.count)
         death_counts = now - prv
         assert np.all(death_counts == self.model.nodes.deaths[tick]), "Death counts by patch mismatch"
+
+        # TODO - check flow delta against nbirths and ndeaths
+        previous_N = np.zeros(len(self.model.scenario), dtype=np.int32)
+        for state in self.states:
+            if (pop := getattr(self.model.nodes, state, None)) is not None:
+                previous_N += pop[tick]
+        expected_N = previous_N + self.model.nodes.births[tick] - self.model.nodes.deaths[tick]
+        actual_N = 0
+        for state in self.states:
+            if (pop := getattr(self.model.nodes, state, None)) is not None:
+                actual_N += pop[tick + 1]
+        assert np.all(expected_N == actual_N), "Population counts by state mismatch after births and deaths"
 
         return
 
@@ -1351,12 +1185,7 @@ class VitalDynamicsSI(VitalDynamicsBase):
         return
 
     @staticmethod
-    @nb.njit(
-        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
+    @nb.njit(nogil=True, parallel=True, cache=True)
     def nb_process_deaths(dods, states, nodeids, delta_S, delta_I, tick):
         for i in nb.prange(len(dods)):
             if dods[i] == tick:
@@ -1371,12 +1200,14 @@ class VitalDynamicsSI(VitalDynamicsBase):
     @validate(pre=VitalDynamicsBase.prevalidate_step, post=VitalDynamicsBase.postvalidate_step)
     def step(self, tick: int) -> None:
         # Do mortality first, then births
+
         delta_S = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
         delta_I = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
         self.nb_process_deaths(self.model.people.dod, self.model.people.state, self.model.people.nodeid, delta_S, delta_I, tick)
         # Combine thread results
         delta_S = delta_S.sum(axis=0).astype(self.model.nodes.S.dtype)
         delta_I = delta_I.sum(axis=0).astype(self.model.nodes.I.dtype)
+
         # state(t+1) = state(t) + ∆state(t)
         self.model.nodes.S[tick + 1] += delta_S  # delta_S is negative or zero
         self.model.nodes.I[tick + 1] += delta_I  # delta_I is negative or zero
@@ -1394,43 +1225,8 @@ class VitalDynamicsSIR(VitalDynamicsBase):
 
         return
 
-    def prevalidate_step(self, tick: int) -> None:
-        self._cpeople = self.model.people.count
-        self._deceased = self.model.people.state == State.DECEASED.value
-
-        return
-
-    def postvalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
-
-        nbirths = self.model.nodes.births[tick].sum()
-        assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
-        istart = self._cpeople
-        iend = self.model.people.count
-        # Assert that number of births by patch matches self.model.nodes.births[tick]
-        birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
-        assert np.all(birth_counts == self.model.nodes.births[tick]), "Birth counts by patch mismatch"
-        assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
-        assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
-
-        ndeaths = self.model.nodes.deaths[tick].sum()
-        deceased = self.model.people.state == State.DECEASED.value
-        assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
-        # Assert that new deaths by patch matches self.model.nodes.deaths[tick]
-        prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.nodes.count)
-        now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.nodes.count)
-        death_counts = now - prv
-        assert np.all(death_counts == self.model.nodes.deaths[tick]), "Death counts by patch mismatch"
-
-        return
-
     @staticmethod
-    @nb.njit(
-        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32[:, :], nb.int32),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
+    @nb.njit(nogil=True, parallel=True, cache=True)
     def nb_process_deaths(dods, states, nodeids, deceased_S, deceased_I, deceased_R, tick):
         for i in nb.prange(len(dods)):
             if dods[i] == tick:
@@ -1446,9 +1242,10 @@ class VitalDynamicsSIR(VitalDynamicsBase):
 
         return
 
-    @validate(pre=prevalidate_step, post=postvalidate_step)
+    @validate(pre=VitalDynamicsBase.prevalidate_step, post=VitalDynamicsBase.postvalidate_step)
     def step(self, tick: int) -> None:
         # Do mortality first, then births
+
         deceased_S = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
         deceased_I = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
         deceased_R = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
@@ -1459,6 +1256,7 @@ class VitalDynamicsSIR(VitalDynamicsBase):
         deceased_S = deceased_S.sum(axis=0).astype(self.model.nodes.S.dtype)
         deceased_I = deceased_I.sum(axis=0).astype(self.model.nodes.I.dtype)
         deceased_R = deceased_R.sum(axis=0).astype(self.model.nodes.R.dtype)
+
         # state(t+1) = state(t) + ∆state(t)
         self.model.nodes.S[tick + 1] -= deceased_S
         self.model.nodes.I[tick + 1] -= deceased_I
@@ -1477,43 +1275,8 @@ class VitalDynamicsSEIR(VitalDynamicsBase):
 
         return
 
-    def prevalidate_step(self, tick: int) -> None:
-        self._cpeople = self.model.people.count
-        self._deceased = self.model.people.state == State.DECEASED.value
-
-        return
-
-    def postvalidate_step(self, tick: int) -> None:
-        assert np.all(self.model.nodes.I[tick + 1] >= 0), "Infected counts must be non-negative"
-
-        nbirths = self.model.nodes.births[tick].sum()
-        assert self.model.people.count == self._cpeople + nbirths, "Population count mismatch after births"
-        istart = self._cpeople
-        iend = self.model.people.count
-        # Assert that number of births by patch matches self.model.nodes.births[tick]
-        birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
-        assert np.all(birth_counts == self.model.nodes.births[tick]), "Birth counts by patch mismatch"
-        assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
-        assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
-
-        ndeaths = self.model.nodes.deaths[tick].sum()
-        deceased = self.model.people.state == State.DECEASED.value
-        assert ndeaths == deceased.sum() - self._deceased.sum(), "Death counts mismatch"
-        # Assert that new deaths by patch matches self.model.nodes.deaths[tick]
-        prv = np.bincount(self.model.people.nodeid[0 : self._cpeople][self._deceased], minlength=self.model.nodes.count)
-        now = np.bincount(self.model.people.nodeid[deceased], minlength=self.model.nodes.count)
-        death_counts = now - prv
-        assert np.all(death_counts == self.model.nodes.deaths[tick]), "Death counts by patch mismatch"
-
-        return
-
     @staticmethod
-    @nb.njit(
-        # (nb.int16[:], nb.int8[:], nb.uint16[:], nb.int32[:, :], nb.int32[:, :], nb.int32[:, :], nb.int32),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
+    @nb.njit(nogil=True, parallel=True, cache=True)
     def nb_process_deaths(dods, states, nodeids, deceased_S, deceased_E, deceased_I, deceased_R, tick):
         for i in nb.prange(len(dods)):
             if dods[i] == tick:
@@ -1531,9 +1294,10 @@ class VitalDynamicsSEIR(VitalDynamicsBase):
 
         return
 
-    @validate(pre=prevalidate_step, post=postvalidate_step)
+    @validate(pre=VitalDynamicsBase.prevalidate_step, post=VitalDynamicsBase.postvalidate_step)
     def step(self, tick: int) -> None:
         # Do mortality first, then births
+
         deceased_S = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
         deceased_E = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
         deceased_I = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
@@ -1546,6 +1310,7 @@ class VitalDynamicsSEIR(VitalDynamicsBase):
         deceased_E = deceased_E.sum(axis=0).astype(self.model.nodes.E.dtype)
         deceased_I = deceased_I.sum(axis=0).astype(self.model.nodes.I.dtype)
         deceased_R = deceased_R.sum(axis=0).astype(self.model.nodes.R.dtype)
+
         # state(t+1) = state(t) + ∆state(t)
         self.model.nodes.S[tick + 1] -= deceased_S
         self.model.nodes.E[tick + 1] -= deceased_E
@@ -1557,3 +1322,32 @@ class VitalDynamicsSEIR(VitalDynamicsBase):
         self._births(tick)
 
         return
+
+
+## Validation helper functions
+
+
+def _check_flow_vs_census(flow, people, state, name):
+    assert np.all(flow == (_actual := np.bincount(people.nodeid, people.state == state.value, len(flow)))), (
+        f"{name} census does not match {name} counts (by state)."
+    )
+    return
+
+
+def _check_unchanged(previous, current, name):
+    assert np.all(current == previous), f"{name} should be unchanged after step()."
+    return
+
+
+def _check_timer_active(states, value, timers, state_name, timer_name):
+    assert np.all(_test := (timers[states == value] > 0)), (
+        f"{state_name} individuals should have {timer_name} > 0 ({timers[states == value].min()=})"
+    )
+    return
+
+
+def _check_state_timer_consistency(states, value, timers, state_name, timer_name):
+    alive = states != State.DECEASED.value
+    active = timers > 0
+    assert np.all(_test := (states[alive & active] == value)), f"Only {state_name} individuals should have {timer_name} > 0."
+    return

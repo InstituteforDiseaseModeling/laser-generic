@@ -191,6 +191,11 @@ if __name__ == "__main__":
     parser.add_argument("unittest", nargs="*")  # Catch all for unittest args
 
     args = parser.parse_args()
+
+    # # debugging
+    # args.grid = True
+    # args.validating = True
+
     PLOTTING = args.plot
     VERBOSE = args.verbose
     VALIDATING = args.validating
@@ -203,9 +208,6 @@ if __name__ == "__main__":
     EM = args.m
     EN = args.n
     PEE = args.p
-
-    # # debugging
-    # args.grid = True
 
     print(f"Using arguments {args=}")
 

@@ -117,7 +117,7 @@ class Default(unittest.TestCase):
     def test_constant_pop(self):
         with ts.start("test_constant_pop"):
             pop = 1e6
-            init_inf = 1
+            init_inf = 10
             scenario = grid(M=1, N=1, node_size_km=10, population_fn=lambda x, y: pop)
             scenario["S"] = scenario.population - init_inf
             scenario["I"] = init_inf
@@ -132,11 +132,13 @@ class Default(unittest.TestCase):
                 model.components = [
                     SI.Susceptible(model),
                     SI.Infectious(model),
-                    # Send in zero mortality rates to prevent warning.
-                    SI.ConstantPopVitalDynamics(
-                        model, birthrate_map.values, ValuesMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1).values
-                    ),
                     SI.Transmission(model),
+                    SI.ConstantPopVitalDynamics(
+                        # Send in zero mortality rates to prevent warning.
+                        model,
+                        birthrate_map.values,
+                        ValuesMap.from_scalar(0.0, nsteps=parameters.nticks, nnodes=1).values,
+                    ),
                 ]
 
             model.run(f"SI Constant Pop ({model.people.count:,}/{model.nodes.count:,})")
@@ -175,6 +177,11 @@ if __name__ == "__main__":
     parser.add_argument("unittest", nargs="*")  # Catch all for unittest args
 
     args = parser.parse_args()
+
+    # # debugging
+    # args.grid = True
+    # args.validating = True
+
     PLOTTING = args.plot
     VERBOSE = args.verbose
     VALIDATING = args.validating
@@ -184,9 +191,6 @@ if __name__ == "__main__":
     EM = args.m
     EN = args.n
     PEE = args.p
-
-    # # debugging
-    # args.grid = True
 
     if not (args.grid or args.linear or args.constant):  # Run everything
         sys.argv[1:] = args.unittest  # Pass remaining args to unittest
