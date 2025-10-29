@@ -1,3 +1,10 @@
+"""
+Waning Maternal Antibodies (MAB) Example
+
+Builds on TransmssionWithDOI from age_at_infection.py to track age at infection,
+adding a MaternalAntibodies component that gives newborns temporary immunity via maternal antibodies.
+"""
+
 from argparse import ArgumentParser
 
 import laser_core.distributions as dists
