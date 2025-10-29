@@ -1155,6 +1155,10 @@ class VitalDynamicsBase:
             # Record today's ∆
             self.model.nodes.births[tick] = births
 
+        for component in self.model.components:
+            if hasattr(component, "on_birth") and callable(component.on_birth):
+                component.on_birth(istart, iend, tick)
+
         return
 
     def plot(self):
