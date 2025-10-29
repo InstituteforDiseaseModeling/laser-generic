@@ -1,4 +1,9 @@
-"""Components for the SI model."""
+"""
+Components for an SI model.
+
+Agents transition from Susceptible to Infectious upon infection.
+Agents remain in the Infectious state indefinitely (no recovery).
+"""
 
 import warnings
 
