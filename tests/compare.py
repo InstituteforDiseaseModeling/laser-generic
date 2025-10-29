@@ -87,7 +87,7 @@ def build_models(m, n, pop_fn, init_infected=0, init_recovered=0, birthrates=Non
 
 def main():
     POPULATION = int(1e6)
-    sir, sirs, seir, seirs = build_models(m=EM, n=EN, pop_fn=lambda x, y: POPULATION, init_infected=10)
+    sir, sirs, seir, seirs = build_models(m=EM, n=EN, pop_fn=lambda x, y: POPULATION, init_infected=100)
 
     models = [
         ("SIR", sir),

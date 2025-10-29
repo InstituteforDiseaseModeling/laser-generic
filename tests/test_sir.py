@@ -11,6 +11,7 @@ import numpy as np
 from laser_core import PropertySet
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
+from scipy.special import lambertw
 
 import laser_generic.models.SIR as SIR
 from laser_generic.models.model import Model
@@ -166,6 +167,65 @@ class Default(unittest.TestCase):
             model.basemap_provider = base_maps[0]  # [ibm]
             print(f"Using basemap: {model.basemap_provider.name}")
             model.plot()
+
+        return
+
+    def test_kermack_mckendrick(self):
+        def attack_fraction(beta, inf_mean, pop, init_inf):
+            """Approximate final attack fraction from R0 using the Kermack-McKendrick equation."""
+            # Solve the equation: AF = 1 - exp(-R0 * AF)
+            R0 = beta * inf_mean
+            S0 = (pop - init_inf) / pop
+            S_inf = -1 / R0 * lambertw(-R0 * S0 * np.exp(-R0)).real
+            A = 1 - S_inf  # Attack fraction
+
+            return A
+
+        INIT_INF = 1_000
+
+        cases = [
+            # (1.11525 / 7, 7.0, 0.2),
+            (1.2160953 / 7, 7.0, 1.0 / 3.0),
+            (1.27685 / 7, 7.0, 0.4),
+            (1.527 / 7, 7.0, 0.6),
+            (2.011675 / 7, 7.0, 0.8),
+        ]
+        for beta, inf_mean, expected_af in cases:
+            failed = 0
+            NITERS = 10  # MAGIC# #1
+            for _ in range(NITERS):
+                scenario = stdgrid(M=1, N=1, population_fn=lambda x, y: 1_000_000)
+                scenario["S"] = scenario["population"] - INIT_INF
+                scenario["I"] = INIT_INF
+                scenario["R"] = 0
+
+                params = PropertySet({"nticks": NTICKS, "beta": beta})
+
+                model = Model(scenario, params)
+
+                infdurdist = dists.normal(loc=inf_mean, scale=2)
+
+                s = SIR.Susceptible(model)
+                i = SIR.Infectious(model, infdurdist)
+                r = SIR.Recovered(model)
+                tx = SIR.Transmission(model, infdurdist)
+                # Recovered has to run _before_ Infectious to move people correctly (Infectious updates model.nodes.R)
+                model.components = [s, r, i, tx]
+
+                model.run(f"SIR Kermack-McKendrick ({model.people.count:,}/{model.nodes.count:,})")
+
+                actual_af = model.nodes.R[-1].sum() / scenario.population.sum()
+                # Check that actual attack fraction is within 5% of expected
+                diff = np.abs(actual_af - expected_af)
+                frac = diff / expected_af
+                # assert frac <= 0.05, f"Attack fraction {actual_af:.4f} differs from expected {expected_af:.4f} by more than 5% ({frac:.2%})"
+                if frac > 0.05:
+                    failed += 1
+
+            THRESHOLD = 3  # MAGIC# #2
+            assert failed < THRESHOLD, (
+                f"Attack fraction test failed {failed} out of {NITERS} iterations for R0={beta * inf_mean:.4f}\n***** This is a statistical test; occasional failures are expected. *****"
+            )
 
         return
 
