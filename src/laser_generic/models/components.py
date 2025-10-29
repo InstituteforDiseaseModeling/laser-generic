@@ -129,10 +129,10 @@ class Exposed:
             f"Exposed individuals should currently have etimer > 0 ({self.model.people.etimer[i_exposed].min()=})"
         )
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.etimer > 0))[0]
-        assert np.all(self.model.people.state[i_non_zero] == State.EXPOSED.value), "Only exposed individuals should have etimer > 0."
+        active = self.model.people.etimer > 0
+        alive_and_active = alive & active
+        assert np.all(self.model.people.state[alive_and_active] == State.EXPOSED.value), "Only exposed individuals should have etimer > 0."
 
-        alive = self.model.people.state != State.DECEASED.value
         self.etimers_one = (alive) & (self.model.people.etimer == 1)
 
         return
@@ -155,8 +155,9 @@ class Exposed:
             f"Exposed individuals should currently have etimer > 0 ({self.model.people.etimer[i_exposed].min()=})"
         )
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.etimer > 0))[0]
-        assert np.all(self.model.people.state[i_non_zero] == State.EXPOSED.value), "Only exposed individuals should have etimer > 0."
+        active = self.model.people.etimer > 0
+        alive_and_active = alive & active
+        assert np.all(self.model.people.state[alive_and_active] == State.EXPOSED.value), "Only exposed individuals should have etimer > 0."
 
         # Check that everyone who had etimer == 1 before the step is now infectious
         assert np.all(self.model.people.state[self.etimers_one] == State.INFECTIOUS.value), (
@@ -354,8 +355,11 @@ class InfectiousIS:
             f"Infected individuals should have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
         )
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.itimer > 0))[0]
-        assert np.all(self.model.people.state[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+        active = self.model.people.itimer > 0
+        alive_and_active = alive & active
+        assert np.all(self.model.people.state[alive_and_active] == State.INFECTIOUS.value), (
+            "Only infectious individuals should have itimer > 0"
+        )
 
         return
 
@@ -368,15 +372,16 @@ class InfectiousIS:
         i_infectious = np.nonzero(states == State.INFECTIOUS.value)[0]
         assert np.all(itimers[i_infectious] > 0), f"Infected individuals should have itimer > 0 ({itimers[i_infectious].min()=})"
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (itimers > 0))[0]
-        assert np.all(states[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+        active = itimers > 0
+        alive_and_active = alive & active
+        assert np.all(states[alive_and_active] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
 
         nodeids = self.model.people.nodeid
         # nodes.I should match count of infectious by node
         assert np.all(
             self.model.nodes.I[tick + 1] == np.bincount(nodeids, states == State.INFECTIOUS.value, minlength=self.model.nodes.count)
         ), "Infected census does not match infectious counts (by state)."
-        assert np.all(self.model.nodes.I[tick + 1] == np.bincount(nodeids, itimers > 0, minlength=self.model.nodes.count)), (
+        assert np.all(self.model.nodes.I[tick + 1] == np.bincount(nodeids, alive_and_active, minlength=self.model.nodes.count)), (
             "Infected census does not match infectious counts (by itimer)."
         )
 
@@ -493,12 +498,12 @@ class InfectiousIR:
             f"Infectious individuals should have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
         )
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.itimer > 0))[0]
-        if not np.all(self.model.people.state[i_non_zero] == State.INFECTIOUS.value):
-            ...
-        assert np.all(self.model.people.state[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+        active = self.model.people.itimer > 0
+        alive_and_active = alive & active
+        assert np.all(self.model.people.state[alive_and_active] == State.INFECTIOUS.value), (
+            "Only infectious individuals should have itimer > 0."
+        )
 
-        alive = self.model.people.state != State.DECEASED.value
         self.itimers_one = (alive) & (self.model.people.itimer == 1)
 
         return
@@ -521,8 +526,11 @@ class InfectiousIR:
             f"Infectious individuals should currently have itimer > 0 ({self.model.people.itimer[i_infectious].min()=})"
         )
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.itimer > 0))[0]
-        assert np.all(self.model.people.state[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0."
+        active = self.model.people.itimer > 0
+        alive_and_active = alive & active
+        assert np.all(self.model.people.state[alive_and_active] == State.INFECTIOUS.value), (
+            "Only infectious individuals should have itimer > 0."
+        )
 
         # Check that everyone who had itimer == 1 before the step is now recovered
         assert np.all(self.model.people.state[self.itimers_one] == State.RECOVERED.value), (
@@ -646,8 +654,9 @@ class InfectiousIRS:
 
         # Check that only infectious agents have itimer > 0
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.itimer > 0))[0]
-        assert np.all(states[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+        active = self.model.people.itimer > 0
+        alive_and_active = alive & active
+        assert np.all(states[alive_and_active] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0."
 
         return
 
@@ -667,8 +676,9 @@ class InfectiousIRS:
 
         # Check that only infectious agents have itimer > 0
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.itimer > 0))[0]
-        assert np.all(states[i_non_zero] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
+        active = self.model.people.itimer > 0
+        alive_and_active = alive & active
+        assert np.all(states[alive_and_active] == State.INFECTIOUS.value), "Only infectious individuals should have itimer > 0"
 
         return
 
@@ -868,8 +878,9 @@ class RecoveredRS:
         # assert np.all(self.model.nodes.R[tick] >= 0), "Recovered counts must be non-negative"
 
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.rtimer > 0))[0]
-        assert np.all(states[i_non_zero] == State.RECOVERED.value), "Only recovered individuals should have rtimer > 0."
+        active = self.model.people.rtimer > 0
+        alive_and_active = alive & active
+        assert np.all(states[alive_and_active] == State.RECOVERED.value), "Only recovered individuals should have rtimer > 0."
         i_recovered = np.nonzero(states == State.RECOVERED.value)[0]
         assert np.all(self.model.people.rtimer[i_recovered] > 0), (
             f"Recovered individuals should currently have rtimer > 0 ({self.model.people.rtimer[i_recovered].min()=})"
@@ -888,8 +899,9 @@ class RecoveredRS:
         # assert np.all(self.model.nodes.R[tick] >= 0), "Recovered counts must be non-negative"
 
         alive = self.model.people.state != State.DECEASED.value
-        i_non_zero = np.nonzero((alive) & (self.model.people.rtimer > 0))[0]
-        assert np.all(states[i_non_zero] == State.RECOVERED.value), "Only recovered individuals should have rtimer > 0."
+        active = self.model.people.rtimer > 0
+        alive_and_active = alive & active
+        assert np.all(states[alive_and_active] == State.RECOVERED.value), "Only recovered individuals should have rtimer > 0."
         i_recovered = np.nonzero(states == State.RECOVERED.value)[0]
         assert np.all(self.model.people.rtimer[i_recovered] > 0), (
             f"Recovered individuals should currently have rtimer > 0 ({self.model.people.rtimer[i_recovered].min()=})"
@@ -1267,7 +1279,8 @@ class VitalDynamicsBase:
         birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
         assert np.all(birth_counts == self.model.nodes.births[tick]), "Birth counts by patch mismatch"
         assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
-        assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
+        if hasattr(self.model.people, "itimer"):
+            assert np.all(self.model.people.itimer[istart:iend] == 0), "Newborns should have itimer == 0"
 
         ndeaths = self.model.nodes.deaths[tick].sum()
         deceased = self.model.people.state == State.DECEASED.value
