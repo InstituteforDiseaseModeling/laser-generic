@@ -1,3 +1,4 @@
+import numba as nb
 import numpy as np
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
@@ -75,4 +76,84 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
+    print("done.")
+
+
+import numpy as np
+
+import laser_generic.models.SEIR as SEIR
+
+State = SEIR.State
+
+
+class MaternalAntibodies:
+    def __init__(self, model, mabdurdist, mabdurmin=1):
+        self.model = model
+        self.mabdurdist = mabdurdist
+        self.mabdurmin = mabdurmin
+        # Add mtimer property to people (uint16)
+        self.model.people.add_scalar_property("mtimer", dtype=np.uint16)
+        # Optionally initialize to 0 (no maternal antibodies)
+        self.model.people.mtimer[:] = 0
+
+    def on_birth(self, newborn_indices):
+        # Set mtimer for newborns and set state to Recovered
+        timers = np.maximum(np.round(self.mabdurdist(size=len(newborn_indices))), self.mabdurmin).astype(np.uint16)
+        self.model.people.mtimer[newborn_indices] = timers
+        self.model.people.state[newborn_indices] = State.RECOVERED.value
+
+    @staticmethod
+    @nb.njit(nogil=True, parallel=True, cache=True)
+    def nb_mabs_step(states, mtimers, sus_val, rec_val):
+        for i in nb.prange(len(states)):
+            if states[i] == rec_val and mtimers[i] > 0:
+                mtimers[i] -= 1
+                if mtimers[i] == 0:
+                    states[i] = sus_val
+        return
+
+    def step(self, tick: int) -> None:
+        # Decrement mtimer and revert to Susceptible when expired
+        self.nb_mabs_step(
+            self.model.people.state,
+            self.model.people.mtimer,
+            State.SUSCEPTIBLE.value,
+            State.RECOVERED.value,
+        )
+        return
+
+
+# Example usage:
+if __name__ == "__main__":
+    import laser_core.distributions as dists
+    from laser_core import PropertySet
+
+    from utils import stdgrid
+
+    NTICKS = 365
+    R0 = 1.386
+    INFECTIOUS_DURATION_MEAN = 7.0
+    EXPOSED_DURATION_SHAPE = 4.5
+    EXPOSED_DURATION_SCALE = 1.0
+
+    scenario = stdgrid()
+    scenario["S"] = scenario["population"] - 10
+    scenario["E"] = 0
+    scenario["I"] = 10
+    scenario["R"] = 0
+    params = PropertySet({"nticks": NTICKS, "beta": R0 / INFECTIOUS_DURATION_MEAN})
+    model = SEIR.Model(scenario, params)
+    expdist = dists.normal(loc=EXPOSED_DURATION_SHAPE, scale=EXPOSED_DURATION_SCALE)
+    infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=2)
+    mabdist = dists.gamma(shape=5, scale=10)  # Example maternal antibody duration distribution
+    s = SEIR.Susceptible(model)
+    e = SEIR.Exposed(model, expdist, infdist)
+    i = SEIR.Infectious(model, infdist)
+    r = SEIR.Recovered(model)
+    mabs = MaternalAntibodies(model, mabdist, mabdurmin=5)
+    model.components = [s, r, i, e, mabs]
+    # Example: simulate births
+    newborns = np.array([0, 1, 2])  # Indices of newborns
+    mabs.on_birth(newborns)
+    model.run()
     print("done.")
