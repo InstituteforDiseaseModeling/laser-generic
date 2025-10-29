@@ -4,11 +4,25 @@ LASER (Light Agent Spatial modeling for ERadication) is a high-performance, agen
 
 The LASER framework is designed to be flexible. The basis of the framework, `laser-core`, is composed of modular components that can be used to create custom epidemiological models. For those who want to explore disease dynamics without the need to code from scratch, the development team is creating [pre-built models](get-started/index.md), which will include a generic epidemiological model and disease-specific models. These pre-built models range from simple compartmental models to more complex agent-based models with spatial dynamics. And finally, for those who want to [contribute to code](contributions.md), the framework is open source and contributions are welcome!
 
+## Installation
+
+
+```sh
+pip install laser-generic
+```
+
+You can also install the in-development version with:
+
+```sh
+pip install https://github.com/InstituteforDiseaseModeling/laser-generic/archive/main.zip
+```
+
+
 ## Learn more
 
 <div class="grid cards" markdown>
 
--   :material-laptop:{ .lg .middle } __Get started modeling__
+-   :material-laptop:{ .lg .middle } __Get started__
 
     ---
 
@@ -22,7 +36,7 @@ The LASER framework is designed to be flexible. The basis of the framework, `las
 
     Full details on all classes and functions.
 
-    [:octicons-arrow-right-24: API reference](parameters.md)
+    [:octicons-arrow-right-24: API reference](autoapi/laser_generic/index.md)
 
 -   :simple-jupyter:{ .lg .middle } __Tutorials__
 
@@ -31,15 +45,6 @@ The LASER framework is designed to be flexible. The basis of the framework, `las
     An interactive tour of key features.
 
     [:octicons-arrow-right-24: Tutorials](tutorials/index.md)
-
--   :octicons-book-16:{ .lg .middle } __Glossary__
-
-    ---
-
-    Look up unfamiliar terms.
-
-    [:octicons-arrow-right-24: Glossary](glossary.md)
-
 
 -   :material-new-box:{ .lg .middle } __What's new__
 
