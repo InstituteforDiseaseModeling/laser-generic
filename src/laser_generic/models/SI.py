@@ -13,6 +13,7 @@ from .components import InfectiousSI as Infectious
 from .components import Susceptible
 from .components import TransmissionSIX as Transmission
 from .components import VitalDynamicsSI as VitalDynamics
+from .components import _check_flow_vs_census
 from .shared import State
 
 __all__ = ["ConstantPopVitalDynamics", "Infectious", "State", "Susceptible", "Transmission", "VitalDynamics"]
@@ -45,9 +46,18 @@ class ConstantPopVitalDynamics:
 
         return
 
-    def prevalidate_step(self, tick: int) -> None: ...
+    def prevalidate_step(self, tick: int) -> None:
+        # Look ahead to state at tick+1 since transmission may (should) have occurred meaning S[tick] and I[tick] are outdated.
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
 
-    def postvalidate_step(self, tick: int) -> None: ...
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        _check_flow_vs_census(self.model.nodes.S[tick + 1], self.model.people, State.SUSCEPTIBLE, "Susceptible")
+        _check_flow_vs_census(self.model.nodes.I[tick + 1], self.model.people, State.INFECTIOUS, "Infectious")
+
+        return
 
     @staticmethod
     @nb.njit(
