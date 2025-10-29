@@ -140,7 +140,7 @@ def seed_infections_randomly(model, ninfections: int = 100) -> np.ndarray:
 
     Returns:
 
-        None
+        np.ndarray: An array of node IDs where the infections were seeded.
     """
 
     # Seed initial infections in random locations at the start of the simulation
