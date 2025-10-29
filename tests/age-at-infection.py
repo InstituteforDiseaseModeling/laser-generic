@@ -31,6 +31,7 @@ from laser_core.demographics import KaplanMeierEstimator
 import laser_generic.models.SEIR as SEIR
 from laser_generic.models.model import Model
 from laser_generic.newutils import ValuesMap
+from laser_generic.newutils import validate
 from utils import stdgrid
 
 State = SEIR.State
@@ -43,6 +44,43 @@ class TransmissionWithDOI(SEIR.Transmission):
         self.model.people.add_scalar_property("doi", dtype=np.int16)
         # Optionally initialize to -1 to indicate never infected
         self.model.people.doi[:] = -1
+
+    def prevalidate_step(self, tick: int) -> None:
+        self.prv_state = self.model.people.state.copy()
+        self.prv_snext = self.model.nodes.S[tick + 1].copy()
+        self.prv_enext = self.model.nodes.E[tick + 1].copy()
+
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        # Everyone who has different state should a) have been SUSCEPTIBLE before and b) be EXPOSED now
+        changed = np.nonzero(self.model.people.state != self.prv_state)[0]
+        assert np.all(self.prv_state[changed] == State.SUSCEPTIBLE.value), (
+            "Only susceptible individuals should change state in transmission."
+        )
+        assert np.all(self.model.people.state[changed] == State.EXPOSED.value), "Only newly infected individuals should now be exposed."
+        # Everyone who is newly exposed should have etimer > 0
+        assert np.all(self.model.people.etimer[changed] > 0), (
+            f"Newly exposed individuals should have etimer > 0 ({self.model.people.etimer[changed].min()=})"
+        )
+        # everyone who is newly exposed should have doi == tick
+        assert np.all(self.model.people.doi[changed] == tick), "Newly exposed individuals should have doi equal to the current tick."
+
+        # S[tick+1] - S'[tick+1] should equal number of newly exposed
+        exposed_by_node = np.bincount(self.model.people.nodeid[changed], minlength=self.model.nodes.count)
+        assert np.all((self.prv_snext - self.model.nodes.S[tick + 1]) == exposed_by_node), (
+            "Number of newly exposed individuals should match the change in susceptible individuals."
+        )
+        # E'[tick+1] - E[tick+1] should equal number of newly exposed
+        assert np.all((self.model.nodes.E[tick + 1] - self.prv_enext) == exposed_by_node), (
+            "Number of newly exposed individuals should match the change in exposed individuals."
+        )
+        # incidence[tick] should equal number of newly exposed
+        assert np.all(self.model.nodes.incidence[tick] == exposed_by_node), (
+            "Incidence should match the number of newly exposed individuals."
+        )
+
+        return
 
     @staticmethod
     @nb.njit(nogil=True, parallel=True, cache=True)
@@ -58,6 +96,7 @@ class TransmissionWithDOI(SEIR.Transmission):
                     doi[i] = tick  # Record tick of infection
         return
 
+    @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         ft = self.model.nodes.forces[tick]
         N = self.model.nodes.S[tick] + self.model.nodes.E[tick] + (I := self.model.nodes.I[tick])  # noqa: E741
@@ -88,25 +127,72 @@ class TransmissionWithDOI(SEIR.Transmission):
 
 
 class Importation:
-    def __init__(self, model, period, new_infections, infdurdist):
+    def __init__(self, model, period, new_infections, infdurdist, infdurmin=1):
         self.model = model
         self.period = period  # e.g., 30 (days/ticks)
         self.new_infections = np.array(new_infections, dtype=np.int32)
         self.infdurdist = infdurdist
+        self.infdurmin = infdurmin
+
+    def prevalidate_step(self, tick: int) -> None:
+        self.prv_state = self.model.people.state.copy()
+        self.prv_snext = self.model.nodes.S[tick + 1].copy()
+        self.prv_inext = self.model.nodes.I[tick + 1].copy()
+
+        return
+
+    def postvalidate_step(self, tick: int) -> None:
+        # Everyone who has different state should a) have been SUSCEPTIBLE before and b) be EXPOSED now
+        changed = np.nonzero(self.model.people.state != self.prv_state)[0]
+
+        if tick % self.period == 0:
+            assert changed.sum() > 0, "There should be new infections on importation days."
+        else:
+            assert changed.sum() == 0, "There should be no new infections on non-importation days."
+
+        assert np.all(self.prv_state[changed] == State.SUSCEPTIBLE.value), (
+            "Only susceptible individuals should change state in transmission."
+        )
+        assert np.all(self.model.people.state[changed] == State.INFECTIOUS.value), "Newly infected individuals should now be infectious."
+        # Everyone who is newly infectious should have itimer > 0
+        assert np.all(self.model.people.itimer[changed] > 0), (
+            f"Newly infectious individuals should have itimer > 0 ({self.model.people.itimer[changed].min()=})"
+        )
+        # Importations don't get a doi
+        # # everyone who is newly infectious should have doi == tick
+        # assert np.all(self.model.people.doi[changed] == tick), "Newly infectious individuals should have doi equal to the current tick."
+
+        # Change in S[tick+1] should equal number of newly infectious
+        infectious_by_node = np.bincount(self.model.people.nodeid[changed], minlength=self.model.nodes.count)
+        assert np.all((self.prv_snext - self.model.nodes.S[tick + 1]) == infectious_by_node), (
+            "Number of newly infectious individuals should match the change in susceptible individuals."
+        )
+        # Change in I[tick+1] should equal number of newly infectious
+        assert np.all((self.model.nodes.I[tick + 1] - self.prv_inext) == infectious_by_node), (
+            "Number of newly infectious individuals should match the change in infectious individuals."
+        )
+        # Don't count importation in incidence
+        # # incidence[tick] should equal number of newly infectious
+        # assert np.all(self.model.nodes.incidence[tick] == infectious_by_node), (
+        #     "Incidence should match the number of newly infectious individuals."
+        # )
+
+        return
 
     @staticmethod
     @nb.njit(nogil=True, parallel=True, cache=True)
-    def nb_importation_step(states, probabilities, nodeids, itimers, infdurdist, inf_by_node, tick):
+    def nb_importation_step(states, probabilities, nodeids, itimers, infdurdist, infdurmin, inf_by_node, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
                 nid = nodeids[i]
                 if np.random.rand() < probabilities[nid]:
                     states[i] = State.INFECTIOUS.value
-                    itimers[i] = infdurdist(tick, nid)
+                    itimers[i] = np.maximum(np.round(infdurdist(tick, nid)), infdurmin)  # Set the infection timer
                     inf_by_node[nb.get_thread_id(), nid] += 1
 
         return
 
+    @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         # Only act on scheduled ticks
         if tick % self.period != 0:
@@ -126,6 +212,7 @@ class Importation:
             self.model.people.nodeid,
             self.model.people.itimer,
             self.infdurdist,
+            self.infdurmin,
             inf_by_node := np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.uint32),
             tick,
         )
@@ -162,6 +249,7 @@ if __name__ == "__main__":
     birthrates_map = ValuesMap.from_scalar(35, nsteps=NTICKS, nnodes=len(scenario))
 
     model = Model(scenario, params, birthrates=birthrates_map.values)
+    # model.validating = True
 
     expdist = dists.normal(loc=EXPOSED_DURATION_MEAN, scale=EXPOSED_DURATION_SCALE)
     infdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=INFECTIOUS_DURATION_SCALE)
