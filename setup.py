@@ -125,7 +125,7 @@ setup(
     },
     # entry_points={
     #     "console_scripts": [
-    #         "laser-generic = laser_generic.cli:run",
+    #         "laser-generic = laser.generic.cli:run",
     #     ]
     # },
     ##    cmdclass={"build_ext": OptionalBuildExt},

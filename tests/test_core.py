@@ -1,4 +1,4 @@
-from laser_generic import compute
+from laser.generic import compute
 
 
 def test_compute():

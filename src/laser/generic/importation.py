@@ -3,11 +3,14 @@ This module defines Importation classes, which provide methods to import cases i
 
 """
 
+from collections.abc import Generator
+from typing import Any
+
 import numpy as np
 from matplotlib.figure import Figure
 
-from laser_generic.utils import seed_infections_in_patch
-from laser_generic.utils import seed_infections_randomly
+from laser.generic.utils import seed_infections_in_patch
+from laser.generic.utils import seed_infections_randomly
 
 
 class Infect_Random_Agents:
@@ -87,7 +90,7 @@ class Infect_Random_Agents:
 
         return
 
-    def plot(self, fig: Figure = None):
+    def plot(self, fig: Figure = None) -> Generator[Any, Any, Any]:
         """
         Placeholder for visualization of infection events.
 
@@ -175,7 +178,7 @@ class Infect_Agents_In_Patch:
 
         return
 
-    def plot(self, fig: Figure = None):
+    def plot(self, fig: Figure = None) -> Generator[Any, Any, Any]:
         """
         Placeholder for visualization of targeted patch infections.
 

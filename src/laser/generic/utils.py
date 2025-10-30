@@ -4,11 +4,12 @@ This module provides utility functions for the laser-measles project.
 """
 
 from math import ceil
+from typing import Any
 
 import click
 import numpy as np
-from laser_core import PropertySet
-from laser_core.migration import distance
+from laser.core import PropertySet
+from laser.core.migration import distance
 
 
 def calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool = False) -> np.ndarray:
@@ -99,7 +100,7 @@ def calc_capacity(population: np.uint32, nticks: np.uint32, cbr: np.float32, ver
 
 
 # Want to think about the ways to seed infections.  Not all infections have a timer!
-def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
+def seed_infections_randomly_SI(model: Any, ninfections: int = 100) -> None:
     """
     Randomly seed initial infections for SI-style models without using timers.
 
@@ -129,7 +130,7 @@ def seed_infections_randomly_SI(model, ninfections: int = 100) -> None:
     return
 
 
-def seed_infections_randomly(model, ninfections: int = 100) -> None:
+def seed_infections_randomly(model: Any, ninfections: int = 100) -> np.ndarray:
     """
     Randomly seed initial infections across the entire population.
 
@@ -162,7 +163,7 @@ def seed_infections_randomly(model, ninfections: int = 100) -> None:
     return inf_nodeids
 
 
-def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
+def seed_infections_in_patch(model: Any, ipatch: int, ninfections: int = 1) -> None:
     """
     Seed initial infections in a specific patch of the population at the start of the simulation.
     This function randomly selects individuals from the specified patch and sets their infection timer
@@ -188,7 +189,7 @@ def seed_infections_in_patch(model, ipatch: int, ninfections: int = 1) -> None:
     return
 
 
-def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1.0) -> None:
+def set_initial_susceptibility_in_patch(model: Any, ipatch: int, susc_frac: float = 1.0) -> None:
     """
     Randomly assign susceptibility levels to individuals in a specific patch at the start of the simulation.
 
@@ -214,7 +215,7 @@ def set_initial_susceptibility_in_patch(model, ipatch: int, susc_frac: float = 1
     return
 
 
-def set_initial_susceptibility_randomly(model, susc_frac: float = 1.0) -> None:
+def set_initial_susceptibility_randomly(model: Any, susc_frac: float = 1.0) -> None:
     """
     Randomly assign susceptibility levels to individuals in the population at the start of the simulation.
 
