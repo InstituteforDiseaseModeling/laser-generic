@@ -149,15 +149,15 @@ class ValuesMap:
         return self._data
 
 
-def grid(M=5, N=5, node_size_km=10, population_fn=None, origin_x=0, origin_y=0):
+def grid(M=5, N=5, node_size_km=10, population_fn=None, origin_x=0, origin_y=0) -> gpd.GeoDataFrame:
     """
     Create an MxN grid of cells anchored at (0, 0) with populations and geometries.
 
     Args:
         M (int): Number of rows (north-south).
         N (int): Number of columns (east-west).
-        grid_size (float): Size of each cell in kilometers (default 10).
-        population (callable): Function returning population for a cell.
+        node_size_km (float): Size of each cell in kilometers (default 10).
+        population_fn (callable): Function returning population for a cell.
         origin_x (float): longitude of the origin (bottom-left corner) -180 <= origin_x < 180.
         origin_y (float): latitude of the origin (bottom-left corner) -90 <= origin_y < 90.
 

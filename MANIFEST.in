@@ -9,7 +9,6 @@ include .coveragerc
 include .editorconfig
 include .github/workflows/github-actions.yml
 include .pre-commit-config.yaml
-include .readthedocs.yml
 include pytest.ini
 include tox.ini
 
@@ -19,9 +18,9 @@ include CONTRIBUTING.md
 include LICENSE
 include README.md
 
-recursive-exclude notebooks *.ipynb
-recursive-exclude notebooks/media *.svg
-recursive-exclude notebooks/media *.png
+recursive-exclude docs/notebooks *.ipynb
+recursive-exclude docs/notebooks/media *.svg
+recursive-exclude docs/notebooks/media *.png
 
 global-exclude *.py[cod] __pycache__/* *.so *.dylib
 

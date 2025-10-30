@@ -3,6 +3,9 @@ This module defines Importation classes, which provide methods to import cases i
 
 """
 
+from collections.abc import Generator
+from typing import Any
+
 import numpy as np
 from matplotlib.figure import Figure
 
@@ -87,7 +90,7 @@ class Infect_Random_Agents:
 
         return
 
-    def plot(self, fig: Figure = None):
+    def plot(self, fig: Figure = None) -> Generator[Any, Any, Any]:
         """
         Placeholder for visualization of infection events.
 
@@ -175,7 +178,7 @@ class Infect_Agents_In_Patch:
 
         return
 
-    def plot(self, fig: Figure = None):
+    def plot(self, fig: Figure = None) -> Generator[Any, Any, Any]:
         """
         Placeholder for visualization of targeted patch infections.
 

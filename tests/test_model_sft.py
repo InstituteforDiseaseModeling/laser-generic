@@ -3,19 +3,19 @@ import itertools
 import numpy as np
 import pandas as pd
 import pytest
-from laser_core import PropertySet
+from laser.core import PropertySet
 from scipy.optimize import curve_fit
 from scipy.optimize import fsolve
 
-from laser_generic import Births_ConstantPop
-from laser_generic import Model
-from laser_generic import Susceptibility
-from laser_generic import Transmission
-from laser_generic.infection import Infection
-from laser_generic.infection import Infection_SIS
-from laser_generic.utils import seed_infections_randomly
-from laser_generic.utils import seed_infections_randomly_SI
-from laser_generic.utils import set_initial_susceptibility_randomly
+from laser.generic import Births_ConstantPop
+from laser.generic import Model
+from laser.generic import Susceptibility
+from laser.generic import Transmission
+from laser.generic.infection import Infection
+from laser.generic.infection import Infection_SIS
+from laser.generic.utils import seed_infections_randomly
+from laser.generic.utils import seed_infections_randomly_SI
+from laser.generic.utils import set_initial_susceptibility_randomly
 
 
 def SI_logistic(t, beta, size, t0):
@@ -78,7 +78,7 @@ def test_si_model_nobirths():
         seed_infections_randomly_SI(model, ninfections=1)
         model.run()
         cases = [model.patches.cases[i][0] for i in range(nticks)]
-        popt, pcov = curve_fit(SI_logistic, t, cases, p0=[0.05, 1.1e5, 1])
+        popt, _pcov = curve_fit(SI_logistic, t, cases, p0=[0.05, 1.1e5, 1])
 
         output.append(
             pd.DataFrame.from_dict(
@@ -136,7 +136,7 @@ def test_si_model_wbirths():
         seed_infections_randomly_SI(model, ninfections=3)
         model.run()
         cases = [model.patches.cases[i][0] for i in range(nticks)]
-        popt, pcov = curve_fit(
+        popt, _pcov = curve_fit(
             SI_logistic_cbr,
             np.arange(nticks),
             cases,
@@ -202,7 +202,7 @@ def test_sir_nobirths():
         seed_infections_randomly(model, ninfections=3)
         model.run()
         cases = [model.patches.cases[i][0] for i in range(nticks)]
-        popt, pcov = curve_fit(
+        popt, _pcov = curve_fit(
             SIS_logistic,
             t,
             cases,
