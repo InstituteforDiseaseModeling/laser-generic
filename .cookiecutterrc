@@ -34,7 +34,7 @@ default_context:
     github_actions_windows: "yes"
     license: "MIT license"
     module_name: "core"
-    package_name: "laser_generic"
+    package_name: "laser.generic"
     pre_commit: "yes"
     project_name: "laser-generic"
     project_short_description: "Generic disease models implented with the LASER framework."

@@ -11,8 +11,8 @@ See the Overview for [installation instructions](index.md#installation).
 To use the project:
 
 ```python
-import laser_generic
-laser_generic.compute(...)
+import laser.generic
+laser.generic.compute(...)
 ```
 
 ## Build a model
@@ -54,7 +54,7 @@ This example will demonstrate how to build and run a simple, 25-patch SEIR-like 
     LASER uses a `PropertySet` (like a dict) to define model-wide parameters. Start with defaults and override as needed.
 
     ``` python
-    from laser_generic.utils import get_default_parameters
+    from laser.generic.utils import get_default_parameters
 
     params = get_default_parameters() | {
         "seed": 42,
@@ -77,7 +77,7 @@ This example will demonstrate how to build and run a simple, 25-patch SEIR-like 
     This initializes patch-level arrays and allocates the population frame.
 
     ``` python
-    from laser_generic.model import Model
+    from laser.generic.model import Model
 
     model = Model(scenario, params)
     ```
@@ -87,12 +87,12 @@ This example will demonstrate how to build and run a simple, 25-patch SEIR-like 
     Components are step functions called every tick. Attach those you want in order.
 
     ``` python
-    from laser_generic.transmission import Transmission
-    from laser_generic.susceptibility import Susceptibility
-    from laser_generic.exposure import Exposure
-    from laser_generic.infection import Infection
-    from laser_generic.importation import Infect_Random_Agents
-    from laser_generic.births import Births
+    from laser.generic.transmission import Transmission
+    from laser.generic.susceptibility import Susceptibility
+    from laser.generic.exposure import Exposure
+    from laser.generic.infection import Infection
+    from laser.generic.importation import Infect_Random_Agents
+    from laser.generic.births import Births
 
     model.components = [
         Births,                # assigns dob

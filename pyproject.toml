@@ -1,15 +1,14 @@
 [project]
-name = "laser-generic"
+name = "laser.generic"
 version = "0.0.0"
 description = "Generic, SI/SIR/SEIR/etc., disease models implemented with the LASER toolkit."
 requires-python = ">= 3.9"
 readme = "README.md"
-license = {file = "LICENSE"}
+license-files = ["LICENSE"]
 keywords = ["sir", "seir", "spatial", "modeling", "laser"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Unix",
     "Operating System :: POSIX",
     "Operating System :: Microsoft :: Windows",
@@ -41,13 +40,15 @@ maintainers = [
 
 dependencies = [
   "click",
-  "laser-core",
+  "laser-core>=0.7.0",
   "tqdm",
   "geopandas",
   "pandas",
   "numpy",
   "scipy",
-  "scikit-learn"
+  "scikit-learn",
+  "mplcursors>=0.7",
+  "contextily>=1.6.2",
 ]
 
 [project.optional-dependencies]
@@ -63,11 +64,15 @@ Issues = "https://github.com/InstituteforDiseaseModeling/laser-generic/issues"
 Changelog = "https://github.com/InstituteforDiseaseModeling/laser-generic/blob/master/CHANGELOG.md"
 
 [project.scripts]
-generic = "laser_generic.cli:run"
+generic = "laser.generic.cli:run"
 
 [build-system]
-requires = ["setuptools>=30.3.0",]
+requires = ["setuptools>=80.9.0",]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["laser*"]
 
 [tool.pytest.ini_options]
 filterwarnings = ["error"]
@@ -168,7 +173,7 @@ search = 'version = release = "{current_version}"'
 replace = 'version = release = "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "src/laser_generic/__init__.py"
+filename = "src/laser/generic/__init__.py"
 search = '__version__ = "{current_version}"'
 replace = '__version__ = "{new_version}"'
 
@@ -181,7 +186,3 @@ replace = 'version: "{new_version}"'
 filename = "pyproject.toml"
 search = 'version = "{current_version}"'
 replace = 'version = "{new_version}"'
-
-[tool.setuptools]
-packages = ["laser.generic"]
-package-dir = {"" = "src"}
