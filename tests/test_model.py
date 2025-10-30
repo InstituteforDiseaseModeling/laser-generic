@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from laser_core import PropertySet
+from laser.core import PropertySet
 
 from laser.generic import Births_ConstantPop
 from laser.generic import Model

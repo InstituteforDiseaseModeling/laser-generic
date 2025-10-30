@@ -25,8 +25,8 @@ Like the Transmission component, the step() function of this Importation compone
 import matplotlib.pyplot as plt
 import numba as nb
 import numpy as np
-from laser_core.demographics import AliasedDistribution
-from laser_core.demographics import KaplanMeierEstimator
+from laser.core.demographics import AliasedDistribution
+from laser.core.demographics import KaplanMeierEstimator
 
 import laser.generic.models.SEIR as SEIR
 from laser.generic.models.model import Model
@@ -226,8 +226,8 @@ class Importation:
 # Example usage in a test or simulation setup:
 if __name__ == "__main__":
     # Build a model as in test_seir.py, but use TransmissionWithDOI
-    import laser_core.distributions as dists
-    from laser_core import PropertySet
+    import laser.core.distributions as dists
+    from laser.core import PropertySet
 
     NTICKS = 3650
     R0 = 10  # measles-ish 1.386

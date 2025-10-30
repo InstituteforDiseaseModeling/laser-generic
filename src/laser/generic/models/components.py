@@ -1,4 +1,4 @@
-import laser_core.distributions as dists
+import laser.core.distributions as dists
 import matplotlib.pyplot as plt
 import numba as nb
 import numpy as np

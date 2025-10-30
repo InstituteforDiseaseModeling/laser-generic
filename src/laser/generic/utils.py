@@ -7,8 +7,9 @@ from math import ceil
 
 import click
 import numpy as np
-from laser_core import PropertySet
-from laser_core.migration import distance
+
+from laser.core import PropertySet
+from laser.core.migration import distance
 
 
 def calc_distances(latitudes: np.ndarray, longitudes: np.ndarray, verbose: bool = False) -> np.ndarray:

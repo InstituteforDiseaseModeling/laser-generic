@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 from tqdm import tqdm
 import numpy as np
-from laser_core import LaserFrame
-from laser_core.migration import distance
-from laser_core.migration import gravity
-from laser_core.migration import row_normalizer
+from laser.core import LaserFrame
+from laser.core.migration import distance
+from laser.core.migration import gravity
+from laser.core.migration import row_normalizer
 
 from laser.generic.newutils import ValuesMap
 from laser.generic.newutils import estimate_capacity

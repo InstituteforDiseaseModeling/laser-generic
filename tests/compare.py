@@ -13,8 +13,8 @@ from pathlib import Path
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
-from laser_core import PropertySet
-import laser_core.distributions as dists
+from laser.core import PropertySet
+import laser.core.distributions as dists
 
 import laser.generic.models.SIR as SIR
 import laser.generic.models.SIRS as SIRS

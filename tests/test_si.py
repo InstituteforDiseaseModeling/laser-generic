@@ -7,9 +7,9 @@ from argparse import ArgumentParser
 from pathlib import Path
 
 import numpy as np
-from laser_core import PropertySet
-from laser_core.demographics import AliasedDistribution
-from laser_core.demographics import KaplanMeierEstimator
+from laser.core import PropertySet
+from laser.core.demographics import AliasedDistribution
+from laser.core.demographics import KaplanMeierEstimator
 
 import laser.generic.models.SI as SI
 from laser.generic.models.model import Model

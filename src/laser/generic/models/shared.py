@@ -1,8 +1,8 @@
 from enum import Enum
 
 import numpy as np
-from laser_core.demographics import AliasedDistribution
-from laser_core.demographics import KaplanMeierEstimator
+from laser.core.demographics import AliasedDistribution
+from laser.core.demographics import KaplanMeierEstimator
 
 __all__ = ["State", "sample_dobs", "sample_dods"]
 

@@ -6,11 +6,11 @@ import unittest
 from argparse import ArgumentParser
 from pathlib import Path
 
-import laser_core.distributions as dists
+import laser.core.distributions as dists
 import numpy as np
-from laser_core import PropertySet
-from laser_core.demographics import AliasedDistribution
-from laser_core.demographics import KaplanMeierEstimator
+from laser.core import PropertySet
+from laser.core.demographics import AliasedDistribution
+from laser.core.demographics import KaplanMeierEstimator
 from scipy.special import lambertw
 
 import laser.generic.models.SIR as SIR
