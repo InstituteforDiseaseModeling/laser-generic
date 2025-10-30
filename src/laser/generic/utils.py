@@ -8,7 +8,6 @@ from typing import Any
 
 import click
 import numpy as np
-
 from laser.core import PropertySet
 from laser.core.migration import distance
 
