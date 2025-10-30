@@ -28,10 +28,10 @@ import numpy as np
 from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 
-import laser_generic.models.SEIR as SEIR
-from laser_generic.models.model import Model
-from laser_generic.newutils import ValuesMap
-from laser_generic.newutils import validate
+import laser.generic.models.SEIR as SEIR
+from laser.generic.models.model import Model
+from laser.generic.newutils import ValuesMap
+from laser.generic.newutils import validate
 from utils import stdgrid
 
 State = SEIR.State

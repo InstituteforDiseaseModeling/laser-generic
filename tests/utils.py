@@ -3,7 +3,7 @@ import warnings
 import contextily as ctx
 import numpy as np
 
-from laser_generic.newutils import grid
+from laser.generic.newutils import grid
 
 __all__ = ["base_maps", "stdgrid"]
 

@@ -29,8 +29,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
 
-from laser_generic import Births
-from laser_generic import Births_ConstantPop
+from laser.generic import Births
+from laser.generic import Births_ConstantPop
 
 
 class Model:

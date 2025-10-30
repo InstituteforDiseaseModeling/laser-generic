@@ -1,4 +1,4 @@
-from laser_generic.newutils import TimingStats as ts  # noqa: I001
+from laser.generic.newutils import TimingStats as ts  # noqa: I001
 
 import json
 import sys
@@ -13,9 +13,9 @@ from laser_core.demographics import AliasedDistribution
 from laser_core.demographics import KaplanMeierEstimator
 from scipy.special import lambertw
 
-import laser_generic.models.SIR as SIR
-from laser_generic.models.model import Model
-from laser_generic.newutils import ValuesMap
+import laser.generic.models.SIR as SIR
+from laser.generic.models.model import Model
+from laser.generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid
 

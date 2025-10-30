@@ -17,9 +17,9 @@ from laser_core.distributions import sample_ints
 from matplotlib import pyplot as plt
 
 from age_at_infection import TransmissionWithDOI
-from laser_generic.models import SEIR
-from laser_generic.models.model import Model
-from laser_generic.newutils import ValuesMap
+from laser.generic.models import SEIR
+from laser.generic.models.model import Model
+from laser.generic.newutils import ValuesMap
 from utils import stdgrid
 
 State = SEIR.State

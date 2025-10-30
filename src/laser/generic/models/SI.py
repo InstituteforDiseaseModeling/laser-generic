@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 import numba as nb
 import numpy as np
 
-from laser_generic.newutils import ValuesMap
-from laser_generic.newutils import validate
+from laser.generic.newutils import ValuesMap
+from laser.generic.newutils import validate
 
 from .components import InfectiousSI as Infectious
 from .components import Susceptible

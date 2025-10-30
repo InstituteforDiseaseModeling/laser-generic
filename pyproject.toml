@@ -1,5 +1,5 @@
 [project]
-name = "laser-generic"
+name = "laser.generic"
 version = "0.0.0"
 description = "Generic, SI/SIR/SEIR/etc., disease models implemented with the LASER toolkit."
 requires-python = ">= 3.9"
@@ -65,11 +65,18 @@ Issues = "https://github.com/InstituteforDiseaseModeling/laser-generic/issues"
 Changelog = "https://github.com/InstituteforDiseaseModeling/laser-generic/blob/master/CHANGELOG.md"
 
 [project.scripts]
-generic = "laser_generic.cli:run"
+generic = "laser.generic.cli:run"
 
 [build-system]
 requires = ["setuptools>=80.9.0",]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["laser*"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.pytest.ini_options]
 filterwarnings = ["error"]
@@ -170,7 +177,7 @@ search = 'version = release = "{current_version}"'
 replace = 'version = release = "{new_version}"'
 
 [[tool.bumpversion.files]]
-filename = "src/laser_generic/__init__.py"
+filename = "src/laser/generic/__init__.py"
 search = '__version__ = "{current_version}"'
 replace = '__version__ = "{new_version}"'
 

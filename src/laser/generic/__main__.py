@@ -1,5 +1,5 @@
 """
-Entrypoint module, in case you use `python -mlaser_generic`.
+Entrypoint module, in case you use `python -mlaser.generic`.
 
 
 Why does this file exist, and why __main__? For more info, read:
@@ -9,7 +9,7 @@ Why does this file exist, and why __main__? For more info, read:
 - https://docs.python.org/3/using/cmdline.html#cmdoption-m
 """
 
-from laser_generic.cli import run
+from laser.generic.cli import run
 
 if __name__ == "__main__":
     run()

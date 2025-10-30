@@ -1,4 +1,4 @@
-from laser_generic.newutils import TimingStats as ts  # noqa: I001
+from laser.generic.newutils import TimingStats as ts  # noqa: I001
 
 import contextily as ctx
 import geopandas as gpd
@@ -11,9 +11,9 @@ from laser_core.migration import distance
 from laser_core.migration import gravity
 from laser_core.migration import row_normalizer
 
-from laser_generic.newutils import ValuesMap
-from laser_generic.newutils import estimate_capacity
-from laser_generic.newutils import get_centroids
+from laser.generic.newutils import ValuesMap
+from laser.generic.newutils import estimate_capacity
+from laser.generic.newutils import get_centroids
 
 
 class Model:
