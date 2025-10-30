@@ -19,6 +19,7 @@ laser_generic.compute(...)
 
 LASER is designed to be modular and flexible to accommodate a variety of modeling needs. The example below will demonstrate the basic set up of a LASER model, using a simple, 25-patch SEIR-like model with vital dynamics (births).
 
+
 1. Define the scenario.
 
     You must define a `scenario` DataFrame with one row per patch, each including a `population`, and optionally `latitude` and `longitude` for plotting or spatial coupling.
@@ -171,6 +172,13 @@ LASER is designed to be modular and flexible to accommodate a variety of modelin
     print("Cases test over time (first 100 ticks):")
     print(model.patches.cases_test[:100, :])
     ```
+
+### Using AI
+
+For internal IDM users, you can use a pre-built AI interface, [JENNER-GPT](https://chatgpt.com/g/g-674f5fd33aec8191bcdc1a2736fb7c8d-laser-gpt-jenner?model=gpt-4o) to create your simulations.
+
+<!-- should add some example prompts -->
+
 
 ## Tutorials
 

@@ -196,4 +196,8 @@ To explore working with Kapaln-Meier estimators, see [Non-disease death estimati
 
 ## Spatial distributions of populations
 
-<!-- [Added here since it's part of the demographics subpackage, but it might make more sense with the migration information] -->
+For spatial models, LASER includes functions to distribute populations across nodes. Populations may be distributed in either a skewed or tapered pattern.
+
+For a skewed distribution, populations are distributed across nodes according to a simple exponential random distribution, with adjustments to ensure the total population and the specified fraction of rural population is adhered to.
+
+For a tapered distribution, populations are distributed following a logarithmic-like decay pattern where the first node (node 0) receives the largest subset of the population (typically half the population), and subsequent nodes receive progressively smaller proportions.

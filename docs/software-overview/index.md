@@ -1,6 +1,8 @@
 # Software overview
 
-LASER is a modeling framework that includes a variety of ways for users to implement the code to model infectious diseases. At the root of the framework is `laser-core`, a suite of components that can be assembled or customized to fit specific modeling needs. The LASER development team is also in the process of producing pre-built disease models crafted from `laser-core` components, which are tailored to address specific public health modeling questions. You can learn more about [creating custom models](../get-started/custom.md) using `laser-core` or running models using pre-built disease models in the [Get started modeling](../get-started/index.md) section.
+LASER is a modeling framework that includes a variety of ways for users to implement the code to model infectious diseases.
+
+<!-- had to delete a bunch since it was framed around laser-core; need to add some more content/context -->
 
 
 ## Design principles
