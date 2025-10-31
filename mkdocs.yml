@@ -102,7 +102,7 @@ plugins:
   - include-markdown # include other files, such as READMEs
   - table-reader # enables rendering of CSV/TSV files or tables
   - mkdocs-jupyter: # enables Jupyter notebooks to be rendered
-      execute: false
+      execute: true
       allow_errors: true
       include-source: true
 #  - mkdocs-autoapi: # API reference generation
