@@ -3,7 +3,7 @@ FROM sphinxdoc/sphinx-latexpdf:latest
 
 # Install extra Sphinx extensions you use
 RUN pip install --no-cache-dir \
-      myst-parser \
+      myst-parser[linkify] \
       sphinx-autodoc-typehints \
       sphinx-rtd-theme \
       sphinx-autoapi

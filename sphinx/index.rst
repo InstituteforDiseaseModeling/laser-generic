@@ -12,11 +12,11 @@ the automatically generated API reference from AutoAPI.
    :maxdepth: 2
    :caption: Getting Started
 
-   ../docs/index.md
-   ../docs/get-started.md
-   ../docs/glossary.md
-   ../docs/whatsnew.md
-   ../docs/contribute.md
+   source/converted/index
+   source/converted/get-started
+   source/converted/glossary
+   source/converted/whatsnew
+   source/converted/contribute
 
 .. toctree::
    :maxdepth: 2

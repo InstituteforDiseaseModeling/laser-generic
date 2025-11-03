@@ -67,6 +67,7 @@ autoapi_type = "python"
 autoapi_dirs = ["../src/laser/generic"]
 autoapi_add_toctree_entry = True
 autoapi_keep_files = True  # optional—see generated .rst under _autoapi/
+autoapi_imported_members = False                # 👈 prevents live imports
 
 autosummary_generate = True
 autoclass_content = "both"
