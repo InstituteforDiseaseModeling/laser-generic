@@ -22,7 +22,6 @@ theme:
         name: Light mode
       primary: white
       accent: light blue
-
     # Dark Mode
     - scheme: slate
       toggle:
