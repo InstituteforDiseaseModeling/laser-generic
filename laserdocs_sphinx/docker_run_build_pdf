@@ -1,0 +1,2 @@
+ 6839  docker run --rm -v "$(pwd)":/docs -w /docs/sphinx laser-docs:latest latexpdf\n
+ 6840  open sphinx/_build/latex/LASER-GENERIC.pdf
