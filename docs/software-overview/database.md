@@ -19,6 +19,6 @@ The classes described below are only a subset of LASER components. For a full li
 The tutorial [Build SIR models](../tutorials/sir.md) demonstrates how these two classes can be implemented.
 
 
-## SortedQue
+## SortedQueue
 
-Timing of events is an important function for agent-based models. Management and tracking of values, especially as the number of agents reaches the millions, can be problematic. `SortedQue` is a custom process created for LASER to track and sort these values, and works directly with `LaserFrame` object arrays.
+Timing of events is an important function for agent-based models. Management and tracking of values, especially as the number of agents reaches the millions, can be problematic. `SortedQueue` is a custom process created for LASER to track and sort these values, and works directly with `LaserFrame` object arrays.

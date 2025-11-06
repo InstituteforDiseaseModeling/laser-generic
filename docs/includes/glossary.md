@@ -1,6 +1,7 @@
 # Glossary
 
-Including a glossary of terms can be helpful to users. Unlike Sphinx, MkDocs does not enable linking to specific terms.
-
-Term
-: Definition of term.
+*[HTML]: Hyper Text Markup Language
+*[ODE]: ordinary differential equation
+*[ODEs]: ordinary differential equations
+*[ABM]: agent-based model
+*[ABMs]: agent-based models

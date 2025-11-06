@@ -112,7 +112,7 @@ $$
 
 This presents us with the choice of whether or not the origin population $i$ is included in $\Omega$ - i.e., does the same "gravity" that brings others to visit a community reduce the propensity of that community's members to travel to other communities?
 
-The Stouffer model **does not** include the impact from the local community:
+This Stouffer model **does not** include the impact from the local community:
 
 $$
 \Omega(i,j) = \left(k:0 < D_{i,k} \leq D_{i,j}\right).

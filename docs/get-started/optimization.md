@@ -4,7 +4,7 @@ As an agent-based model, research using LASER will require thousands of simulati
 
 When creating LASER models, knowing how to identify and fix performance bottlenecks can save compute time and speed results.
 
-## Identifying bottlenecks
+## Identify bottlenecks
 
 Typically, we do not recommend running the code through a profiler, at least not initially. Instead, we take advantage of LASER’s highly modular structure and AI-driven optimization.
 
@@ -28,7 +28,7 @@ def run(self):
 ```
 ///
 
-This often reveals the top 1 to 3 performance bottlenecks. Focus first on the biggest offender—it provides the most opportunity for speedup. Often, the largest bottleneck is not what you might instinctively expect. Avoid optimizing a component only to find out it contributes just a small percentage of the total runtime. A modest improvement in the runtime of an “expensive” component is often more effective than spending a lot of time on highly optimizing a component which only accounts for a small fraction of runtime. Also, make sure that your reporting code is being measured and reported, ideally in its own ‘bucket’. This may be easier or harder depending on how you are doing reporting. Since reporting usually involves counting over the entire population, it usually shows up as a hotspot sooner or later. Fortunately, it’s usually fairly easy to speed up. Or even eliminate.
+This often reveals the top one to three performance bottlenecks. Focus first on the biggest offender—it provides the most opportunity for speedup. Often, the largest bottleneck is not what you might instinctively expect. Avoid optimizing a component only to find out it contributes just a small percentage of the total runtime. A modest improvement in the runtime of an “expensive” component is often more effective than spending a lot of time on highly optimizing a component which only accounts for a small fraction of runtime. Also, make sure that your reporting code is being measured and reported, ideally in its own ‘bucket’. This may be easier or harder depending on how you are doing reporting. Since reporting usually involves counting over the entire population, it usually shows up as a hotspot sooner or later. Fortunately, it’s usually fairly easy to speed up. Or even eliminate.
 
 
 ## Leverage AI
@@ -85,7 +85,7 @@ If the best Numba solution still isn’t fast enough, consider compiled C.
 
 - Never append. There may be cases where you are collecting information as it happens without knowing ahead of time how many rows/entries/elements you’ll need. This is easy in Python using list appending, for example, but that’s a performance killer. Really try to find a way to figure out ahead of time how many entries there will be, and then allocate memory for that, and insert into the existing row.
 
-- Some components have long time-scales, like mortality. By default you are probably going to end up doing most component steps every timestep. You can probably get away with doing mortality updates, for example, far less often. You can experiement with weekly, fortnightly or monthly updates, depending on the timescale of the component you’re optimizing. Just be sure to move everything forward by a week if you’re only doing the update every week. And expect “blocky” plots. Note that there are fancier solutions like ‘strided sharding’ (details omitted).
+- Some components have long timescales, like mortality. By default you are probably going to end up doing most component steps every timestep. You can probably get away with doing mortality updates, for example, far less often. You can experiment with weekly, fortnightly or monthly updates, depending on the timescale of the component you’re optimizing. Just be sure to move everything forward by a week if you’re only doing the update every week. And expect “blocky” plots. Note that there are fancier solutions like ‘strided sharding’ (details omitted).
 
 - When prompting AI, use questions rather than directives. For example:
 
