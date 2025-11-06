@@ -3,6 +3,9 @@ This module defines the Transmission class, which models the transmission of mea
 
 """
 
+from collections.abc import Generator
+from typing import Any
+
 import numba as nb
 import numpy as np
 from matplotlib import pyplot as plt
@@ -22,7 +25,7 @@ class Transmission:
     It supports multiple transmission dynamics depending on the structure of the population (e.g., SI, SEIR).
     """
 
-    def __init__(self, model, verbose: bool = False) -> None:
+    def __init__(self, model: Any, verbose: bool = False) -> None:
         """
         Initialize the Transmission component and register per-patch properties.
 
@@ -45,7 +48,7 @@ class Transmission:
 
         return
 
-    def census(self, model, tick) -> None:
+    def census(self, model: Any, tick) -> None:
         """
         Snapshot infectious counts into `cases_test` at tick `t` and propagate to tick `t+1`.
 
@@ -79,7 +82,7 @@ class Transmission:
         patches.cases_test[tick + 1, :] = patches.cases_test[tick, :].copy()
         return
 
-    def __call__(self, model, tick) -> None:
+    def __call__(self, model: Any, tick) -> None:
         """
         Compute and apply transmission dynamics for the current tick.
 
@@ -279,7 +282,7 @@ class Transmission:
 
         return
 
-    def on_birth(self, model, _tick, istart, iend) -> None:
+    def on_birth(self, model: Any, _tick: int, istart, iend) -> None:
         """
         Initialize `doi` (date of infection) for newborns.
 
@@ -298,7 +301,7 @@ class Transmission:
             model.population.doi[istart] = 0
         return
 
-    def plot(self, fig: Figure = None):
+    def plot(self, fig: Figure = None) -> Generator[Any, Any, Any]:
         """
         Generate a 2x2 subplot figure showing cases and incidence over time.
 
@@ -350,7 +353,7 @@ class TransmissionSIR(Transmission):
     This class is typically paired with `Infection` (not `Exposure`) components.
     """
 
-    def __call__(self, model, tick) -> None:
+    def __call__(self, model: Any, tick) -> None:
         """
         Perform a transmission step for an SIR model at a specific simulation tick.
 

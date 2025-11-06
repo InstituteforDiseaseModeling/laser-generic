@@ -10,7 +10,9 @@ Example:
 
 """
 
+from collections.abc import Generator
 from datetime import datetime
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -58,7 +60,7 @@ class Births:
         return
 
     @property
-    def initializers(self):
+    def initializers(self) -> list:
         """
         Returns the initializers to call on new agent births.
 
@@ -72,7 +74,7 @@ class Births:
         return self._initializers
 
     @property
-    def metrics(self):
+    def metrics(self) -> pd.DataFrame:
         """
         Returns the timing metrics for the births initializers.
 
@@ -84,7 +86,7 @@ class Births:
 
         return pd.DataFrame(self._metrics, columns=["tick"] + [type(initializer).__name__ for initializer in self._initializers])
 
-    def __call__(self, model, tick) -> None:
+    def __call__(self, model: Any, tick: int) -> None:
         """
         Adds new agents to each patch based on expected daily births calculated from CBR. Calls each of the registered initializers for the newborns.
 
@@ -109,7 +111,7 @@ class Births:
         # Potential improvements - if population is growing/shrinking, there should be more/fewer births later in the year
         # If we are doing annually, could generate a 1-year random series of births all at once, rather than a number for the year and then interpolate every day
         # Could consider increments other than 1 year.
-        doy = tick % 365 + 1  # day of year 1…365
+        doy = (tick % 365) + 1  # day of year 1…365
         year = tick // 365
 
         if doy == 1:
@@ -145,7 +147,7 @@ class Births:
 
         return
 
-    def plot(self, fig: Figure = None):
+    def plot(self, fig: Figure = None) -> Generator[Any, Any, Any]:
         """
         Plots the births in the top 5 most populous patches and a pie chart of birth initializer times.
 
@@ -209,7 +211,7 @@ class Births_ConstantPop:
         - `nticks`: Number of time steps in the simulation (int).
     """
 
-    def __init__(self, model, verbose: bool = False):
+    def __init__(self, model: Any, verbose: bool = False):
         """
         Initialize the Births_ConstantPop component.
 
@@ -240,7 +242,7 @@ class Births_ConstantPop:
         # nyears = (model.params.nticks + 364) // 365
         model.patches.add_vector_property("births", length=model.params.nticks, dtype=np.uint32)
         mu = (1 + model.params.cbr / 1000) ** (1 / 365) - 1
-        model.patches.births = model.prng.poisson(lam=model.patches.populations[0, :] * mu, size=model.patches.births.shape)
+        model.patches.births[:] = model.prng.poisson(lam=model.patches.populations[0, :] * mu, size=model.patches.births.shape)
         # model.patches.births[year, :] = model.prng.poisson(model.patches.populations[tick, :] * model.params.cbr / 1000)
         self._initializers = []
         self._metrics = []
@@ -248,7 +250,7 @@ class Births_ConstantPop:
         return
 
     @property
-    def initializers(self):
+    def initializers(self) -> list:
         """
         Returns the initializers to call on new agent births.
 
@@ -262,7 +264,7 @@ class Births_ConstantPop:
         return self._initializers
 
     @property
-    def metrics(self):
+    def metrics(self) -> pd.DataFrame:
         """
         Returns the timing metrics for the births initializers.
 
@@ -274,7 +276,7 @@ class Births_ConstantPop:
 
         return pd.DataFrame(self._metrics, columns=["tick"] + [type(initializer).__name__ for initializer in self._initializers])
 
-    def __call__(self, model, tick) -> None:
+    def __call__(self, model: Any, tick: int) -> None:
         """
         Execute births for a given time step.
 
@@ -335,7 +337,7 @@ class Births_ConstantPop:
 
         return
 
-    def plot(self, fig: Figure = None):
+    def plot(self, fig: Figure = None) -> Generator[Any, Any, Any]:
         """
         Visualize birth activity and initializer performance.
 
@@ -396,7 +398,7 @@ class Births_ConstantPop_VariableBirthRate(Births_ConstantPop):
         model: The simulation model, which must contain population and patch data.
     """
 
-    def __init__(self, model, verbose: bool = False):
+    def __init__(self, model: Any, verbose: bool = False):
         """
         Initialize the Births_ConstantPop_VariableBirthRate component.
 

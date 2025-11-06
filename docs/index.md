@@ -36,7 +36,7 @@ pip install https://github.com/InstituteforDiseaseModeling/laser-generic/archive
 
     Full details on all classes and functions.
 
-    [:octicons-arrow-right-24: API reference](autoapi/laser_generic/index.md)
+    [:octicons-arrow-right-24: API reference](api.md)
 
 -   :simple-jupyter:{ .lg .middle } __Tutorials__
 

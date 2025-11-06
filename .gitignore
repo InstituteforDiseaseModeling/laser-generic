@@ -97,3 +97,6 @@ outputs/*
 outputs2/*
 outputs3/*
 periodicity_outs/*
+
+# ignore timing_data.json anywhere in the project
+timing_data.json
