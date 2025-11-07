@@ -1180,8 +1180,8 @@ class VitalDynamicsBase:
         self.states = states or ["S", "E", "I", "R"]
 
         # Date-Of-Birth and Date-Of-Death properties per agent
-        self.model.people.add_property("dob", dtype=np.int16)
-        self.model.people.add_property("dod", dtype=np.int16)
+        self.model.people.add_property("dob", dtype=np.int32)
+        self.model.people.add_property("dod", dtype=np.int32)
         # birth and death statistics per node
         self.model.nodes.add_vector_property("births", model.params.nticks + 1, dtype=np.int32)
         self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.int32)
