@@ -44,13 +44,9 @@ nav: # Navigation structure for the documentation
     - Intrinsic periodicity of the SIR system: notebooks/06_SIR_wbirths_natural_periodicity.ipynb
     - Exploring the critical community size of an SIR model: notebooks/07_SIR_CCS.ipynb
     - The relationship between spatial coupling and incidence correlation in a 2-patch model: notebooks/08_2patch_SIR_wbirths_correlation.ipynb
-  #- API Reference:
-  #    - laser-generic: reference/laser-generic.md
-  #    - laser-core: reference/laser-core.md
-  - Glossary: glossary.md
+  # - API reference: reference/laser
+  - API reference: reference/
   - Contribution guide: contribute.md
-  - API reference:
-    - reference/laser/core/index.md
 
 # icons, semantic markup, emojis
 markdown_extensions:
@@ -87,17 +83,29 @@ plugins:
   - search # search functionality
   - autorefs # automatically create linkable references
   - include-markdown # include other files, such as READMEs
-  - api-autonav:
-      modules: ['src/laser']
-      nav_section_title: "API reference"
-      api_root_uri: "reference"
-      nav_item_prefix: ""
-      show_full_namespace: true
-      on_implicit_namespace_package: "warn"
+  # - api-autonav:
+  #     modules: ['src/laser']
+  #     nav_section_title: "API reference"
+  #     api_root_uri: "reference"
+  #     nav_item_prefix: ""
+  #     show_full_namespace: true
+  #     on_implicit_namespace_package: "warn"
+      # module_options:
+      #   laser.generic:
+      #     docstring_style: google
+      #     show_signature: false
+      #   ".*":
+      #     heading_level: 1
+      #     show_symbol_type_heading: true
   - mkdocs-jupyter: # enables Jupyter notebooks to be rendered
       execute: true
       allow_errors: true
-      include-source: true
+      include_source: true
+  - gen-files:
+      scripts:
+        - docs/customization/gen-files.py
+  - literate-nav:
+      tab_length: 2
   - mkdocstrings: # process docstrings to generate API reference
       handlers:
         python:
@@ -113,9 +121,6 @@ plugins:
             show_object_full_path: true
             preload_modules:
             - laser.core
-  - gen-files:
-      scripts:
-        - docs/customization/gen-files.py
 
 copyright: Copyright &copy; 2025 Gates Foundation. All rights reserved.
 
