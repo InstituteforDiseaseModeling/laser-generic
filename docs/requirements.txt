@@ -3,7 +3,7 @@ mkdocs-material # doc theme that includes extensive functionality
 mkdocs-include-markdown-plugin # include files outside /docs
 mkdocs-autorefs # create automatic linkable references to sections, etc.
 mkdocs-gen-files # generate external module reference docs
-mkdocs-literative-nav # use a SUMMARY.md file for API reference TOC
+mkdocs-literate-nav # use a SUMMARY.md file for API reference TOC
 mkdocs-section-index # ability to create parent topics in TOC
 python-markdown-math # integrate LaTeX math
 pymdown-extensions # various extensions for markdown
