@@ -13,7 +13,7 @@ theme:
   features:
     - navigation.footer # include a footer with links to privacy, terms, etc.
     - content.code.copy # enable copy buttons for code blocks
-    #- navigation.indexes # enable parent index page for sections
+    - navigation.indexes # enable parent index page for sections
   palette:
     # Light Mode
     - scheme: default
@@ -44,7 +44,6 @@ nav: # Navigation structure for the documentation
     - Intrinsic periodicity of the SIR system: notebooks/06_SIR_wbirths_natural_periodicity.ipynb
     - Exploring the critical community size of an SIR model: notebooks/07_SIR_CCS.ipynb
     - The relationship between spatial coupling and incidence correlation in a 2-patch model: notebooks/08_2patch_SIR_wbirths_correlation.ipynb
-  # - API reference: reference/laser
   - API reference: reference/
   - Contribution guide: contribute.md
 
@@ -83,20 +82,6 @@ plugins:
   - search # search functionality
   - autorefs # automatically create linkable references
   - include-markdown # include other files, such as READMEs
-  # - api-autonav:
-  #     modules: ['src/laser']
-  #     nav_section_title: "API reference"
-  #     api_root_uri: "reference"
-  #     nav_item_prefix: ""
-  #     show_full_namespace: true
-  #     on_implicit_namespace_package: "warn"
-      # module_options:
-      #   laser.generic:
-      #     docstring_style: google
-      #     show_signature: false
-      #   ".*":
-      #     heading_level: 1
-      #     show_symbol_type_heading: true
   - mkdocs-jupyter: # enables Jupyter notebooks to be rendered
       execute: true
       allow_errors: true
