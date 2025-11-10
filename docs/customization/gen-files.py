@@ -1,18 +1,25 @@
 # docs/gen-files.py
 from __future__ import annotations
+
 import importlib
+import logging
 import pkgutil
 from pathlib import Path, PurePosixPath
+
 import mkdocs_gen_files as gen
+
+logger = logging.getLogger(__name__)
 
 SRC = Path("src")
 NS = "laser"
 NS_ROOT = SRC / NS
 CORE_ROOT = "laser.core"  # importable package
 
+
 def ref_md(dotted: str) -> str:
     """reference/<dotted>/index.md with POSIX separators."""
     return str(PurePosixPath("reference") / "/".join(dotted.split(".")) / "index.md")
+
 
 def emit_page(dotted: str, body: str | None = None) -> None:
     with gen.open(ref_md(dotted), "w") as f:
@@ -26,9 +33,10 @@ def emit_page(dotted: str, body: str | None = None) -> None:
         else:
             f.write(body)
 
+
 # ---------- collect from disk: every module + all ancestor packages ----------
 packages: set[str] = set()
-modules: set[str]  = set()
+modules: set[str] = set()
 
 # Ensure the root 'laser' landing exists so we can nest under it if desired
 packages.add(NS)
@@ -61,17 +69,20 @@ try:
     core_items.add(CORE_ROOT)
     for _, name, _ in pkgutil.walk_packages(core_pkg.__path__, prefix=CORE_ROOT + "."):
         core_items.add(name)
-except Exception:
-    # not importable in this env; fine
-    pass
+except Exception as e:  # noqa: S110
+    # not importable in this environment; fine
+    logger.debug("Optional import failed: %s", e)
 
 # ---------- emit all pages ----------
 emitted: set[str] = set()
+
+
 def emit_once(dotted: str, body: str | None = None) -> None:
     if dotted in emitted:
         return
     emit_page(dotted, body)
     emitted.add(dotted)
+
 
 # small landing for 'laser'
 emit_once(NS, f"# {NS}\n\nRoot namespace for LASER packages.\n")
@@ -86,6 +97,7 @@ for name in sorted(core_items, key=lambda s: (s.count("."), s)):
     emit_once(name)
 
 # ---------- SUMMARY.md (two siblings, with correct hierarchical ordering) ----------
+
 
 def _build_tree(root: str, names: set[str]) -> dict:
     """
@@ -110,6 +122,7 @@ def _build_tree(root: str, names: set[str]) -> dict:
 
     return tree
 
+
 def _render_tree(root: str, tree: dict) -> list[str]:
     """
     Render the nested dict as literate-nav bullets under `root`.
@@ -119,19 +132,20 @@ def _render_tree(root: str, tree: dict) -> list[str]:
 
     def walk(rel_parts: list[str], node: dict):
         # rel_parts is the path under the root (e.g., ['generic', 'models'])
-        dotted = ".".join([root] + rel_parts)
+        dotted = ".".join([root, *rel_parts])
         depth = len(rel_parts)  # depth under the root
-        indent = "  " * (depth)  # bullet indent under the root line we'll add earlier
-        path = "/".join([root.replace(".", "/")] + rel_parts) + "/index.md"
+        indent = "  " * depth  # bullet indent under the root line we'll add earlier
+        path = "/".join([root.replace(".", "/"), *rel_parts]) + "/index.md"
         lines.append(f"{indent}- [{dotted}]({path})\n")
         for seg in sorted(node.keys()):
-            walk(rel_parts + [seg], node[seg])
+            walk([*rel_parts, seg], node[seg])
 
     # walk each top-level child under the root
     for seg in sorted(tree.keys()):
         walk([seg], tree[seg])
 
     return lines
+
 
 def _write_block(root: str, pool: set[str]) -> list[str]:
     """
@@ -143,9 +157,10 @@ def _write_block(root: str, pool: set[str]) -> list[str]:
     out.extend(_render_tree(root, subtree))
     return out
 
+
 # Build SUMMARY with two sibling blocks
 summary_lines: list[str] = ["# API reference\n"]
-summary_lines += _write_block("laser.core", emitted)     # emitted contains both disk + core
+summary_lines += _write_block("laser.core", emitted)  # emitted contains both disk + core
 summary_lines += _write_block("laser.generic", emitted)
 
 with gen.open("reference/SUMMARY.md", "w") as f:
