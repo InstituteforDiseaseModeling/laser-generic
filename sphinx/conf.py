@@ -27,15 +27,17 @@ here = os.path.abspath(os.path.dirname(__file__))
 # │   └── laser/
 # │       └── generic/
 # └── sphinx/
+"""
 src_path = os.path.abspath(os.path.join(here, "..", "src"))
 if not os.path.exists(src_path):
     raise RuntimeError(f"Cannot find local source directory at {src_path}")
-sys.path.insert(0, src_path)
+#sys.path.insert(0, src_path)
 
 # Remove any installed copy of 'laser' from sys.path so autodoc uses local code
 for p in list(sys.path):
     if "site-packages" in p and os.path.isdir(os.path.join(p, "laser")):
         sys.path.remove(p)
+"""
 
 # -----------------------------------------------------------------------------
 # Project information
