@@ -4,7 +4,8 @@ from __future__ import annotations
 import importlib
 import logging
 import pkgutil
-from pathlib import Path, PurePosixPath
+from pathlib import Path
+from pathlib import PurePosixPath
 
 import mkdocs_gen_files as gen
 
@@ -69,7 +70,7 @@ try:
     core_items.add(CORE_ROOT)
     for _, name, _ in pkgutil.walk_packages(core_pkg.__path__, prefix=CORE_ROOT + "."):
         core_items.add(name)
-except Exception as e:  # noqa: S110
+except Exception as e:
     # not importable in this environment; fine
     logger.debug("Optional import failed: %s", e)
 
@@ -118,7 +119,7 @@ def _build_tree(root: str, names: set[str]) -> dict:
         parts = full.split(".")
         # Add every prefix between root and the leaf
         for i in range(len(root_parts) + 1, len(parts) + 1):
-            insert(parts[len(root_parts):i])  # relative parts under root
+            insert(parts[len(root_parts) : i])  # relative parts under root
 
     return tree
 
