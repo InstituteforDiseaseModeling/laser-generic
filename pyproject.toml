@@ -74,9 +74,6 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 include = ["laser*"]
 
-[tool.setuptools.package-dir]
-"" = "src"
-
 [tool.pytest.ini_options]
 filterwarnings = ["error"]
 markers = ["modeltest"]
