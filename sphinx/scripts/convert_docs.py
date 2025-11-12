@@ -15,7 +15,4 @@ for md in md_dir.rglob("*.md"):
     rel = md.relative_to(md_dir)
     out = rst_dir / rel.with_suffix(".rst")
     out.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run([
-        "pandoc", "-f", "markdown", "-t", "rst",
-        str(md), "-o", str(out)
-    ])
+    subprocess.run(["pandoc", "-f", "markdown", "-t", "rst", str(md), "-o", str(out)])
