@@ -22,6 +22,7 @@ if spec is not None:
 # -----------------------------------------------------------------------------
 here = Path(__file__).resolve().parent
 
+"""
 # Uncomment this if using auto-import of local modules:
 src_path = here.parent / "src"
 if not src_path.exists():
@@ -35,7 +36,6 @@ for p in list(sys.path):
         sys.path.remove(p)
 """
 
->>>>>>> 7f96dc7 (ruff)
 # -----------------------------------------------------------------------------
 # Project information
 # -----------------------------------------------------------------------------
