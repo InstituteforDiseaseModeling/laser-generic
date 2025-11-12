@@ -60,8 +60,8 @@ nav: # Navigation structure for the documentation
    #   - Intrinsic periodicity of the SIR system: tutorials/notebooks/06_SIR_wbirths_natural_periodicity.ipynb
    #   - Exploring the critical community size of an SIR model: tutorials/notebooks/07_SIR_CCS.ipynb
    #   - The relationship between spatial coupling and incidence correlation in a 2-patch model: tutorials/notebooks/08_2patch_SIR_wbirths_correlation.ipynb
- - API reference: reference/
- - Contribution guide: contribute.md
+  - API reference: reference/
+  - Contribution guide: contribute.md
 
 # icons, semantic markup, emojis
 markdown_extensions:
