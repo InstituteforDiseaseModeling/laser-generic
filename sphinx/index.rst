@@ -4,7 +4,7 @@
 LASER-GENERIC Documentation
 ===========================
 
-Welcome to the LASER-GENERIC documentation suite.  
+Welcome to the LASER-GENERIC documentation suite.
 These pages combine human-authored guides (written in Markdown) with
 the automatically generated API reference from AutoAPI.
 
