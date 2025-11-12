@@ -80,23 +80,12 @@ docs/_build
 uv.lock
 
 tmp/
-notebooks/parameters.csv
-notebooks/cases0.csv
-notebooks/cases1.csv
-notebooks/cases2.csv
-notebooks/cases3.csv
-notebooks/cases4.csv
-notebooks/cases5.csv
-notebooks/cases6.csv
-notebooks/cases7.csv
-notebooks/cases8.csv
-notebooks/cases9.csv
-notebooks/twopatchSIRoutputs/
 src/test.py
-outputs/*
+notebooks/outputs/*
 outputs2/*
 outputs3/*
 periodicity_outs/*
 
 # ignore timing_data.json anywhere in the project
 timing_data.json
+notebooks/outputs/outputs.npy
