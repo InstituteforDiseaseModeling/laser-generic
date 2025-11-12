@@ -1,5 +1,7 @@
 # scripts/convert_docs.py
-import os, subprocess, pathlib
+import os
+import subprocess
+import pathlib
 
 md_dir = pathlib.Path("docs")
 rst_dir = pathlib.Path("sphinx/source/converted")
