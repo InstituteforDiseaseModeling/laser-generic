@@ -1,4 +1,4 @@
-site_name: LASER-generic # update to your project name
+site_name: LASER # update to your project name
 site_url: https://institutefordiseasemodeling.github.io/laser-generic # update to your project URL
 repo_name: InstituteforDiseaseModeling/laser-generic # update to your repo name
 repo_url: https://github.com/InstituteforDiseaseModeling/laser-generic # update to your repo URL
@@ -33,17 +33,33 @@ theme:
 nav: # Navigation structure for the documentation
   - Home: index.md
   - What's new: whatsnew.md
-  - Get started: get-started.md
-  - Tutorials: # this creates a section in the TOC
-    - notebooks/index.md # parent topics for sections must be an index.md file
-    - SI model with no demographics: notebooks/01_SI_nobirths_logistic_growth.ipynb # parent topics for sections must be an index.md file
-    - SI model with constant population demographics: notebooks/02_SI_wbirths_logistic_growth.ipynb
-    - SIS model with no demographics: notebooks/03_SIS_nobirths_logistic_growth.ipynb
-    - Outbreak size in the SIR model: notebooks/04_SIR_nobirths_outbreak_size.ipynb
-    - Average age at infection in the SIR model: notebooks/05_SIR_wbirths_age_distribution.ipynb
-    - Intrinsic periodicity of the SIR system: notebooks/06_SIR_wbirths_natural_periodicity.ipynb
-    - Exploring the critical community size of an SIR model: notebooks/07_SIR_CCS.ipynb
-    - The relationship between spatial coupling and incidence correlation in a 2-patch model: notebooks/08_2patch_SIR_wbirths_correlation.ipynb
+  - Software overview:
+    - software-overview/index.md
+    - Demographics:
+      - software-overview/demographics/index.md
+      - software-overview/demographics/age_pyramid.ipynb
+      - software-overview/demographics/kmestimator.ipynb
+    - software-overview/migration.md
+    - software-overview/database.md
+    - software-overview/transmission.md
+  - Get started:
+    - get-started/index.md
+    - get-started/initialization.md
+    - get-started/calibration.md
+    - get-started/optimization.md
+  - Tutorials:
+    - tutorials/index.md
+    - tutorials/sir.md
+   # - Notebooks:
+   #   - tutorials/notebooks/index.md # parent topics for sections must be an index.md file
+   #   - SI model with no demographics: tutorials/notebooks/01_SI_nobirths_logistic_growth.ipynb # parent topics for sections must be an index.md file
+   #   - SI model with constant population demographics: tutorials/notebooks/02_SI_wbirths_logistic_growth.ipynb
+   #   - SIS model with no demographics: tutorials/notebooks/03_SIS_nobirths_logistic_growth.ipynb
+   #   - Outbreak size in the SIR model: tutorials/notebooks/04_SIR_nobirths_outbreak_size.ipynb
+   #   - Average age at infection in the SIR model: tutorials/notebooks/05_SIR_wbirths_age_distribution.ipynb
+   #   - Intrinsic periodicity of the SIR system: tutorials/notebooks/06_SIR_wbirths_natural_periodicity.ipynb
+   #   - Exploring the critical community size of an SIR model: tutorials/notebooks/07_SIR_CCS.ipynb
+   #   - The relationship between spatial coupling and incidence correlation in a 2-patch model: tutorials/notebooks/08_2patch_SIR_wbirths_correlation.ipynb
   - API reference: reference/
   - Contribution guide: contribute.md
 
@@ -55,6 +71,11 @@ markdown_extensions:
   - md_in_html # enables grids
   - admonition # warnings, etc.
   - def_list
+  - footnotes
+  - pymdownx.snippets: # insert content from other files
+      auto_append:
+        - docs/includes/glossary.md
+  - abbr # term/abbreviation hover description
   - pymdownx.emoji: # emojis and icons
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
@@ -82,6 +103,7 @@ plugins:
   - search # search functionality
   - autorefs # automatically create linkable references
   - include-markdown # include other files, such as READMEs
+  - table-reader # enables rendering of CSV/TSV files or tables
   - mkdocs-jupyter: # enables Jupyter notebooks to be rendered
       execute: true
       allow_errors: true
@@ -106,6 +128,7 @@ plugins:
             show_object_full_path: true
             preload_modules:
             - laser.core
+
 
 copyright: Copyright &copy; 2025 Gates Foundation. All rights reserved.
 

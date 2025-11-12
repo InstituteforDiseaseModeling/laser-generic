@@ -10,6 +10,7 @@ pymdown-extensions # various extensions for markdown
 mkdocs-jupyter # jupyter notebooks
 mkdocstrings # generate API reference from docstrings
 mkdocstrings-python # python handler for mkdocstrings
+mkdocs-table-reader-plugin
 
 # include all packages needed for running Jupyter notebooks
 pandas
