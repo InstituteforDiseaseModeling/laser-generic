@@ -26,8 +26,8 @@ The `SIRModel` class is the core of the implementation. It initializes a populat
 ```
 import numpy as np
 import matplotlib.pyplot as plt
-from laser_core import LaserFrame
-from laser_core import PropertySet
+from laser.core import LaserFrame
+from laser.core import PropertySet
 
 class SIRModel:
     def __init__(self, params):
@@ -204,9 +204,9 @@ As above, the model will require the use of `LaserFrame`, but will now also incl
 import numpy as np
 import matplotlib.pyplot as plt
 import csv
-from laser_core.laserframe import LaserFrame
-from laser_core.demographics.spatialpops import distribute_population_skewed as dps
-from laser_core.migration import gravity
+from laser.core.laserframe import LaserFrame
+from laser.core.demographics.spatialpops import distribute_population_skewed as dps
+from laser.core.migration import gravity
 ```
 ///
 
@@ -728,8 +728,8 @@ In the above examples, we modeled migration by moving individual agents from nod
 
 ```
 import numpy as np
-from laser_core.migration import gravity
-from laser_core.utils import calc_distances
+from laser.core.migration import gravity
+from laser.core.utils import calc_distances
 
 class TransmissionComponent:
     """
@@ -776,8 +776,8 @@ class TransmissionComponent:
         a, b, c, k = self.model.params.a, self.model.params.b, self.model.params.c, self.model.params.k
 
         # Compute all pairwise distances in one call (this speeds up initialization significantly)
-        # from laser_core.migration import gravity, row_normalizer
-        # from laser_core.utils import calc_distances
+        # from laser.core.migration import gravity, row_normalizer
+        # from laser.core.utils import calc_distances
         distances = calc_distances(self.locations[:, 0], self.locations[:, 1])
         self.network = gravity(initial_populations, distances, k, a, b, c)
         self.network /= np.power(initial_populations.sum(), c)  # Normalize
