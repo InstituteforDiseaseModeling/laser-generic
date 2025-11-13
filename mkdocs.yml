@@ -50,16 +50,16 @@ nav: # Navigation structure for the documentation
   - Tutorials:
     - tutorials/index.md
     - tutorials/sir.md
-   # - Notebooks:
-   #   - tutorials/notebooks/index.md # parent topics for sections must be an index.md file
-   #   - SI model with no demographics: tutorials/notebooks/01_SI_nobirths_logistic_growth.ipynb # parent topics for sections must be an index.md file
-   #   - SI model with constant population demographics: tutorials/notebooks/02_SI_wbirths_logistic_growth.ipynb
-   #   - SIS model with no demographics: tutorials/notebooks/03_SIS_nobirths_logistic_growth.ipynb
-   #   - Outbreak size in the SIR model: tutorials/notebooks/04_SIR_nobirths_outbreak_size.ipynb
-   #   - Average age at infection in the SIR model: tutorials/notebooks/05_SIR_wbirths_age_distribution.ipynb
-   #   - Intrinsic periodicity of the SIR system: tutorials/notebooks/06_SIR_wbirths_natural_periodicity.ipynb
-   #   - Exploring the critical community size of an SIR model: tutorials/notebooks/07_SIR_CCS.ipynb
-   #   - The relationship between spatial coupling and incidence correlation in a 2-patch model: tutorials/notebooks/08_2patch_SIR_wbirths_correlation.ipynb
+    - Notebooks:
+      - tutorials/notebooks/index.md # parent topics for sections must be an index.md file
+      - SI model with no demographics: tutorials/notebooks/01_SI_nobirths_logistic_growth.ipynb # parent topics for sections must be an index.md file
+      - SI model with constant population demographics: tutorials/notebooks/02_SI_wbirths_logistic_growth.ipynb
+      - SIS model with no demographics: tutorials/notebooks/03_SIS_nobirths_logistic_growth.ipynb
+      - Outbreak size in the SIR model: tutorials/notebooks/04_SIR_nobirths_outbreak_size.ipynb
+      - Average age at infection in the SIR model: tutorials/notebooks/05_SIR_wbirths_age_distribution.ipynb
+      - Intrinsic periodicity of the SIR system: tutorials/notebooks/06_SIR_wbirths_natural_periodicity.ipynb
+      - Exploring the critical community size of an SIR model: tutorials/notebooks/07_SIR_CCS.ipynb
+      - The relationship between spatial coupling and incidence correlation in a 2-patch model: tutorials/notebooks/08_2patch_SIR_wbirths_correlation.ipynb
   - API reference: reference/
   - Contribution guide: contribute.md
 
