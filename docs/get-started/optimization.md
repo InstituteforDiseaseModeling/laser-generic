@@ -91,4 +91,4 @@ If the best Numba solution still isn’t fast enough, consider compiled C.
 
     `"Do you think it might be better to...?"`
 
-    This prevents oversteering the AI into suboptimal solutions.
+    This prevents oversteering the AI into sub-optimal solutions.
