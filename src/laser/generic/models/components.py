@@ -136,7 +136,6 @@ class Exposed:
         # (nb.int8[:], nb.uint8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:], nb.types.FunctionType(nb.types.uint8()), nb.int32),
         nogil=True,
         parallel=True,
-        cache=True,
     )
     def nb_exposed_step(states, etimers, itimers, symptomatic, nodeids, infdurdist, infdurmin, tick):
         for i in nb.prange(len(states)):
@@ -574,7 +573,6 @@ class InfectiousIRS:
         # (nb.int8[:], nb.uint8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:], nb.types.FunctionType(nb.types.uint8()), min),
         nogil=True,
         parallel=True,
-        cache=True,
     )
     def nb_infectious_step(states, itimers, rtimers, recovered, nodeids, wandurdist, wandurmin, tick):
         for i in nb.prange(len(states)):
@@ -978,7 +976,7 @@ class TransmissionSI:
         return
 
     @staticmethod
-    @nb.njit(nogil=True, parallel=True, cache=True)
+    @nb.njit(nogil=True, parallel=True)
     def nb_transmission_step(states, nodeids, ft, inf_by_node, itimers, infdurdist, infdurmin, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
@@ -1087,7 +1085,7 @@ class TransmissionSE:
         return
 
     @staticmethod
-    @nb.njit(nogil=True, parallel=True, cache=True)
+    @nb.njit(nogil=True, parallel=True)
     def nb_transmission_step(states, nodeids, ft, exp_by_node, etimers, expdurdist, expdurmin, tick):
         for i in nb.prange(len(states)):
             if states[i] == State.SUSCEPTIBLE.value:
