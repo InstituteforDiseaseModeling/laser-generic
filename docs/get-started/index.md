@@ -1,10 +1,10 @@
 # Get started
 
-`laser-generic` is an implementation of the LASER agent-based modeling framework for modeling generic diseases, such as measles.
+LASER is intended for modeling diseases with straightforward and predictable transmission dynamics, such as influenza or measles.
 
 ## Installation
 
-See the Overview for [installation instructions](index.md#installation).
+See the Home page for [installation instructions](../index.md#installation).
 
 ## Usage
 
@@ -17,7 +17,8 @@ laser.generic.compute(...)
 
 ## Build a model
 
-This example will demonstrate how to build and run a simple, 25-patch SEIR-like model with vital dynamics (births).
+LASER is designed to be modular and flexible to accommodate a variety of modeling needs. The example below will demonstrate the basic set up of a LASER model, using a simple, 25-patch SEIR-like model with vital dynamics (births).
+
 
 1. Define the scenario.
 
@@ -172,6 +173,13 @@ This example will demonstrate how to build and run a simple, 25-patch SEIR-like 
     print(model.patches.cases_test[:100, :])
     ```
 
+### Using AI
+
+For internal IDM users, you can use a pre-built AI interface, [JENNER-GPT](https://chatgpt.com/g/g-674f5fd33aec8191bcdc1a2736fb7c8d-laser-gpt-jenner?model=gpt-4o) to create your simulations.
+
+<!-- should add some example prompts -->
+
+
 ## Tutorials
 
-Begin with the first tutorial [SI model with no demographics](notebooks/01_SI_nobirths_logistic_growth.ipynb) for a very simple implementation of the LASER-generic model.
+The [Tutorials](../tutorials/sir.md) section begins with example code to demonstrate setting up simple SIR models and gradually adding complexity. For an interactive experience, begin with the first Jupyter notebook tutorial [SI model with no demographics](../tutorials/notebooks/01_SI_nobirths_logistic_growth.ipynb) for a very simple implementation of the LASER model
