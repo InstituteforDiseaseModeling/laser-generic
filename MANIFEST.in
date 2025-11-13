@@ -21,6 +21,8 @@ include README.md
 recursive-exclude docs/notebooks *.ipynb
 recursive-exclude docs/notebooks/media *.svg
 recursive-exclude docs/notebooks/media *.png
+recursive-include sphinx *.py
+recursive-include sphinx *.rst
 
 global-exclude *.py[cod] __pycache__/* *.so *.dylib
 
@@ -33,3 +35,5 @@ recursive-exclude docs *
 exclude tox.ini
 exclude .pre-commit-config.yaml
 exclude tests/*.gz
+exclude sphinx/scripts/convert_docs.py
+exclude laserdocs_sphinx/*
