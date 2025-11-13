@@ -182,4 +182,4 @@ For internal IDM users, you can use a pre-built AI interface, [JENNER-GPT](https
 
 ## Tutorials
 
-The [Tutorials](../tutorials/sir.md) section begins with example code to demonstrate setting up simple SIR models and gradually adding complexity. For an interactive experience, begin with the first Jupyter notebook tutorial [SI model with no demographics](../tutorials/notebooks/01_SI_nobirths_logistic_growth.ipynb) for a very simple implementation of the LASER model.
+The [Tutorials](../tutorials/sir.md) section begins with example code to demonstrate setting up simple SIR models and gradually adding complexity. For an interactive experience, begin with the first Jupyter notebook tutorial [SI model with no demographics](../tutorials/notebooks/01_SI_nobirths_logistic_growth.ipynb) for a very simple implementation of the LASER model
