@@ -86,7 +86,7 @@ import click
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-from laser_core import LaserFrame, PropertySet
+from laser.core import LaserFrame, PropertySet
 
 class Transmission:
     """
