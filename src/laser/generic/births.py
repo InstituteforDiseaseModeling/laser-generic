@@ -122,7 +122,14 @@ class Births:
             annual_births * (doy - 1) // 365
         )  # Is this not always basically annual_births / 365?
         count_births = todays_births.sum()
-        istart, iend = model.population.add(count_births)
+        try:
+            istart, iend = model.population.add(count_births)
+        except ValueError as ex:
+            print(str(ex))
+            print(
+                "This exception can happen if you've added the Births component but not set the capacity to allow for births. See laser.core.utils.calc_capacity"
+            )
+            raise ex
 
         if hasattr(model.population, "dob"):
             model.population.dob[istart:iend] = tick  # set to current tick
