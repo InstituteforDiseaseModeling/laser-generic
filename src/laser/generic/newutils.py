@@ -198,31 +198,47 @@ def grid(M=5, N=5, node_size_km=10, population_fn=None, origin_x=0, origin_y=0) 
     return gdf
 
 
-def estimate_capacity(birthrates: np.ndarray, initial_pop: np.ndarray) -> np.ndarray:
+def estimate_capacity(birthrates: np.ndarray, initial_pop: np.ndarray, safety_factor: float = 1.0) -> np.ndarray:
     """
-    Estimate the carrying capacity of each node given birthrates and initial population.
-
+    Estimate the required capacity (number of agents) to model a population given birthrates over time.
     Args:
-        birthrates (np.ndarray): 2D array of shape (nticks, nnodes) with CBR (birthrates per 1000 individuals per year) in effect at each tick.
-        initial_pop (np.ndarray): 1D array of shape (nnodes,) with initial population per node.
+        birthrates (np.ndarray): 2D array of shape (nsteps, nnodes) representing birthrates (CBR) per 1,000 individuals per year.
+        initial_pop (np.ndarray): 1D array of length nnodes representing the initial population at each node.
+        safety_factor (float): Safety factor to account for variability in population growth. Default is 1.0.
 
     Returns:
-        np.ndarray: 1D array of shape (nnodes,) with estimated final population count per node.
+        np.ndarray: 1D array of length nnodes representing the estimated required capacity (number of agents) at each node.
     """
-    nticks, nnodes = birthrates.shape
-    assert len(initial_pop) == nnodes, "initial_pop length must match number of nodes in birthrates_map"
-    estimate = initial_pop.copy()
+    # Validate birthrates shape against initial_pop shape
+    _, nnodes = birthrates.shape
+    assert len(initial_pop) == nnodes, f"Number of nodes in birthrates ({nnodes}) and initial_pop length ({len(initial_pop)}) must match"
 
-    for t in range(nticks):
-        # Poisson draw for births per patch
+    # Validate birthrates values, must be >= 0 and <= 100
+    assert np.all(birthrates >= 0.0), "All birthrate values must be non-negative"
+    assert np.all(birthrates <= 100.0), "All birthrate values must be less than or equal to 100"
 
-        # naive = rates[t] / 1000 / 365
-        # _ = np.random.poisson(naive * estimate)
-        accurate = (1.0 + birthrates[t] / 1000) ** (1.0 / 365) - 1.0
-        delta = np.random.poisson(accurate * estimate)
-        estimate += delta
+    # Validate safety_factor
+    assert 0 <= safety_factor <= 6, f"safety_factor must be between 0 and 6, got {safety_factor}"
 
-    return estimate
+    # Convert CBR to daily growth rate
+    # CBR = births per 1,000 individuals per year
+    # CBR / 1000 = births per individual per year
+    # Growth = (1 + CBR / 1000) per individual per year
+    # Daily growth = (1 + CBR / 1000) ^ (1/365)
+    # Daily growth rate = (1 + CBR / 1000) ^ (1/365) - 1
+    lamda = (1.0 + birthrates / 1000) ** (1.0 / 365) - 1.0
+
+    # Geometric Brownian motion approximation for population growth (https://en.wikipedia.org/wiki/Geometric_Brownian_motion#Properties)
+    # E(P_t) = P_0 * exp(mu * t)
+    # where mu is the daily growth rate and t is the number of time steps (days)
+
+    # Since we may have time-varying rates, add up daily growth rates over all time steps
+    exp_mu_t = np.exp(lamda.sum(axis=0))
+
+    safety_multiplier = 1 + safety_factor * (np.sqrt(exp_mu_t) - 1)
+    estimates = np.round(initial_pop * safety_multiplier * exp_mu_t).astype(np.int32)
+
+    return estimates
 
 
 class TimingContext:
