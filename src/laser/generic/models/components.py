@@ -10,6 +10,44 @@ from .shared import sample_dobs
 from .shared import sample_dods
 
 
+@staticmethod
+@nb.njit(
+    nogil=True,
+    parallel=True,
+    cache=True,
+)
+def nb_timer_update(states, test_state, timers, new_state, transitioned, node_ids):
+    for i in nb.prange(len(states)):
+        if states[i] == test_state:
+            timers[i] -= 1
+            if timers[i] == 0:
+                states[i] = new_state
+                transitioned[nb.get_thread_id(), node_ids[i]] += 1
+
+    return
+
+
+@staticmethod
+@nb.njit(
+    nogil=True,
+    parallel=True,
+    cache=True,
+)
+def nb_timer_update_timer_set(
+    states, test_state, oldtimers, new_state, newtimers, transitioned, node_ids, duration_dist, duration_min, tick
+):
+    for i in nb.prange(len(states)):
+        if states[i] == test_state:
+            oldtimers[i] -= 1
+            if oldtimers[i] == 0:
+                states[i] = new_state
+                nid = node_ids[i]
+                newtimers[i] = np.maximum(np.round(duration_dist(tick, nid)), duration_min)  # Set the new timer
+                transitioned[nb.get_thread_id(), nid] += 1
+
+    return
+
+
 class Susceptible:
     """
     Simple Susceptible component suitable for all models (SI/SIS/SIR/SIRS/SEIR/SEIRS).
@@ -131,34 +169,17 @@ class Exposed:
 
         return
 
-    @staticmethod
-    @nb.njit(
-        # (nb.int8[:], nb.uint8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:], nb.types.FunctionType(nb.types.uint8()), nb.int32),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
-    def nb_exposed_step(states, etimers, itimers, newly_infectious, nodeids, infdurdist, infdurmin, tick):
-        for i in nb.prange(len(states)):
-            if states[i] == State.EXPOSED.value:
-                etimers[i] -= 1
-                if etimers[i] == 0:
-                    states[i] = State.INFECTIOUS.value
-                    nid = nodeids[i]
-                    itimers[i] = np.maximum(np.round(infdurdist(tick, nid)), infdurmin)  # Set the infection timer
-                    newly_infectious[nb.get_thread_id(), nid] += 1
-
-        return
-
     def step(self, tick: int) -> None:
         # Propagate the number of exposed individuals in each patch
         # state(t+1) = state(t) + ∆state(t), initialize state(t+1) with state(t)
         self.model.nodes.E[tick + 1] = self.model.nodes.E[tick]
 
         newly_infectious_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
-        self.nb_exposed_step(
+        nb_timer_update_timer_set(
             self.model.people.state,
+            State.EXPOSED.value,
             self.model.people.etimer,
+            State.INFECTIOUS.value,
             self.model.people.itimer,
             newly_infectious_by_node,
             self.model.people.nodeid,
@@ -328,23 +349,6 @@ class InfectiousIS:
 
         return
 
-    @staticmethod
-    @nb.njit(
-        # (nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
-    def nb_infectious_step(states, itimers, newly_recovered, nodeids):
-        for i in nb.prange(len(states)):
-            if states[i] == State.INFECTIOUS.value:
-                itimers[i] -= 1
-                if itimers[i] == 0:
-                    states[i] = State.SUSCEPTIBLE.value
-                    newly_recovered[nb.get_thread_id(), nodeids[i]] += 1
-
-        return
-
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         """Step function for the Infected component.
@@ -357,7 +361,14 @@ class InfectiousIS:
         self.model.nodes.I[tick + 1] = self.model.nodes.I[tick]
 
         newly_recovered_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
-        self.nb_infectious_step(self.model.people.state, self.model.people.itimer, newly_recovered_by_node, self.model.people.nodeid)
+        nb_timer_update(
+            self.model.people.state,
+            State.INFECTIOUS.value,
+            self.model.people.itimer,
+            State.SUSCEPTIBLE.value,
+            newly_recovered_by_node,
+            self.model.people.nodeid,
+        )
         newly_recovered_by_node = newly_recovered_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
         # state(t+1) = state(t) + ∆state(t)
@@ -450,23 +461,6 @@ class InfectiousIR:
 
         return
 
-    @staticmethod
-    @nb.njit(
-        # (nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
-    def nb_infectious_step(states, itimers, newly_recovered, nodeids):
-        for i in nb.prange(len(states)):
-            if states[i] == State.INFECTIOUS.value:
-                itimers[i] -= 1
-                if itimers[i] == 0:
-                    states[i] = State.RECOVERED.value
-                    newly_recovered[nb.get_thread_id(), nodeids[i]] += 1
-
-        return
-
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         """Step function for the Infected component.
@@ -479,7 +473,14 @@ class InfectiousIR:
         self.model.nodes.I[tick + 1] = self.model.nodes.I[tick]
 
         newly_recovered_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
-        self.nb_infectious_step(self.model.people.state, self.model.people.itimer, newly_recovered_by_node, self.model.people.nodeid)
+        nb_timer_update(
+            self.model.people.state,
+            State.INFECTIOUS.value,
+            self.model.people.itimer,
+            State.RECOVERED.value,
+            newly_recovered_by_node,
+            self.model.people.nodeid,
+        )
         newly_recovered_by_node = newly_recovered_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)  # Sum over threads
 
         # state(t+1) = state(t) + ∆state(t)
@@ -569,25 +570,6 @@ class InfectiousIRS:
 
         return
 
-    @staticmethod
-    @nb.njit(
-        # (nb.int8[:], nb.uint8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:], nb.types.FunctionType(nb.types.uint8()), min),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
-    def nb_infectious_step(states, itimers, rtimers, newly_recovered, nodeids, wandurdist, wandurmin, tick):
-        for i in nb.prange(len(states)):
-            if states[i] == State.INFECTIOUS.value:
-                itimers[i] -= 1
-                if itimers[i] == 0:
-                    states[i] = State.RECOVERED.value
-                    nid = nodeids[i]
-                    rtimers[i] = np.maximum(np.round(wandurdist(tick, nid)), wandurmin)  # Set the recovery timer
-                    newly_recovered[nb.get_thread_id(), nid] += 1
-
-        return
-
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         """Step function for the Infected component.
@@ -600,9 +582,11 @@ class InfectiousIRS:
         self.model.nodes.I[tick + 1] = self.model.nodes.I[tick]
 
         newly_recovered_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
-        self.nb_infectious_step(
+        nb_timer_update_timer_set(
             self.model.people.state,
+            State.INFECTIOUS.value,
             self.model.people.itimer,
+            State.RECOVERED.value,
             self.model.people.rtimer,
             newly_recovered_by_node,
             self.model.people.nodeid,
@@ -778,23 +762,6 @@ class RecoveredRS:
 
         return
 
-    @staticmethod
-    @nb.njit(
-        # (nb.int8[:], nb.uint8[:], nb.uint32[:, :], nb.uint16[:]),
-        nogil=True,
-        parallel=True,
-        cache=True,
-    )
-    def nb_recovered_step(states, rtimers, newly_waned_by_node, nodeids):
-        for i in nb.prange(len(states)):
-            if states[i] == State.RECOVERED.value:
-                rtimers[i] -= 1
-                if rtimers[i] == 0:
-                    states[i] = State.SUSCEPTIBLE.value
-                    newly_waned_by_node[nb.get_thread_id(), nodeids[i]] += 1
-
-        return
-
     @validate(pre=prevalidate_step, post=postvalidate_step)
     def step(self, tick: int) -> None:
         # Propagate the number of recovered individuals in each patch
@@ -802,9 +769,11 @@ class RecoveredRS:
         self.model.nodes.R[tick + 1] = self.model.nodes.R[tick]
 
         newly_waned_by_node = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
-        self.nb_recovered_step(
+        nb_timer_update(
             self.model.people.state,
+            State.RECOVERED.value,
             self.model.people.rtimer,
+            State.SUSCEPTIBLE.value,
             newly_waned_by_node,
             self.model.people.nodeid,
         )
@@ -1047,7 +1016,7 @@ class TransmissionSI:
 
 class TransmissionSE:
     """
-    Transmission component for an SIER/SIERS model with S -> E transition and incubation duration.
+    Transmission component for an SEIR/SEIRS model with S -> E transition and incubation duration.
 
     Agents transition from Susceptible to Exposed based on force of infection.
     Sets newly exposed agents' infection timers (etimer) based on `expdurdist` and `expdurmin`.
