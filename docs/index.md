@@ -55,7 +55,7 @@ python -c "import laser.generic; print('LASER is ready.')"
 
 ### 📦 Why `uv`?
 
-[`uv`](https://github.com/astral-sh/uv) is a modern Python package manager that is:
+[`uv`](https://docs.astral.sh/uv/getting-started/installation/) is a modern Python package manager that is:
 
 - Much faster than pip
 - Fully compatible with `pip install`
