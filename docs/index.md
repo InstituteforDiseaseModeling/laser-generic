@@ -4,13 +4,13 @@ LASER (Light Agent Spatial modeling for ERadication) is a high-performance, agen
 
 The LASER framework is designed to be flexible and is composed of modular components that can be used to create custom epidemiological models. For those who want to explore disease dynamics without the need to code from scratch, the framework includes epidemiological components that are designed model diseases with non-vector transmission dynamics. These modules can be used to create anything from simple compartmental models to more complex agent-based models with spatial dynamics. The framework is open-source, so for those who want to [contribute to code](contribute.md), contributions are welcome!
 
-## 🚀 Installing LASER
+## 🚀 Installation
 
 LASER is distributed as a Python package. The **recommended install path for most users** is through the high-level `laser-generic` package, which includes the core engine and all epidemiological modeling tools.
 
 ---
 
-### ✅ Recommended for Most Users
+### ✅ Recommended for most users
 
 To install LASER, run:
 
@@ -31,7 +31,7 @@ from laser.generic.model import Model
 
 ---
 
-### 🛠️ For Engine Developers Only
+### 🛠️ For engine developers only
 
 If you are developing or modifying the simulation internals, you can install the low-level engine directly:
 
@@ -43,7 +43,7 @@ This is **not required** for modelers using the LASER framework via `laser-gener
 
 ---
 
-### 🧪 Verifying the Install
+### 🧪 Verify the install
 
 Check your install with:
 
@@ -55,7 +55,7 @@ python -c "import laser.generic; print('LASER is ready.')"
 
 ### 📦 Why `uv`?
 
-[`uv`](https://docs.astral.sh/uv/getting-started/installation/) is a modern Python package manager that is:
+[`uv`](https://docs.astral.sh/uv/getting-started/installation) is a modern Python package manager that is:
 
 - Much faster than pip
 - Fully compatible with `pip install`
@@ -66,8 +66,6 @@ To install `uv`:
 ```
 pip install uv
 ```
-
-Or follow the official [installation guide](https://docs.astral.sh/uv/installation/).
 
 ---
 
