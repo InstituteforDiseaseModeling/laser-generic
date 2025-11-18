@@ -153,8 +153,8 @@ extra:
 
 
   analytics:
-    provider: google
-    tracking_id: # no tracking until we can implement OneTrust cookie consent
+    provider: custom
+    tracking_id: GTM-NK4K647
     feedback:
       title: Was this page helpful?
       ratings:
