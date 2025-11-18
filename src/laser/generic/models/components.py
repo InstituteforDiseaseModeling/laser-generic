@@ -728,7 +728,7 @@ class InfectiousIRS:
     This component manages infectious individuals in models where recovery confers
     temporary immunity, after which agents become susceptible again (SIRS/SEIRS).
 
-    ⚙️ Responsibilities:
+    Responsibilities:
     - Initializes infectious agents from `model.scenario.I`
     - Assigns and tracks infectious timers (`itimer`) per agent
     - Transitions agents from `INFECTIOUS` to `RECOVERED` when `itimer == 0`
@@ -738,31 +738,31 @@ class InfectiousIRS:
         • `R[t, i]`: current recovered count
         • `recovered[t, i]`: number of agents recovering on tick `t`
 
-    📥 Required Inputs:
+    Required Inputs:
     - `model.scenario.I`: number of initially infected agents per node
     - `infdurdist`: function returning infection durations
     - `wandurdist`: function returning immunity durations (waning)
     - `infdurmin`: minimum infectious period (default = 1 day)
     - `wandurmin`: minimum duration of immunity (default = 1 day)
 
-    📊 Outputs:
+    Outputs:
     - `model.people.itimer`: days remaining in the infectious state
     - `model.people.rtimer`: days remaining in the recovered state
     - `model.nodes.I`, `model.nodes.R`: counts per node per tick
     - `model.nodes.recovered[t]`: number of recoveries recorded on tick `t`
 
-    🔁 Step Behavior:
+    Step Behavior:
     - Infectious agents decrement their `itimer`
     - When `itimer == 0`, agents become recovered and receive an `rtimer`
     - Patch-level totals are updated
     - Downstream components (e.g., `Recovered`) handle `rtimer` countdown and eventual return to `SUSCEPTIBLE`
 
-    🧪 Validation:
+    Validation:
     - Ensures timer consistency and population accounting
     - Confirms correct infectious-to-recovered transitions
     - Can be chained with recovery and waning components for full SIRS/SEIRS loops
 
-    📈 Plotting:
+    Plotting:
     Two plots are provided:
     1. Infected counts per node
     2. Total infected and recovered counts across time
@@ -1804,13 +1804,13 @@ class VitalDynamicsSI(VitalDynamicsBase):
     health states are `SUSCEPTIBLE` and `INFECTIOUS`. It supports both daily births and
     non-disease deaths using age-structured survival curves and crude birth rates (CBR).
 
-    ⚙️ Responsibilities:
+    Responsibilities:
     - Applies daily mortality by checking agent `dod == tick`
     - Removes agents from `S` or `I` and marks them `DECEASED`
     - Adds new agents as `SUSCEPTIBLE` using `_births()`, sampling age and lifespan
     - Updates patch-level counts in `S`, `I`, `births`, and `deaths`
 
-    🧪 Validation:
+    Validation:
     - Ensures birth and death counts match population changes
     - Verifies newborn states and death state transitions
 
@@ -1868,13 +1868,13 @@ class VitalDynamicsSIR(VitalDynamicsBase):
     and recovered compartments. It handles per-agent births and age-dependent deaths
     and adjusts patch-level state counts accordingly.
 
-    ⚙️ Responsibilities:
+    Responsibilities:
     - Applies mortality by removing agents in `S`, `I`, or `R` with `dod == tick`
     - Marks deceased agents with `State.DECEASED`
     - Adds newborns as `SUSCEPTIBLE`, updating `S`, `births`, and `deaths`
     - Maintains per-tick, per-patch counts for `S`, `I`, `R`, `births`, `deaths`
 
-    🧪 Validation:
+    Validation:
     - Verifies consistent population accounting across all compartments
     - Asserts correct transition timing for births and deaths
 
@@ -1940,13 +1940,13 @@ class VitalDynamicsSEIR(VitalDynamicsBase):
     This component supports full vital dynamics in compartmental models that include
     an incubation stage (`EXPOSED`) in addition to infection and recovery.
 
-    ⚙️ Responsibilities:
+    Responsibilities:
     - Applies daily age-dependent mortality across `S`, `E`, `I`, and `R`
     - Marks deceased agents as `DECEASED`, removing them from the simulation
     - Adds new agents as `SUSCEPTIBLE`, assigning age and expected lifespan
     - Updates per-tick, per-node counts for `S`, `E`, `I`, `R`, `births`, and `deaths`
 
-    🧪 Validation:
+    Validation:
     - Ensures consistent agent transitions and patch-level flows
     - Confirms that changes in population reflect births minus deaths
 
