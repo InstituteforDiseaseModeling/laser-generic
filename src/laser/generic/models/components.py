@@ -12,7 +12,7 @@ from .shared import sample_dods
 
 class Susceptible:
     """
-    Susceptible Component for Patch-Based Compartmental Models (S, SI, SIS, SIR, SEIR, etc.)
+    Susceptible Component for Patch-Based Agent-Based Models (S, SI, SIS, SIR, SEIR, etc.)
 
     This component initializes and tracks the count of susceptible individuals (`S`) in
     a spatially structured agent-based model. It is compatible with all standard LASER
@@ -29,8 +29,8 @@ class Susceptible:
     - Validates consistency between patch-level susceptible counts and agent-level state.
 
     Usage:
-    Add this component early in the component list for any S-based model, typically before
-    transmission or exposure components. Compatible with:
+    Add this component early in the component list for any model with SUSCEPTIBLE agents, 
+    typically before transmission or exposure components. Compatible with:
         - `SIR.Transmission`
         - `SIR.Exposure`
         - `SIR.Infectious`
@@ -130,7 +130,7 @@ class Exposed:
     - Assigns and tracks per-agent incubation timers (`etimer`)
     - Transitions agents from `EXPOSED` to `INFECTIOUS` when `etimer == 0`
     - Assigns new infection timers (`itimer`) upon becoming infectious
-    - Updates patch-level exposed (`E`) and symptomatic case counts
+    - Updates patch-level EXPOSED (`E`) and INFECTIOUS case counts
     - Provides validation hooks for state and timer consistency
 
     Required Inputs:
@@ -143,7 +143,7 @@ class Exposed:
     Outputs:
     - `model.people.etimer`: agent-level incubation timer
     - `model.nodes.E[t, i]`: number of exposed individuals at time `t` in node `i`
-    - `model.nodes.symptomatic[t, i]`: number of newly symptomatic (infectious) cases per node per day
+    - `model.nodes.newly_infectious[t, i]`: number of newly infectious cases per node per day
 
     Validation:
     - Ensures consistency between individual states and `etimer` values
@@ -418,8 +418,8 @@ class InfectiousIS:
 
     Required Inputs:
     - `model.scenario.I`: initial number of infectious agents per patch
-    - `infdurdist`: a callable function returning infection durations
-    - `infdurmin`: the minimum infection period (default = 1 day)
+    - `infdurdist`: a callable function which samples the infectious duration distribution
+    - `infdurmin`: the minimum infection period (default = 1 time step)
 
     Outputs:
     - `model.people.itimer`: per-agent infection countdown timer
@@ -740,8 +740,8 @@ class InfectiousIRS:
 
     Required Inputs:
     - `model.scenario.I`: number of initially infected agents per node
-    - `infdurdist`: function returning infection durations
-    - `wandurdist`: function returning immunity durations (waning)
+    - `infdurdist`: function that samples the infectious duration distribution
+    - `wandurdist`: function that samples the waning immunity duration distribution
     - `infdurmin`: minimum infectious period (default = 1 day)
     - `wandurmin`: minimum duration of immunity (default = 1 day)
 
@@ -770,8 +770,8 @@ class InfectiousIRS:
     Example:
         model.components = [
             SIR.Susceptible(model),
-            Exposed(model, ...),
             InfectiousIRS(model, infdurdist, wandurdist),
+            Exposed(model, ...),
             Recovered(model),
         ]
     """
@@ -1019,12 +1019,12 @@ class RecoveredRS:
     - Decrements `rtimer` each tick; transitions agents to `SUSCEPTIBLE` when `rtimer == 0`
     - Updates patch-level counts:
         • `R[t, i]`: number of recovered individuals in node `i` at time `t`
-        • `waned[t, i]`: number of agents who re-entered susceptibility on day `t`
+        • `waned[t, i]`: number of agents who re-entered susceptibility on time step `t`
 
     Required Inputs:
     - `model.scenario.R`: initial number of recovered individuals per node
-    - `wandurdist`: a function returning waning durations
-    - `wandurmin`: minimum duration of immunity (default = 1 day)
+    - `wandurdist`: a function sampling the waning immunity duration distribution
+    - `wandurmin`: minimum duration of immunity (default = 1 time step)
 
     Outputs:
     - `model.people.rtimer`: per-agent countdown to immunity expiration
@@ -1035,7 +1035,7 @@ class RecoveredRS:
     - Agents with `state == RECOVERED` decrement `rtimer`
     - When `rtimer == 0`, they return to `SUSCEPTIBLE`
     - `R` and `S` counts are updated to reflect this transition
-    - `waned[t]` logs the number of agents who lost immunity on day `t`
+    - `waned[t]` logs the number of agents who lost immunity on time step `t`
 
     Validation:
     - Ensures population conservation and consistency between agent states and patch totals
@@ -1049,8 +1049,8 @@ class RecoveredRS:
     Example:
         model.components = [
             SIR.Susceptible(model),
+            SEIRS.Infectious(model, infdurdist, wandurdist),
             Exposed(model, ...),
-            InfectiousIRS(model, infdurdist, wandurdist),
             RecoveredRS(model, wandurdist),
         ]
     """
@@ -1190,7 +1190,7 @@ class TransmissionSIX:
 
     Responsibilities:
     - Computes per-node force of infection (`λ`) at each tick:
-        λ = β * (I / N), with optional spatial coupling via a migration matrix
+        λ = β * (I / N), with spatial coupling via a migration matrix
     - Applies probabilistic infection to susceptible agents using `nb_transmission_step`
     - Updates per-node `S` and `I` counts accordingly
     - Tracks new infections (incidence) and FOI values per node and tick
@@ -1199,7 +1199,7 @@ class TransmissionSIX:
     - `model.nodes.I[t]`: number of infectious agents per node at tick `t`
     - `model.nodes.S[t]`: number of susceptible agents per node at tick `t`
     - `model.params.beta`: transmission rate (global)
-    - `model.network` (optional): matrix of spatial coupling between nodes
+    - `model.network`: matrix of spatial coupling between nodes
 
     Outputs:
     - `model.nodes.forces[t, i]`: force of infection in node `i` at tick `t`
@@ -1207,7 +1207,7 @@ class TransmissionSIX:
 
     Step Behavior:
     - Computes FOI (`λ`) for each node
-    - Optionally applies inter-node infection pressure via `model.network`
+    - Applies inter-node infection pressure via `model.network`
     - Converts FOI into a Bernoulli probability using: `p = 1 - exp(-λ)`
     - Infects susceptible agents probabilistically
     - Updates state and records incidence
@@ -1327,20 +1327,20 @@ class TransmissionSI:
 
     Required Inputs:
     - `model.params.beta`: transmission rate (global)
-    - `model.network`: optional [n x n] matrix of transmission coupling
-    - `infdurdist(tick, node)`: callable returning sampled infection duration
+    - `model.network`: [n x n] matrix of transmission coupling
+    - `infdurdist(tick, node)`: callable sampling the infectious duration distribution
     - `model.people.itimer`: preallocated per-agent infection timer
 
     Outputs:
     - `model.nodes.forces[t, i]`: computed FOI in node `i` at time `t`
-    - `model.nodes.incidence[t, i]`: new infections in node `i` on day `t`
+    - `model.nodes.incidence[t, i]`: new infections in node `i` on time step `t`
 
     Step Behavior:
-    - Computes local FOI (`λ`) from `I[t] / N`
-    - Adds inbound/outbound force from other nodes via network coupling
-    - Applies stochastic infection process per agent
-    - Assigns `itimer` for each newly infected agent
-    - Updates `S[t+1]`, `I[t+1]`, and records incidence
+    - Computes FOI (`λ`) for each node
+    - Applies inter-node infection pressure via `model.network`
+    - Converts FOI into a Bernoulli probability using: `p = 1 - exp(-λ)`
+    - Infects susceptible agents probabilistically
+    - Updates state and records incidence
 
     Validation:
     - Ensures consistency between incidence and change in `I`
@@ -1468,15 +1468,15 @@ class TransmissionSE:
 
     Responsibilities:
     - Computes force of infection `λ = β * (I / N)` at each tick per node
-    - Optionally adjusts FOI using `model.network` for inter-node transmission coupling
+    - Adjusts FOI using `model.network` for inter-node transmission coupling. Required but can be nullified by filling with all zeros.
     - Applies FOI to susceptible agents to determine exposure
     - Assigns incubation durations (`etimer`) to each newly exposed agent
     - Updates node-level counts for `S` and `E` and logs daily incidence
 
     Required Inputs:
     - `model.params.beta`: global transmission rate
-    - `model.network`: optional [n x n] matrix for FOI migration
-    - `expdurdist(tick, node)`: callable returning sampled incubation durations
+    - `model.network`: [n x n] matrix for FOI migration
+    - `expdurdist(tick, node)`: callable that samples the exposure/incubation duration distribution
     - `expdurmin`: minimum incubation period (default = 1)
 
     Outputs:
@@ -1485,10 +1485,11 @@ class TransmissionSE:
     - `model.people.etimer`: per-agent incubation countdown
 
     Step Behavior:
-    - Computes FOI and converts it to Bernoulli infection probability
-    - Stochastically exposes susceptible agents using `nb_transmission_step`
-    - Assigns `etimer` values to exposed agents
-    - Updates `S[t+1]`, `E[t+1]`, and records incidence
+    - Computes FOI (`λ`) for each node
+    - Optionally applies inter-node infection pressure via `model.network`
+    - Converts FOI into a Bernoulli probability using: `p = 1 - exp(-λ)`
+    - Infects susceptible agents probabilistically
+    - Updates state and records incidence
 
     Validation:
     - Validates consistency between agent states and patch-level counts before and after tick
@@ -1625,9 +1626,9 @@ class VitalDynamicsBase:
     - Invokes `on_birth(...)` hooks in downstream components (if defined)
 
     Required Inputs:
-    - `birthrates[t, i]`: daily crude birth rate for each node
-    - `pyramid`: instance of `AliasedDistribution` to sample agent age at birth
-    - `survival`: instance of `KaplanMeierEstimator` to sample lifespan from age
+    - `birthrates[t, i]`: annual crude birth rate for each node
+    - `pyramid`: instance of `AliasedDistribution` to sample agent age at birth (only for initial population)
+    - `survival`: instance of `KaplanMeierEstimator` to sample lifespan from age (for both initial population and future births)
     - `states`: list of state labels used in population accounting (default = `["S", "E", "I", "R"]`)
 
     Outputs:
@@ -1649,9 +1650,6 @@ class VitalDynamicsBase:
 
     Extension Notes:
     This class does not implement `step()` and must be subclassed with a scheduling strategy.
-    Common extensions include:
-        - `VitalDaily`: applies births/deaths on every tick
-        - `VitalPeriodic`: applies changes at fixed intervals
 
     Plotting:
     The `plot()` method provides daily and cumulative trends for births and deaths.
