@@ -28,8 +28,8 @@ import numpy as np
 from laser.core.demographics import AliasedDistribution
 from laser.core.demographics import KaplanMeierEstimator
 
-import laser.generic.models.SEIR as SEIR
-from laser.generic.models.model import Model
+from laser.generic import SEIR
+from laser.generic import Model
 from laser.generic.newutils import ValuesMap
 from laser.generic.newutils import validate
 from utils import stdgrid
@@ -76,7 +76,7 @@ class TransmissionWithDOI(SEIR.Transmission):
             "Number of newly exposed individuals should match the change in exposed individuals."
         )
         # incidence[tick] should equal number of newly exposed
-        assert np.all(self.model.nodes.incidence[tick] == exposed_by_node), (
+        assert np.all(self.model.nodes.newly_infected[tick] == exposed_by_node), (
             "Incidence should match the number of newly exposed individuals."
         )
 
@@ -122,7 +122,7 @@ class TransmissionWithDOI(SEIR.Transmission):
         exp_by_node = exp_by_node.sum(axis=0).astype(self.model.nodes.S.dtype)
         self.model.nodes.S[tick + 1] -= exp_by_node
         self.model.nodes.E[tick + 1] += exp_by_node
-        self.model.nodes.incidence[tick] = exp_by_node
+        self.model.nodes.newly_infected[tick] = exp_by_node
         return
 
 

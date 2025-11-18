@@ -13,8 +13,8 @@ from laser.core.demographics import AliasedDistribution
 from laser.core.demographics import KaplanMeierEstimator
 from scipy.special import lambertw
 
-import laser.generic.models.SIR as SIR
-from laser.generic.models.model import Model
+from laser.generic import SIR
+from laser.generic import Model
 from laser.generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid

@@ -3,6 +3,9 @@ import numpy as np
 import pandas as pd
 import pytest
 from laser.core import PropertySet
+from laser.generic.infection import Infection
+from laser.generic.infection import Infection_SIS
+from laser.generic.transmission import TransmissionSIR
 
 from laser.generic import Births
 from laser.generic import Births_ConstantPop
@@ -15,9 +18,6 @@ from laser.generic import RoutineImmunization
 from laser.generic import Susceptibility
 from laser.generic import Transmission
 from laser.generic.importation import Infect_Agents_In_Patch
-from laser.generic.infection import Infection
-from laser.generic.infection import Infection_SIS
-from laser.generic.transmission import TransmissionSIR
 from laser.generic.utils import get_default_parameters
 from laser.generic.utils import seed_infections_in_patch
 from laser.generic.utils import seed_infections_randomly

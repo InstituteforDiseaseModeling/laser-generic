@@ -1,15 +1,19 @@
 from laser.generic.newutils import TimingStats as ts  # noqa: I001
 
+import datetime
+
 import contextily as ctx
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from tqdm import tqdm
+import matplotlib.pyplot as plt
 import numpy as np
 from laser.core import LaserFrame
 from laser.core.migration import distance
 from laser.core.migration import gravity
 from laser.core.migration import row_normalizer
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.figure import Figure
+from tqdm import tqdm
 
 from laser.generic.newutils import ValuesMap
 from laser.generic.newutils import estimate_capacity
@@ -17,7 +21,7 @@ from laser.generic.newutils import get_centroids
 
 
 class Model:
-    def __init__(self, scenario, params, birthrates=None, skip_capacity: bool = False):
+    def __init__(self, scenario, params, birthrates=None, name: str = "generic", skip_capacity: bool = False):
         """
         Initialize the SI model.
 
@@ -25,9 +29,11 @@ class Model:
             scenario (GeoDataFrame): The scenario data containing per patch population, initial S and I counts, and geometry.
             params (PropertySet): The parameters for the model, including 'nticks' and 'beta'.
             birthrates (np.ndarray, optional): Birth rates in CBR per patch per tick. Defaults to None.
+            name (str, optional): Name of the model instance. Defaults to "generic".
             skip_capacity (bool, optional): If True, skips capacity checks. Defaults to False.
         """
         self.params = params
+        self.name = name
 
         num_nodes = max(np.unique(scenario.nodeid)) + 1
         self.birthrates = birthrates if birthrates is not None else ValuesMap.from_scalar(0, num_nodes, self.params.nticks).values
@@ -95,7 +101,9 @@ class Model:
 
         return
 
-    def _plot(self, basemap_provider=ctx.providers.Esri.WorldImagery):
+    def plot(self, figure: Figure = None, basemap_provider=ctx.providers.Esri.WorldImagery, **rest):
+        _fig = plt.figure(figsize=(12, 9), dpi=200) if figure is None else figure
+
         if "geometry" in self.scenario.columns:
             gdf = gpd.GeoDataFrame(self.scenario, geometry="geometry")
 
@@ -145,7 +153,7 @@ class Model:
                 sel.annotation.set_text(f"Population: {pop_val}")
             """
 
-            plt.show()
+            yield  # plt.show()
 
         pops = {
             pop[0]: (pop[1], pop[2])
@@ -158,7 +166,10 @@ class Model:
             if hasattr(self.nodes, pop[0])
         }
 
-        _fig, ax1 = plt.subplots(figsize=(16, 9), dpi=200)
+        # _fig, ax1 = plt.subplots(figsize=(16, 9), dpi=200)
+        _fig = plt.figure(figsize=(12, 9), dpi=200) if figure is None else figure
+        ax1 = _fig.add_subplot(111)
+
         active_population = sum([getattr(self.nodes, p) for p in pops])
         total_active = np.sum(active_population, axis=1)
         sumstr = " + ".join(p for p in pops)
@@ -181,10 +192,13 @@ class Model:
             plt.title("Active Population Over Time")
 
         plt.tight_layout()
-        plt.show()
+        yield  # plt.show()
 
         # Plot total pops over time
-        _fig, ax1 = plt.subplots(figsize=(16, 9), dpi=200)
+        # _fig, ax1 = plt.subplots(figsize=(16, 9), dpi=200)
+        _fig = plt.figure(figsize=(12, 9), dpi=200) if figure is None else figure
+        ax1 = _fig.add_subplot(111)
+
         totals = [(p, np.sum(getattr(self.nodes, p), axis=1)) for p in pops]
         for pop, total in totals:
             ax1.plot(total, label=f"Total {pops[pop][0]} ({pop})", color=pops[pop][1])
@@ -193,14 +207,24 @@ class Model:
         ax1.legend(loc="upper right")
         plt.title("Total Populations Over Time")
         plt.tight_layout()
-        plt.show()
+        yield  # plt.show()
 
         return
 
-    def plot(self):
-        self._plot(getattr(self, "basemap_provider", None))  # Pass basemap_provider argument to _plot if provided
-        for c in self.components:
-            if hasattr(c, "plot") and callable(c.plot):
-                c.plot()
+    def visualize(self, pdf: bool = True) -> None:
+        if not pdf:
+            bmp = getattr(self, "basemap_provider", None)
+            for c in [self, *self.components]:
+                if hasattr(c, "plot") and callable(c.plot):
+                    c.plot(bmp)
+        else:
+            pdf_filename = f"{self.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            with PdfPages(pdf_filename) as pdf:
+                bmp = getattr(self, "basemap_provider", None)
+                for c in [self, *self.components]:
+                    if hasattr(c, "plot") and callable(c.plot):
+                        for _plot in c.plot(bmp):
+                            pdf.savefig(_plot)
+                            plt.close(_plot)
 
         return

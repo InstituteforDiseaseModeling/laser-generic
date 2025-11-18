@@ -12,8 +12,8 @@ from laser.core.demographics import AliasedDistribution
 from laser.core.demographics import KaplanMeierEstimator
 import laser.core.distributions as dists
 
-import laser.generic.models.SIS as SIS
-from laser.generic.models.model import Model
+from laser.generic import SIS
+from laser.generic import Model
 from laser.generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid

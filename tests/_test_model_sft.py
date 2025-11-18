@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 from laser.core import PropertySet
+from laser.generic.infection import Infection
+from laser.generic.infection import Infection_SIS
 from scipy.optimize import curve_fit
 from scipy.optimize import fsolve
 
@@ -11,8 +13,6 @@ from laser.generic import Births_ConstantPop
 from laser.generic import Model
 from laser.generic import Susceptibility
 from laser.generic import Transmission
-from laser.generic.infection import Infection
-from laser.generic.infection import Infection_SIS
 from laser.generic.utils import seed_infections_randomly
 from laser.generic.utils import seed_infections_randomly_SI
 from laser.generic.utils import set_initial_susceptibility_randomly

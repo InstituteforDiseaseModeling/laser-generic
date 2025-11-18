@@ -12,8 +12,8 @@ from laser.core import PropertySet
 from laser.core.demographics import AliasedDistribution
 from laser.core.demographics import KaplanMeierEstimator
 
-import laser.generic.models.SEIR as SEIR
-from laser.generic.models.model import Model
+from laser.generic import SEIR
+from laser.generic import Model
 from laser.generic.newutils import ValuesMap
 from utils import base_maps
 from utils import stdgrid

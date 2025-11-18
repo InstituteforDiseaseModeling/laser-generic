@@ -16,11 +16,11 @@ import numpy as np
 from laser.core import PropertySet
 import laser.core.distributions as dists
 
-import laser.generic.models.SIR as SIR
-import laser.generic.models.SIRS as SIRS
-import laser.generic.models.SEIR as SEIR
-import laser.generic.models.SEIRS as SEIRS
-from laser.generic.models.model import Model
+from laser.generic import SIR
+from laser.generic import SIRS
+from laser.generic import SEIR
+from laser.generic import SEIRS
+from laser.generic import Model
 from utils import stdgrid
 
 EM = 10
