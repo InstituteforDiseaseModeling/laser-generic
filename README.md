@@ -65,7 +65,7 @@ pip install https://github.com/InstituteforDiseaseModeling/laser-generic/archive
 
 ## Documentation
 
-https://institutefordiseasemodeling.github.io/laser-generic
+https://laser-base.github.io/laser-generic/
 
 ## Development
 
