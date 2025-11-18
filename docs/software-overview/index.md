@@ -11,6 +11,13 @@ LASER is a modeling framework that includes a variety of ways for users to imple
 
 The philosophy driving the development of LASER was to create a framework that was flexible, powerful, and fast, able to tackle a variety of complex modeling scenarios without sacrificing performance. But complexity often slows performance, and not every modeling question requires a full suite of model features. To solve this problem, LASER was designed as a set of core components, each with fundamental features that could be added--or not--to build working models. Users can optimize performance by creating models tailored to their research needs, only using components necessary for their modeling question. This building-block framework enables parsimony in model design, but also facilitates the building of powerful models with bespoke, complex dynamics.
 
+LASER's core principles can be summarized as follows:
+
+- **Efficient computation**: preallocated memory, fixed-size arrays, sequential array access, and cache-friendly operations.
+- **Modular design**: users define properties and add modular **components** (step functions) that run each timestep.
+- **Fast**: models can be progressively optimized using **NumPy**, **Numba**, or even C/OpenMP for performance.
+- **Spatial focus**: agents belong to patches (nodes), with migration modules (gravity, radiation, Stouffer’s rank, etc.) for multi-patch models.
+
 ## Software architecture
 
 <!-- Framework of how laser works: insert diagram! -->
