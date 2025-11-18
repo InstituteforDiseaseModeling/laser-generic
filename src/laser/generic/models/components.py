@@ -28,7 +28,7 @@ class Susceptible:
       unless modified by other components (e.g., exposure, births).
     - Validates consistency between patch-level susceptible counts and agent-level state.
 
-    🚦 Usage:
+    Usage:
     Add this component early in the component list for any S-based model, typically before
     transmission or exposure components. Compatible with:
         - `SIR.Transmission`
