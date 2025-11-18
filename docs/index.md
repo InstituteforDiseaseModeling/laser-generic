@@ -4,19 +4,70 @@ LASER (Light Agent Spatial modeling for ERadication) is a high-performance, agen
 
 The LASER framework is designed to be flexible and is composed of modular components that can be used to create custom epidemiological models. For those who want to explore disease dynamics without the need to code from scratch, the framework includes epidemiological components that are designed model diseases with non-vector transmission dynamics. These modules can be used to create anything from simple compartmental models to more complex agent-based models with spatial dynamics. The framework is open-source, so for those who want to [contribute to code](contribute.md), contributions are welcome!
 
-## Installation
+## 🚀 Installation
 
+LASER is distributed as a Python package. The **recommended install path for most users** is through the high-level `laser-generic` package, which includes the core engine and all epidemiological modeling tools.
 
-```sh
-pip install laser-generic
+---
+
+### ✅ Recommended for most users
+
+To install LASER, run:
+
+```
+uv pip install laser-generic
 ```
 
-You can also install the in-development version with:
+This installs:
 
-```sh
-pip install https://github.com/InstituteforDiseaseModeling/laser-generic/archive/main.zip
+- `laser-generic`: modeling framework and components (e.g., SIR, SEIR, demography, mobility)
+- `laser-core`: the simulation engine used by `laser-generic`
+
+Once installed, you can start using LASER immediately with:
+
+```python
+from laser.generic.model import Model
 ```
 
+---
+
+### 🛠️ For engine developers only
+
+If you are developing or modifying the simulation internals, you can install the low-level engine directly:
+
+```
+uv pip install laser-core
+```
+
+This is **not required** for modelers using the LASER framework via `laser-generic`.
+
+---
+
+### 🧪 Verify the install
+
+Check your install with:
+
+```bash
+python -c "import laser.generic; print('LASER is ready.')"
+```
+
+---
+
+### 📦 Why `uv`?
+
+[`uv`](https://docs.astral.sh/uv/getting-started/installation) is a modern Python package manager that is:
+
+- Much faster than pip
+- Fully compatible with `pip install`
+- Drop-in replacement for Python environments
+
+To install `uv`:
+
+```
+pip install uv
+```
+
+---
 
 ## Learn more
 
