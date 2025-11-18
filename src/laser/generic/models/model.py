@@ -62,7 +62,11 @@ class Model:
         assert dist_matrix.shape == (self.nodes.count, self.nodes.count), "Distance matrix shape mismatch"
 
         # Compute gravity network matrix
-        self.network = gravity(population, dist_matrix, k=500, a=1, b=1, c=2)
+        k = getattr(self.params, "gravity_k", 500)
+        a = getattr(self.params, "gravity_a", 1)
+        b = getattr(self.params, "gravity_b", 1)
+        c = getattr(self.params, "gravity_c", 2)
+        self.network = gravity(population, dist_matrix, k=k, a=a, b=b, c=c)
         self.network = row_normalizer(self.network, (1 / 16) + (1 / 32))
 
         self.basemap_provider = ctx.providers.Esri.WorldImagery
@@ -72,7 +76,7 @@ class Model:
         return
 
     def run(self, label=None) -> None:
-        label = label or f"{self.people.count} agents in f{len(self.scenario)} nodes"
+        label = label or f"{self.people.count} agents in {len(self.scenario)} nodes"
         with ts.start(f"Running Simulation: {label}"):
             for tick in tqdm(range(self.params.nticks), desc=label):
                 for c in self.components:
