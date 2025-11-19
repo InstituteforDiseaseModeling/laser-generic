@@ -1,0 +1,20 @@
+--index-url https://packages.idmod.org/artifactory/api/pypi/pypi-production/simple
+mkdocs-material # doc theme that includes extensive functionality
+mkdocs-include-markdown-plugin # include files outside /docs
+mkdocs-autorefs # create automatic linkable references to sections, etc.
+mkdocs-gen-files # generate external module reference docs
+mkdocs-literate-nav # use a SUMMARY.md file for API reference TOC
+mkdocs-section-index # ability to create parent topics in TOC
+python-markdown-math # integrate LaTeX math
+pymdown-extensions # various extensions for markdown
+mkdocs-jupyter # jupyter notebooks
+mkdocstrings # generate API reference from docstrings
+mkdocstrings-python # python handler for mkdocstrings
+mkdocs-table-reader-plugin
+
+# include all packages needed for running Jupyter notebooks
+pandas
+matplotlib
+scipy
+numpy
+laser.core
