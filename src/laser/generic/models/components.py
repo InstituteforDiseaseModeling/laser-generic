@@ -29,7 +29,7 @@ class Susceptible:
     - Validates consistency between patch-level susceptible counts and agent-level state.
 
     Usage:
-    Add this component early in the component list for any model with SUSCEPTIBLE agents, 
+    Add this component early in the component list for any model with SUSCEPTIBLE agents,
     typically before transmission or exposure components. Compatible with:
         - `SIR.Transmission`
         - `SIR.Exposure`
