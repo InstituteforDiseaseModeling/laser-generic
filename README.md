@@ -1,8 +1,8 @@
 # Overview
 
-[![Documentation Status](https://readthedocs.org/projects/laser-generic/badge/?style=flat)](https://readthedocs.org/projects/laser-generic/)
-[![GitHub Actions Build Status](https://github.com/InstituteforDiseaseModeling/laser-generic/actions/workflows/github-actions.yml/badge.svg)](https://github.com/InstituteforDiseaseModeling/laser-generic/actions)
-[![Coverage Status](https://codecov.io/gh/InstituteforDiseaseModeling/laser-generic/branch/main/graphs/badge.svg?branch=main)](https://app.codecov.io/github/InstituteforDiseaseModeling/laser-generic)
+[![Documentation Build Status](https://github.com/laser-base/laser-generic/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/laser-base/laser-generic/actions/workflows/pages/pages-build-deployment)
+[![GitHub Actions Build Status](https://github.com/laser-base/laser-generic/actions/workflows/github-actions.yml/badge.svg)](https://github.com/laser-base/laser-generic/actions)
+[![Coverage Status](https://codecov.io/gh/laser-base/laser-generic/branch/main/graphs/badge.svg?branch=main)](https://app.codecov.io/github/laser-base/laser-generic)
 [![PyPI Package latest release](https://img.shields.io/pypi/v/laser-generic.svg)](https://test.pypi.org/project/laser-generic)
 [![PyPI Wheel](https://img.shields.io/pypi/wheel/laser-generic.svg)](https://test.pypi.org/project/laser-generic)
 [![Supported versions](https://img.shields.io/pypi/pyversions/laser-generic.svg)](https://test.pypi.org/project/laser-generic)
@@ -11,7 +11,7 @@
 
 LASER (Lightweight Agent Spatial modeling for ERadication) is a framework for building agent-based infectious disease models with an emphasis on spatial modeling and efficient computation at scale.
 
-[`laser-generic`](https://github.com/InstituteforDiseaseModeling/laser-generic) builds on top of [`laser-core`](https://github.com/InstituteforDiseaseModeling/laser), offering a set of ready-to-use, generic disease model components (e.g., SI, SIS, SIR dynamics, births, deaths, vaccination).
+[`laser-generic`](https://github.com/laser-base/laser-generic) builds on top of [`laser-core`](https://github.com/laser-base/laser-core), offering a set of ready-to-use, generic disease model components (e.g., SI, SIS, SIR dynamics, births, deaths, vaccination).
 
 * Free software: MIT license
 
@@ -65,7 +65,7 @@ pip install https://github.com/InstituteforDiseaseModeling/laser-generic/archive
 
 ## Documentation
 
-https://institutefordiseasemodeling.github.io/laser-generic
+https://laser-base.github.io/laser-generic/
 
 ## Development
 
