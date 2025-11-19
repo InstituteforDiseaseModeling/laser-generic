@@ -96,7 +96,7 @@ class RoutineImmunization:
             - Agents with age in [age - period//2, age + period//2) are considered.
             - A Binomial draw with probability `coverage` selects agents to immunize.
             - Selected agents have `susceptibility` set to 0 (immune).
-            - If present, test arrays on `model.patches` are updated for validation.
+            - If present, test arrays on `model.nodes` are updated for validation.
 
         Args:
             model (object): LASER model (unused; provided for signature parity).
@@ -112,11 +112,11 @@ class RoutineImmunization:
             immunize_nodeids = immunize_in_age_window(self.model, lower, upper, self.coverage, tick)
 
             # Update validation arrays if they exist and we immunized some agents
-            if hasattr(self.model.patches, "recovered_test") and immunize_nodeids is not None and len(immunize_nodeids) > 0:
-                np.add.at(self.model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
-                np.add.at(self.model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
+            if hasattr(self.model.nodes, "recovered_test") and immunize_nodeids is not None and len(immunize_nodeids) > 0:
+                np.add.at(self.model.nodes.recovered_test, (tick + 1, immunize_nodeids), 1)
+                np.add.at(self.model.nodes.susceptibility_test, (tick + 1, immunize_nodeids), -1)
 
-    def plot(self, fig: Optional[Figure] = None) -> None:
+    def plot(self, fig: Optional[Figure] = None):
         """
         Placeholder for RI visualization.
 
@@ -158,7 +158,7 @@ def immunize_in_age_window(model, lower: int, upper: int, coverage: float, tick:
     if not (0.0 <= coverage <= 1.0):
         raise ValueError("coverage must be within [0.0, 1.0]")
 
-    pop = model.population
+    pop = model.people
 
     # Ages in ticks
     ages = tick - pop.dob
@@ -268,7 +268,7 @@ class ImmunizationCampaign:
             - Agents with age in [age_lower, age_upper) are considered.
             - A Binomial draw with probability `coverage` selects agents to immunize.
             - Selected agents have `susceptibility` set to 0 (immune).
-            - If present, test arrays on `model.patches` are updated for validation.
+            - If present, test arrays on `model.nodes` are updated for validation.
 
         Args:
             model (object): LASER model (unused; provided for signature parity).
@@ -280,9 +280,9 @@ class ImmunizationCampaign:
         if (tick >= self.start) and ((tick - self.start) % self.period == 0) and (tick < self.end):
             immunize_nodeids = immunize_in_age_window(self.model, self.age_lower, self.age_upper, self.coverage, tick)
 
-            if hasattr(self.model.patches, "recovered_test") and immunize_nodeids is not None and len(immunize_nodeids) > 0:
-                np.add.at(self.model.patches.recovered_test, (tick + 1, immunize_nodeids), 1)
-                np.add.at(self.model.patches.susceptibility_test, (tick + 1, immunize_nodeids), -1)
+            if hasattr(self.model.nodes, "recovered_test") and immunize_nodeids is not None and len(immunize_nodeids) > 0:
+                np.add.at(self.model.nodes.recovered_test, (tick + 1, immunize_nodeids), 1)
+                np.add.at(self.model.nodes.susceptibility_test, (tick + 1, immunize_nodeids), -1)
 
     def plot(self, fig: Optional[Figure] = None) -> None:
         """
@@ -295,4 +295,128 @@ class ImmunizationCampaign:
             None
         """
         yield
+        return
+
+
+##### ============================= #####
+
+from typing import Callable  # noqa: E402
+
+import numba as nb  # noqa: E402
+
+from .shared import State  # noqa: E402
+
+
+class RoutineImmunizationEx:
+    def __init__(
+        self,
+        model,
+        coverage_fn: Callable[[int, int], float],
+        dose_timing_dist: Callable[[int, int], int],
+        dose_timing_min: int = 1,
+        initialize: bool = True,
+    ) -> None:
+        self.model = model
+        self.coverage_fn = coverage_fn
+        self.dose_timing_dist = dose_timing_dist
+        self.dose_timing_min = dose_timing_min
+
+        self.model.people.add_scalar_property("ritimer", dtype=np.int16, default=0)
+        self.model.nodes.add_vector_property("ri_immunized", model.params.nticks + 1, dtype=np.int32, default=0)
+        self.model.nodes.add_vector_property("ri_doses", model.params.nticks + 1, dtype=np.int32, default=0)
+
+        if initialize:
+            self.initialize_ritimers(
+                self.model.people.dob,
+                0,  # tick
+                self.model.people.nodeid,
+                self.dose_timing_dist,
+                self.dose_timing_min,
+                self.model.people.ritimer,
+            )
+
+        return
+
+    @staticmethod
+    @nb.njit(nogil=True, parallel=True)
+    def initialize_ritimers(
+        dobs: np.ndarray,
+        tick: int,
+        nodeids: np.ndarray,
+        dose_timing_dist: Callable[[int, int], int],
+        dose_timing_min: int,
+        ritimers: np.ndarray,
+    ) -> None:
+        for i in nb.prange(len(dobs)):
+            age = tick - dobs[i]
+            if age < 365:
+                nid = nodeids[i]
+                time_to_immunization = np.maximum(dose_timing_dist(0, nid), dose_timing_min)
+                if time_to_immunization >= age:
+                    ritimers[i] = time_to_immunization - age
+
+        return
+
+    @staticmethod
+    @nb.njit(nogil=True, parallel=True)
+    def routine_immunization_ex_step(
+        states: np.ndarray,
+        ritimers: np.ndarray,
+        nodeids: np.ndarray,
+        coverage_fn: Callable[[int, int], float],
+        newly_immunized: np.ndarray,
+        new_doses: np.ndarray,
+        tick: int,
+    ) -> None:
+        for i in nb.prange(len(states)):
+            timer = ritimers[i]
+            if timer > 0:
+                timer -= 1
+                ritimers[i] = timer
+                if timer == 0:
+                    nid = nodeids[i]
+                    coverage = coverage_fn(tick, nid)
+                    draw = np.random.rand()
+                    if draw < coverage:
+                        if states[i] == State.SUSCEPTIBLE.value:
+                            states[i] = State.RECOVERED.value
+                            newly_immunized[nb.get_thread_id(), nid] += 1  # How many actually move from S to R
+                        new_doses[nb.get_thread_id(), nid] += 1  # Count the dose as delivered regardless of state
+
+        return
+
+    def step(self, tick: int) -> None:
+        newly_immunized = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        new_doses = np.zeros((nb.get_num_threads(), self.model.nodes.count), dtype=np.int32)
+        self.routine_immunization_ex_step(
+            self.model.people.state,
+            self.model.people.ritimer,
+            self.model.people.nodeid,
+            self.coverage_fn,
+            newly_immunized,
+            new_doses,
+            tick,
+        )
+        newly_immunized = np.sum(newly_immunized, axis=0)
+
+        self.model.nodes.S[tick] -= newly_immunized
+        self.model.nodes.R[tick] += newly_immunized
+        self.model.nodes.ri_immunized[tick] = newly_immunized
+
+        new_doses = np.sum(new_doses, axis=0)
+        self.model.nodes.ri_doses[tick] = new_doses
+
+        return
+
+    def on_birth(self, istart: int, iend: int, tick: int) -> None:
+        # Initialize ritimers for newborn agents
+        self.initialize_ritimers(
+            self.model.people.dob[istart:iend],
+            tick,
+            self.model.people.nodeid[istart:iend],
+            self.dose_timing_dist,
+            self.dose_timing_min,
+            self.model.people.ritimer[istart:iend],
+        )
+
         return

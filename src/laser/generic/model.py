@@ -11,6 +11,7 @@ from laser.core import LaserFrame
 from laser.core.migration import distance
 from laser.core.migration import gravity
 from laser.core.migration import row_normalizer
+from laser.core.random import set_seed
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
@@ -34,6 +35,8 @@ class Model:
         """
         self.params = params
         self.name = name
+
+        set_seed(getattr(self.params, "prng_seed", 20260101))
 
         num_nodes = max(np.unique(scenario.nodeid)) + 1
         self.birthrates = birthrates if birthrates is not None else ValuesMap.from_scalar(0, num_nodes, self.params.nticks).values
