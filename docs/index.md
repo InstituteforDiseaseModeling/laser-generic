@@ -21,12 +21,14 @@ uv pip install laser-generic
 This installs:
 
 - `laser-generic`: modeling framework and components (e.g., SIR, SEIR, demography, mobility)
-- `laser-core`: the simulation engine used by `laser-generic`
+- `laser-core`: the basic data structures used by `laser-generic`
 
-Once installed, you can start using LASER immediately with:
+Once installed, you can start using LASER (importing components and composing a model) with:
 
 ```python
 from laser.generic.model import Model
+from laser.generic.models.components import Susceptible
+etc.
 ```
 
 ---
