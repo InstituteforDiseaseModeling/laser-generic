@@ -89,7 +89,7 @@ pip install uv
 
     Full details on all classes and functions.
 
-    [:octicons-arrow-right-24: API reference](reference/laser/generic.md)
+    [:octicons-arrow-right-24: API reference](reference/laser/generic/index.md)
 
 -   :simple-jupyter:{ .lg .middle } __Tutorials__
 

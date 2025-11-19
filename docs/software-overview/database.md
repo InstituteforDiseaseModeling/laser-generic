@@ -8,7 +8,7 @@ PropertySet: stores the agent properties in a dictionary-like object (such as in
 
 LASER is designed to handle large populations with high numbers of independent agents. In order to track agents and their properties, LASER includes functions that store and update this information.
 
-The classes described below are only a subset of LASER components. For a full list of all LASER classes, see the [API reference](reference/laser/generic.md).
+The classes described below are only a subset of LASER components. For a full list of all LASER classes, see the [API reference](../reference/laser/generic/index.md).
 
 ## LaserFrame and PropertySet
 

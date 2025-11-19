@@ -70,6 +70,7 @@ output/*/index.html
 # mkdocs build files
 site/*
 docs/reference/*
+docs/laser-generic-outputs/*
 
 # Mypy Cache
 .mypy_cache/
