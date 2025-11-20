@@ -1,9 +1,6 @@
 {
   "name": "Notebooks",
-  "image": "mcr.microsoft.com/devcontainers/python:3.11",
-  "features": {
-    "ghcr.io/devcontainers/features/jupyter:1": {}
-  },
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -12,10 +9,7 @@
       ]
     },
     "codespaces": {
-      "openFiles": [
-        "docs/tutorials/notebooks/ri_exploration.ipynb"
-      ]
+      "openFiles": [ "docs/tutorials/notebooks/ri_exploration.ipynb" ]
     }
-  },
-  "postCreateCommand": "pip install -e \".[dev]\""
+  }
 }
