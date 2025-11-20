@@ -46,28 +46,38 @@ def create_basic_scenario_susceptible_only(cbr=20.0):
 
 def create_equilibrium_seir_scenario(cbr=20.0):
     """Create a scenario with equilibrium S/E/I/R populations."""
-    scenario = stdgrid(M=1, N=1, population_fn=lambda r, c: 20_000)
+    scenario = stdgrid(M=1, N=1, population_fn=lambda r, c: 10_000_000)
 
-    # Set up equilibrium-like populations
-    scenario["S"] = 15_000
-    scenario["E"] = 2_000
-    scenario["I"] = 1_500
-    scenario["R"] = 1_500
+    R0 = 10  # measles-ish 1.386
+    EXPOSED_DURATION_MEAN = 4.5
+    EXPOSED_DURATION_SCALE = 1.0
+    INFECTIOUS_DURATION_MEAN = 7.0
+    INFECTIOUS_DURATION_SCALE = 2.0
 
-    parameters = PropertySet({"nticks": NTICKS})
+    init_susceptible = np.round(scenario.population / R0).astype(np.int32)  # 1/R0 already recovered
+    equilibrium_prevalence = 9000 / 12_000_000
+    init_infected = np.round(equilibrium_prevalence * scenario.population).astype(np.int32)
+    scenario["S"] = init_susceptible
+    scenario["E"] = 0
+    scenario["I"] = init_infected
+    scenario["R"] = scenario.population - init_susceptible - init_infected
+
+    parameters = PropertySet({"nticks": NTICKS, "beta": R0 / INFECTIOUS_DURATION_MEAN})
+
     birthrates = ValuesMap.from_scalar(cbr, 1, NTICKS).values
     pyramid = load_age_distribution()
 
-    expdurdist = dists.normal(loc=5.0, scale=1.0)
-    infdurdist = dists.normal(loc=7.0, scale=2.0)
+    expdurdist = dists.normal(loc=EXPOSED_DURATION_MEAN, scale=EXPOSED_DURATION_SCALE)
+    infdurdist = dists.normal(loc=INFECTIOUS_DURATION_MEAN, scale=INFECTIOUS_DURATION_SCALE)
 
     model = Model(scenario, parameters, birthrates=birthrates)
     model.components = [
         SEIR.Susceptible(model),
-        SEIR.Exposed(model, expdurdist, infdurdist),
-        SEIR.Infectious(model, infdurdist),
-        SEIR.Recovered(model),
-        BirthsByCBR(model, birthrates, pyramid),
+        SEIR.Recovered(model),  # Recovered before Infectious so Infectious can update R
+        SEIR.Infectious(model, infdurdist),  # Infectious before Exposed so Exposed can update I
+        SEIR.Exposed(model, expdurdist, infdurdist),  # Exposed before Transmission so Transmission can update E
+        SEIR.Transmission(model, expdurdist),
+        BirthsByCBR(model, birthrates, pyramid),  # Last so end of tick populations are correct.
     ]
 
     return model, cbr
@@ -75,13 +85,16 @@ def create_equilibrium_seir_scenario(cbr=20.0):
 
 def create_scenario_with_additional_states(cbr=20.0):
     """Create a scenario with custom state configuration (testing with fewer initial states)."""
-    scenario = stdgrid(M=1, N=1, population_fn=lambda r, c: 20_000)
+    scenario = stdgrid(M=1, N=1, population_fn=lambda r, c: 30_000)
 
     # Initialize with only S and E states (no I or R initially)
-    scenario["S"] = 18_000
-    scenario["E"] = 2_000
+    initial_incubating = 2_000
+    initial_vaccinated = 10_000
+    scenario["S"] = scenario.population - (initial_incubating + initial_vaccinated)
+    scenario["E"] = initial_incubating
     scenario["I"] = 0
     scenario["R"] = 0
+    scenario["V"] = initial_vaccinated
 
     parameters = PropertySet({"nticks": NTICKS})
     birthrates = ValuesMap.from_scalar(cbr, 1, NTICKS).values
@@ -92,13 +105,31 @@ def create_scenario_with_additional_states(cbr=20.0):
 
     model = Model(scenario, parameters, birthrates=birthrates)
 
+    class Vaccinated:
+        def __init__(self, model):
+            self.model = model
+
+            model.nodes.add_vector_property("V", model.params.nticks + 1, dtype=np.int32)
+            model.nodes.V[0, :] = initial_vaccinated
+
+            return
+
+        def step(self, tick):
+            # Vaccinated individuals remain vaccinated (no transitions)
+            self.model.nodes.V[tick + 1, :] = self.model.nodes.V[tick, :]
+
+            return
+
     # Include all SEIR components
     model.components = [
         SEIR.Susceptible(model),
-        SEIR.Exposed(model, expdurdist, infdurdist),
-        SEIR.Infectious(model, infdurdist),
         SEIR.Recovered(model),
-        BirthsByCBR(model, birthrates, pyramid),
+        SEIR.Infectious(model, infdurdist),
+        SEIR.Exposed(model, expdurdist, infdurdist),
+        Vaccinated(model),
+        BirthsByCBR(
+            model, birthrates, pyramid, states=["S", "E", "I", "R", "V"]
+        ),  # Needs to go last so end of tick populations are correct.
     ]
 
     return model, cbr
@@ -110,12 +141,13 @@ def create_multi_node_scenario(cbr=20.0):
 
     # Initialize all nodes with similar proportions
     total_pop = scenario.population
-    scenario["S"] = (total_pop * 0.70).astype(np.int32)
+    # scenario["S"] = (total_pop * 0.70).astype(np.int32)
     scenario["E"] = (total_pop * 0.10).astype(np.int32)
     scenario["I"] = (total_pop * 0.10).astype(np.int32)
     scenario["R"] = (total_pop * 0.10).astype(np.int32)
+    scenario["S"] = (total_pop - (scenario.E + scenario.I + scenario.R)).astype(np.int32)
 
-    parameters = PropertySet({"nticks": NTICKS})
+    parameters = PropertySet({"nticks": NTICKS, "beta": 2.0 / 7.0})
     birthrates = ValuesMap.from_scalar(cbr, 4, NTICKS).values
     pyramid = load_age_distribution()
 
@@ -125,9 +157,9 @@ def create_multi_node_scenario(cbr=20.0):
     model = Model(scenario, parameters, birthrates=birthrates)
     model.components = [
         SEIR.Susceptible(model),
-        SEIR.Exposed(model, expdurdist, infdurdist),
-        SEIR.Infectious(model, infdurdist),
         SEIR.Recovered(model),
+        SEIR.Infectious(model, infdurdist),
+        SEIR.Exposed(model, expdurdist, infdurdist),
         BirthsByCBR(model, birthrates, pyramid),
     ]
 
@@ -253,7 +285,7 @@ class TestBirthsByCBR(unittest.TestCase):
         return
 
     def test_additional_states_custom(self):
-        """Test case with custom state list (only S/E/I, no R) (1 node)."""
+        """Test case with custom state list (S/E/I/R/V) (1 node)."""
         # Scenario
         model, cbr = create_scenario_with_additional_states()
         pop_start = model.people.count
@@ -267,11 +299,8 @@ class TestBirthsByCBR(unittest.TestCase):
         difference = pop_finish - expected_pop
         percent_diff = abs(difference / expected_pop * 100)
 
-        # Population should grow according to CBR within 10% tolerance
-        # (Higher tolerance due to disease dynamics affecting population)
-        assert percent_diff < 10.0, (
-            f"Population growth deviated by {percent_diff:.2f}% (expected: {expected_pop:,}, actual: {pop_finish:,})"
-        )
+        # Population should grow according to CBR within 1% tolerance
+        assert percent_diff < 1.0, f"Population growth deviated by {percent_diff:.2f}% (expected: {expected_pop:,}, actual: {pop_finish:,})"
 
         # Verify population actually grew
         assert pop_finish > pop_start, "Population should have grown due to births"
@@ -293,16 +322,25 @@ class TestBirthsByCBR(unittest.TestCase):
         difference = pop_finish - expected_pop
         percent_diff = abs(difference / expected_pop * 100)
 
-        # Population should grow according to CBR within 10% tolerance
-        # (Higher tolerance due to disease dynamics affecting population)
-        assert percent_diff < 10.0, (
-            f"Population growth deviated by {percent_diff:.2f}% (expected: {expected_pop:,}, actual: {pop_finish:,})"
-        )
+        # Population should grow according to CBR within 1% tolerance
+        assert percent_diff < 1.0, f"Population growth deviated by {percent_diff:.2f}% (expected: {expected_pop:,}, actual: {pop_finish:,})"
 
-        # Each node should have positive population
-        total_pop_per_node = model.nodes.S[-1] + model.nodes.E[-1] + model.nodes.I[-1] + model.nodes.R[-1]
-        for node_idx, pop in enumerate(total_pop_per_node):
-            assert pop > 0, f"Node {node_idx} should have positive population"
+        # Test each node individually
+        for node_idx in range(model.nodes.count):
+            node_pop_start = (
+                model.nodes.S[0, node_idx] + model.nodes.E[0, node_idx] + model.nodes.I[0, node_idx] + model.nodes.R[0, node_idx]
+            )
+            node_pop_finish = (
+                model.nodes.S[-1, node_idx] + model.nodes.E[-1, node_idx] + model.nodes.I[-1, node_idx] + model.nodes.R[-1, node_idx]
+            )
+            expected_node_pop = calculate_expected_population(node_pop_start, cbr, NTICKS)
+
+            node_difference = node_pop_finish - expected_node_pop
+            node_percent_diff = abs(node_difference / expected_node_pop * 100)
+
+            assert node_percent_diff < 1.0, (
+                f"Node {node_idx} population growth deviated by {node_percent_diff:.2f}% (expected: {expected_node_pop:,}, actual: {node_pop_finish:,})"
+            )
 
         return
 
@@ -366,6 +404,34 @@ class TestBirthsByCBR(unittest.TestCase):
         assert early_growth > late_growth, "Early growth rate should be higher than late growth rate as CBR decreases"
 
         return
+
+
+# Useful for debugging test runs
+def plot_em(model):
+    import matplotlib.pyplot as plt  # noqa: PLC0415
+
+    ax1 = plt.gca()
+    ax1.plot(model.nodes.S[:, 0], label="Susceptible", color="blue")
+    ax1.plot(model.nodes.R[:, 0], label="Recovered", color="green")
+    pops = model.nodes.S + model.nodes.E + model.nodes.I + model.nodes.R
+    ax1.plot(pops[:, 0], label="Total Population", linewidth=2, color="black")
+
+    ax2 = ax1.twinx()
+    ax2.plot(model.nodes.E[:, 0], label="Exposed", color="orange", linestyle="--")
+    ax2.plot(model.nodes.I[:, 0], label="Infectious", color="red", linestyle="--")
+
+    # Combine legends from both axes
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc="upper left")
+
+    plt.xlabel("Time (days)")
+    plt.ylabel("Total Population")
+    plt.title("Population Over Time with Births")
+    plt.grid()
+    plt.show()
+
+    return
 
 
 if __name__ == "__main__":

@@ -86,7 +86,7 @@ class Model:
         return
 
     def run(self, label=None) -> None:
-        label = label or f"{self.people.count} agents in {len(self.scenario)} nodes"
+        label = label or f"{self.people.count:,} agents in {len(self.scenario)} node(s)"
         with ts.start(f"Running Simulation: {label}"):
             for tick in tqdm(range(self.params.nticks), desc=label):
                 for c in self.components:
