@@ -11,5 +11,6 @@
     "codespaces": {
       "openFiles": [ "docs/tutorials/notebooks/ri_exploration.ipynb" ]
     }
-  }
+  },
+  "postCreateCommand": "pip install --upgrade -e ."
 }
