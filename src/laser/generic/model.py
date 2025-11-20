@@ -11,13 +11,13 @@ from laser.core import LaserFrame
 from laser.core.migration import distance
 from laser.core.migration import gravity
 from laser.core.migration import row_normalizer
-from laser.core.random import set_seed
+from laser.core.random import seed as set_seed
+from laser.core.utils import calc_capacity
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.figure import Figure
 from tqdm import tqdm
 
 from laser.generic.newutils import ValuesMap
-from laser.generic.newutils import estimate_capacity
 from laser.generic.newutils import get_centroids
 
 
@@ -42,7 +42,8 @@ class Model:
         self.birthrates = birthrates if birthrates is not None else ValuesMap.from_scalar(0, num_nodes, self.params.nticks).values
         num_active = scenario.population.sum()
         if not skip_capacity:
-            num_agents = estimate_capacity(self.birthrates, scenario.population).sum()
+            safety_factor = getattr(self.params, "capacity_safety_factor", 1.0)
+            num_agents = calc_capacity(self.birthrates, scenario.population, safety_factor=safety_factor).sum()
         else:
             # Ignore births for capacity calculation
             num_agents = num_active

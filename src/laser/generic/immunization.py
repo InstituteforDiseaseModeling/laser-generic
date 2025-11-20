@@ -315,15 +315,20 @@ class RoutineImmunizationEx:
         dose_timing_dist: Callable[[int, int], int],
         dose_timing_min: int = 1,
         initialize: bool = True,
+        track: bool = False,
     ) -> None:
         self.model = model
         self.coverage_fn = coverage_fn
         self.dose_timing_dist = dose_timing_dist
         self.dose_timing_min = dose_timing_min
 
+        self.track = track
+
         self.model.people.add_scalar_property("ritimer", dtype=np.int16, default=0)
         self.model.nodes.add_vector_property("ri_immunized", model.params.nticks + 1, dtype=np.int32, default=0)
         self.model.nodes.add_vector_property("ri_doses", model.params.nticks + 1, dtype=np.int32, default=0)
+        if track:
+            self.model.people.add_scalar_property("initial_ri", dtype=np.int16, default=0)
 
         if initialize:
             self.initialize_ritimers(
@@ -333,7 +338,12 @@ class RoutineImmunizationEx:
                 self.dose_timing_dist,
                 self.dose_timing_min,
                 self.model.people.ritimer,
+                self.coverage_fn,
+                self.model.people.state,
             )
+            if track:
+                non_zero = self.model.people.ritimer > 0
+                self.model.people.initial_ri[non_zero] = (self.model.people.ritimer - self.model.people.dob)[non_zero]
 
         return
 
@@ -346,6 +356,8 @@ class RoutineImmunizationEx:
         dose_timing_dist: Callable[[int, int], int],
         dose_timing_min: int,
         ritimers: np.ndarray,
+        coverage_fn: Callable[[int, int], float],
+        states: np.ndarray,
     ) -> None:
         for i in nb.prange(len(dobs)):
             age = tick - dobs[i]
@@ -354,6 +366,11 @@ class RoutineImmunizationEx:
                 time_to_immunization = np.maximum(dose_timing_dist(0, nid), dose_timing_min)
                 if time_to_immunization >= age:
                     ritimers[i] = time_to_immunization - age
+                else:
+                    coverage = coverage_fn(tick, nid)
+                    draw = np.random.rand()
+                    if draw < coverage:
+                        states[i] = State.RECOVERED.value
 
         return
 
@@ -417,6 +434,10 @@ class RoutineImmunizationEx:
             self.dose_timing_dist,
             self.dose_timing_min,
             self.model.people.ritimer[istart:iend],
+            self.coverage_fn,
+            self.model.people.state[istart:iend],
         )
+        if self.track:
+            self.model.people.initial_ri[istart:iend] = self.model.people.ritimer[istart:iend]
 
         return
