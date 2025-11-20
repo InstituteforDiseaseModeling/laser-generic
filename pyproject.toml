@@ -40,7 +40,8 @@ maintainers = [
 
 dependencies = [
   "click",
-  "laser-core>=0.7.0",
+  # "laser-core>=0.7.0",
+  "laser-core@git+https://github.com/laser-base/laser-core.git@all-goodies",
   "tqdm",
   "geopandas",
   "pandas",
