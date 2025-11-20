@@ -1,0 +1,21 @@
+{
+  "name": "Notebooks",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/jupyter:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-toolsai.jupyter",
+        "ms-python.python"
+      ]
+    },
+    "codespaces": {
+      "openFiles": [
+        "docs/tutorials/notebooks/ri_exploration.ipynb"
+      ]
+    }
+  },
+  "postCreateCommand": "pip install -e \".[dev]\""
+}
