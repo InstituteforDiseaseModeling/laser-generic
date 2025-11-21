@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 
 import laser.core.distributions as dists
 import numpy as np
@@ -8,12 +9,13 @@ from laser.core.random import seed as set_seed
 from laser.generic import SEIR
 from laser.generic import Model
 from laser.generic.newutils import ValuesMap
+from laser.generic.shared import State
 from laser.generic.vitaldynamics import MortalityByCDR
 from utils import stdgrid
 
 # Shared test parameters
 NTICKS = 3650  # 10 years
-SEED = 271828
+SEED = datetime.now().microsecond  # noqa: DTZ005
 
 
 def create_seir_scenario_with_mortality(cdr=20.0):
@@ -62,19 +64,20 @@ class TestMortalityByCDR(unittest.TestCase):
         """Test mortality with CDR=2 per 1000 per year."""
         cdr = 2.0
         model, _ = create_seir_scenario_with_mortality(cdr)
-        pop_start = model.people.count
+        pop_start = (model.people.state != State.DECEASED.value).sum()
 
         model.run()
 
-        pop_finish = model.people.count
+        pop_finish = (model.people.state != State.DECEASED.value).sum()
         observed_cdr = calculate_observed_cdr(model)
 
         # Population should have decreased
         assert pop_finish < pop_start, "Population should decrease due to mortality"
 
-        # Observed CDR should be close to target CDR (within 10% tolerance)
+        # Observed CDR should be close to target CDR (within 3% tolerance)
+        # Small CDR apparently needs more tolerance due to numerical accuracy and/or stochastic variation
         percent_diff = abs((observed_cdr - cdr) / cdr * 100)
-        assert percent_diff < 10.0, f"Observed CDR {observed_cdr:.2f} deviated by {percent_diff:.2f}% from target CDR {cdr}"
+        assert percent_diff < 3.0, f"Observed CDR {observed_cdr:.2f} deviated by {percent_diff:.2f}% from target CDR {cdr}"
 
         # Verify deaths were recorded
         total_deaths = model.nodes.deaths.sum()
@@ -87,19 +90,19 @@ class TestMortalityByCDR(unittest.TestCase):
         """Test mortality with CDR=10 per 1000 per year."""
         cdr = 10.0
         model, _ = create_seir_scenario_with_mortality(cdr)
-        pop_start = model.people.count
+        pop_start = (model.people.state != State.DECEASED.value).sum()
 
         model.run()
 
-        pop_finish = model.people.count
+        pop_finish = (model.people.state != State.DECEASED.value).sum()
         observed_cdr = calculate_observed_cdr(model)
 
         # Population should have decreased
         assert pop_finish < pop_start, "Population should decrease due to mortality"
 
-        # Observed CDR should be close to target CDR (within 10% tolerance)
+        # Observed CDR should be close to target CDR (within 1% tolerance)
         percent_diff = abs((observed_cdr - cdr) / cdr * 100)
-        assert percent_diff < 10.0, f"Observed CDR {observed_cdr:.2f} deviated by {percent_diff:.2f}% from target CDR {cdr}"
+        assert percent_diff < 1.0, f"Observed CDR {observed_cdr:.2f} deviated by {percent_diff:.2f}% from target CDR {cdr}"
 
         # Verify deaths were recorded
         total_deaths = model.nodes.deaths.sum()
@@ -112,19 +115,19 @@ class TestMortalityByCDR(unittest.TestCase):
         """Test mortality with CDR=20 per 1000 per year."""
         cdr = 20.0
         model, _ = create_seir_scenario_with_mortality(cdr)
-        pop_start = model.people.count
+        pop_start = (model.people.state != State.DECEASED.value).sum()
 
         model.run()
 
-        pop_finish = model.people.count
+        pop_finish = (model.people.state != State.DECEASED.value).sum()
         observed_cdr = calculate_observed_cdr(model)
 
         # Population should have decreased
         assert pop_finish < pop_start, "Population should decrease due to mortality"
 
-        # Observed CDR should be close to target CDR (within 10% tolerance)
+        # Observed CDR should be close to target CDR (within 1% tolerance)
         percent_diff = abs((observed_cdr - cdr) / cdr * 100)
-        assert percent_diff < 10.0, f"Observed CDR {observed_cdr:.2f} deviated by {percent_diff:.2f}% from target CDR {cdr}"
+        assert percent_diff < 1.0, f"Observed CDR {observed_cdr:.2f} deviated by {percent_diff:.2f}% from target CDR {cdr}"
 
         # Verify deaths were recorded
         total_deaths = model.nodes.deaths.sum()
@@ -137,19 +140,19 @@ class TestMortalityByCDR(unittest.TestCase):
         """Test mortality with CDR=40 per 1000 per year."""
         cdr = 40.0
         model, _ = create_seir_scenario_with_mortality(cdr)
-        pop_start = model.people.count
+        pop_start = (model.people.state != State.DECEASED.value).sum()
 
         model.run()
 
-        pop_finish = model.people.count
+        pop_finish = (model.people.state != State.DECEASED.value).sum()
         observed_cdr = calculate_observed_cdr(model)
 
         # Population should have decreased
         assert pop_finish < pop_start, "Population should decrease due to mortality"
 
-        # Observed CDR should be close to target CDR (within 10% tolerance)
+        # Observed CDR should be close to target CDR (within 1% tolerance)
         percent_diff = abs((observed_cdr - cdr) / cdr * 100)
-        assert percent_diff < 10.0, f"Observed CDR {observed_cdr:.2f} deviated by {percent_diff:.2f}% from target CDR {cdr}"
+        assert percent_diff < 1.0, f"Observed CDR {observed_cdr:.2f} deviated by {percent_diff:.2f}% from target CDR {cdr}"
 
         # Verify deaths were recorded
         total_deaths = model.nodes.deaths.sum()
