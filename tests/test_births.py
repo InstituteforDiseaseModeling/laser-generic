@@ -15,7 +15,7 @@ from utils import stdgrid
 
 # Shared test parameters
 NTICKS = 3650  # 10 years
-SEED = 42
+SEED = 271828
 
 
 def load_age_distribution():
@@ -73,9 +73,9 @@ def create_equilibrium_seir_scenario(cbr=20.0):
     model = Model(scenario, parameters, birthrates=birthrates)
     model.components = [
         SEIR.Susceptible(model),
-        SEIR.Recovered(model),  # Recovered before Infectious so Infectious can update R
-        SEIR.Infectious(model, infdurdist),  # Infectious before Exposed so Exposed can update I
-        SEIR.Exposed(model, expdurdist, infdurdist),  # Exposed before Transmission so Transmission can update E
+        SEIR.Exposed(model, expdurdist, infdurdist),
+        SEIR.Infectious(model, infdurdist),
+        SEIR.Recovered(model),
         SEIR.Transmission(model, expdurdist),
         BirthsByCBR(model, birthrates, pyramid),  # Last so end of tick populations are correct.
     ]
@@ -103,33 +103,17 @@ def create_scenario_with_additional_states(cbr=20.0):
     expdurdist = dists.normal(loc=5.0, scale=1.0)
     infdurdist = dists.normal(loc=7.0, scale=2.0)
 
-    model = Model(scenario, parameters, birthrates=birthrates)
-
-    class Vaccinated:
-        def __init__(self, model):
-            self.model = model
-
-            model.nodes.add_vector_property("V", model.params.nticks + 1, dtype=np.int32)
-            model.nodes.V[0, :] = initial_vaccinated
-
-            return
-
-        def step(self, tick):
-            # Vaccinated individuals remain vaccinated (no transitions)
-            self.model.nodes.V[tick + 1, :] = self.model.nodes.V[tick, :]
-
-            return
+    model = Model(scenario, parameters, birthrates=birthrates, additional_states=["V"])
+    model.nodes.add_vector_property("V", model.params.nticks + 1, dtype=np.int32)
+    model.nodes.V[0, :] = initial_vaccinated
 
     # Include all SEIR components
     model.components = [
         SEIR.Susceptible(model),
-        SEIR.Recovered(model),
-        SEIR.Infectious(model, infdurdist),
         SEIR.Exposed(model, expdurdist, infdurdist),
-        Vaccinated(model),
-        BirthsByCBR(
-            model, birthrates, pyramid, states=["S", "E", "I", "R", "V"]
-        ),  # Needs to go last so end of tick populations are correct.
+        SEIR.Infectious(model, infdurdist),
+        SEIR.Recovered(model),
+        BirthsByCBR(model, birthrates, pyramid),  # Needs to go last so end of tick populations are correct.
     ]
 
     return model, cbr
@@ -157,9 +141,9 @@ def create_multi_node_scenario(cbr=20.0):
     model = Model(scenario, parameters, birthrates=birthrates)
     model.components = [
         SEIR.Susceptible(model),
-        SEIR.Recovered(model),
-        SEIR.Infectious(model, infdurdist),
         SEIR.Exposed(model, expdurdist, infdurdist),
+        SEIR.Infectious(model, infdurdist),
+        SEIR.Recovered(model),
         BirthsByCBR(model, birthrates, pyramid),
     ]
 
