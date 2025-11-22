@@ -6,20 +6,23 @@ import numpy as np
 from .newutils import validate
 from .shared import State
 from .shared import sample_dobs
+from .shared import sample_dods
 
 
 class BirthsByCBR:
-    def __init__(self, model, birthrates, pyramid, validating=False):
+    def __init__(self, model, birthrates, pyramid, track=True, validating=False):
         self.model = model
         self.birthrates = birthrates
         self.pyramid = pyramid
+        self.track = track
         self.validating = validating
 
-        self.model.people.add_property("dob", dtype=np.int16)
         self.model.nodes.add_vector_property("births", model.params.nticks + 1, dtype=np.int32)
 
-        dobs = self.model.people.dob
-        sample_dobs(dobs, self.pyramid, tick=0)
+        if self.track:
+            self.model.people.add_property("dob", dtype=np.int16)
+            dobs = self.model.people.dob
+            sample_dobs(dobs, self.pyramid, tick=0)
 
         return
 
@@ -37,6 +40,10 @@ class BirthsByCBR:
         birth_counts = np.bincount(self.model.people.nodeid[istart:iend], minlength=self.model.nodes.count)
         assert np.all(birth_counts == self.model.nodes.births[tick]), "Birth counts by patch mismatch"
         assert np.all(self.model.people.state[istart:iend] == State.SUSCEPTIBLE.value), "Newborns should be susceptible"
+
+        # Everyone born today should have dob == tick, if self.track == True
+        if self.track:
+            assert np.all(self.model.people.dob[istart:iend] == tick), "Newborns should have dob equal to current tick"
 
         return
 
@@ -57,43 +64,44 @@ class BirthsByCBR:
             # State.SUSCEPTIBLE.value is the default
             # self.model.people.state[istart:iend] = State.SUSCEPTIBLE.value
 
-            dobs = self.model.people.dob[istart:iend]
-            dobs[:] = tick
+            if self.track:
+                dobs = self.model.people.dob[istart:iend]
+                dobs[:] = tick
 
             # state(t+1) = state(t) + ∆state(t)
             self.model.nodes.S[tick + 1] += births
             # Record today's ∆
             self.model.nodes.births[tick] = births
 
-        for component in self.model.components:
-            if hasattr(component, "on_birth") and callable(component.on_birth):
-                with ts.start(f"{component.__class__.__name__}.on_birth()"):
-                    component.on_birth(istart, iend, tick)
+            for component in self.model.components:
+                if hasattr(component, "on_birth") and callable(component.on_birth):
+                    with ts.start(f"{component.__class__.__name__}.on_birth()"):
+                        component.on_birth(istart, iend, tick)
 
         return
 
 
 class MortalityByCDR:
-    def __init__(self, model, mortalityrates, additional_mappings=None, validating=False):
+    def __init__(self, model, mortalityrates, mappings=None, validating=False):
         self.model = model
         self.mortalityrates = mortalityrates
         self.validating = validating
 
-        self.mappings = [
-            (State.SUSCEPTIBLE.value, "S"),
-            (State.EXPOSED.value, "E"),
-            (State.INFECTIOUS.value, "I"),
-            (State.RECOVERED.value, "R"),
-        ]
+        model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.int32)
 
-        if additional_mappings is not None:
-            self.mappings.extend(additional_mappings)
+        if mappings is None:
+            self.mappings = [
+                (State.SUSCEPTIBLE.value, "S"),
+                (State.EXPOSED.value, "E"),
+                (State.INFECTIOUS.value, "I"),
+                (State.RECOVERED.value, "R"),
+            ]
+        else:
+            self.mappings = mappings
 
         self.mapping = np.full(np.max([value for value, _name in self.mappings]) + 1, -1, dtype=np.int32)
         for index, (value, _name) in enumerate(self.mappings):
             self.mapping[value] = index
-
-        model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.int32)
 
         return
 
@@ -172,47 +180,90 @@ class MortalityByCDR:
         return
 
 
-class MortalityBySurvival:
-    def __init__(self, model, survival_probs, validating=False):
+class MortalityByEstimator:
+    def __init__(self, model, estimator, mappings=None, validating=False):
         self.model = model
-        self.survival_probs = survival_probs
+        self.estimator = estimator
         self.validating = validating
+
+        if not hasattr(self.model.people, "dob"):
+            raise RuntimeError("MortalityByEstimator requires 'dob' property on people. If using BirthsByCBR, set track=True.")
+
+        model.people.add_property("dod", dtype=np.int16)
+        model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.int32)
+
+        if mappings is None:
+            self.mappings = [
+                ("S", State.SUSCEPTIBLE.value),
+                ("E", State.EXPOSED.value),
+                ("I", State.INFECTIOUS.value),
+                ("R", State.RECOVERED.value),
+            ]
+        else:
+            self.mappings = mappings
+
+        dobs = self.model.people.dob
+        dods = self.model.people.dod
+        sample_dods(dobs, dods, self.estimator, tick=0)
 
         return
 
     def prevalidate_step(self, tick: int) -> None:
-        self.prv_count = self.model.people.count
+        self._deaths_prv = self.model.people.state == State.DECEASED.value
 
         return
 
     def postvalidate_step(self, tick: int) -> None:
-        ndeaths = self.prv_count - self.model.people.count
-        recorded_deaths = 0
-        for state in self.model.states:
-            if (pop := getattr(self.model.nodes, state, None)) is not None:
-                recorded_deaths += pop[tick].sum() - pop[tick + 1].sum()
-        assert ndeaths == recorded_deaths, "Death count mismatch after mortality"
+        self._deaths_now = self.model.people.state == State.DECEASED.value
+
+        # Check that everyone with a dod == tick is deceased
+        dod_today = self.model.people.dod == tick
+        assert np.all(self.model.people.state[dod_today] == State.DECEASED.value), "People with dod == tick should be deceased."
+
+        # Check that diff between _deaths_now and _deaths_prv matches recorded deaths
+        # Use np.bincount and compare with self.model.nodes.deaths[tick]
+        prv = np.bincount(self.model.people.nodeid[self._deaths_prv], minlength=self.model.nodes.count)
+        now = np.bincount(self.model.people.nodeid[self._deaths_now], minlength=self.model.nodes.count)
+        diff = now - prv
+        assert np.all(diff == self.model.nodes.deaths[tick]), "Death counts by patch mismatch after mortality"
+
+        return
+
+    @staticmethod
+    @nb.njit(nogil=True, parallel=True, cache=True)
+    def nb_process_deaths(dods, states, nodeids, deaths_by_node_and_state, tick):
+        for i in nb.prange(len(dods)):
+            if dods[i] == tick:
+                state = states[i]
+                if state != State.DECEASED.value:
+                    deaths_by_node_and_state[nb.get_thread_id(), nodeids[i], state] += 1
+                    states[i] = State.DECEASED.value
 
         return
 
     @validate(prevalidate_step, postvalidate_step)
-    def step(self, tick):
-        random_values = np.random.random(size=self.model.people.count)
-        survival_probs = self.survival_probs[tick]
-        death_mask = random_values >= survival_probs
-        ndeaths = np.sum(death_mask)
+    def step(self, tick: int) -> None:
+        # Do mortality first, then births
 
-        if ndeaths > 0:
-            deceased_nodeids, deceased_states = (
-                self.model.people.nodeid[death_mask],
-                self.model.people.state[death_mask],
-            )
+        max_state = max([value for _name, value in self.mappings])
 
-            self.model.people.remove(death_mask)
+        deaths_by_node_and_state = np.zeros((nb.get_num_threads(), self.model.nodes.count, max_state + 1), dtype=np.int32)
+        self.nb_process_deaths(self.model.people.dod, self.model.people.state, self.model.people.nodeid, deaths_by_node_and_state, tick)
+        deaths_by_node_and_state = deaths_by_node_and_state.sum(axis=0)  # Sum over threads
 
-            for nodeid, state in zip(deceased_nodeids, deceased_states):
-                state_name = State(state).name
-                if (prop := getattr(self.model.nodes, state_name, None)) is not None:
-                    prop[tick + 1, nodeid] -= 1
+        for state_name, state_value in self.mappings:
+            if (prop := getattr(self.model.nodes, state_name, None)) is not None:
+                # state(t+1) = state(t) + ∆state(t)
+                prop[tick + 1] -= deaths_by_node_and_state[:, state_value]
+
+        # Record today's ∆
+        self.model.nodes.deaths[tick] += deaths_by_node_and_state.sum(axis=1)  # Record
+
+        return
+
+    def on_birth(self, istart: int, iend: int, tick: int) -> None:
+        dobs = self.model.people.dob[istart:iend]
+        dods = self.model.people.dod[istart:iend]
+        sample_dods(dobs, dods, self.estimator, tick)
 
         return

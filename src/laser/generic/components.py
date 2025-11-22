@@ -1134,8 +1134,8 @@ class VitalDynamicsBase:
         self.model.nodes.add_vector_property("deaths", model.params.nticks + 1, dtype=np.int32)
 
         # Initialize starting population
-        dobs = self.model.people.dob[0 : self.model.people.count]
-        dods = self.model.people.dod[0 : self.model.people.count]
+        dobs = self.model.people.dob
+        dods = self.model.people.dod
         sample_dobs(dobs, self.pyramid, tick=0)
         sample_dods(dobs, dods, self.survival, tick=0)
 
