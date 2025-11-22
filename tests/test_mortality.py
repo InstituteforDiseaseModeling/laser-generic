@@ -76,7 +76,7 @@ def load_age_distribution():
     return AliasedDistribution(age_data)
 
 
-def create_seir_scenario_with_age_specific_mortality():
+def create_seir_scenario_with_age_specific_mortality(CBR: float = 0.0):
     """Create a scenario with S/E/I/R populations and age-specific mortality."""
     scenario = stdgrid(M=1, N=1, population_fn=lambda r, c: 100_000)
 
@@ -99,8 +99,7 @@ def create_seir_scenario_with_age_specific_mortality():
         SEIR.Exposed(model, expdurdist, infdurdist),
         SEIR.Infectious(model, infdurdist),
         SEIR.Recovered(model),
-        # Use BirthsByCBR with rate=0 to initialize DOBs based on age pyramid
-        BirthsByCBR(model, birthrates=ValuesMap.from_scalar(0.0, 1, NTICKS).values, pyramid=pyramid, track=True),
+        BirthsByCBR(model, birthrates=ValuesMap.from_scalar(CBR, 1, NTICKS).values, pyramid=pyramid, track=True),
         MortalityByEstimator(model, survival),
     ]
 
@@ -242,6 +241,13 @@ class TestMortalityByEstimator(unittest.TestCase):
         alive_mask = model.people.state != State.DECEASED.value
         assert np.all(model.people.dob[alive_mask] <= 0), "Living agents should have DOB <= 0 (born before or at start)"
 
+        # All alive agents should have DOD >= NTICKS
+        assert np.all(model.people.dod[alive_mask] >= NTICKS), "Living agents should have DOD greater than or equal to NTICKS"
+
+        # All deceased agents should have DOD < NTICKS
+        deceased_mask = model.people.state == State.DECEASED.value
+        assert np.all(model.people.dod[deceased_mask] < NTICKS), "Deceased agents should have DOD less than NTICKS"
+
         return
 
     def test_age_specific_mortality_rates(self):
@@ -260,12 +266,12 @@ class TestMortalityByEstimator(unittest.TestCase):
         # Verify that we have deaths across different age groups
         young_deaths = np.sum((deceased_ages >= 0) & (deceased_ages < 5))
         middle_deaths = np.sum((deceased_ages >= 30) & (deceased_ages < 50))
-        old_deaths = np.sum((deceased_ages >= 65) & (deceased_ages < 85))
+        older_deaths = np.sum((deceased_ages >= 65) & (deceased_ages < 85))
 
         # Should have deaths in all age categories
         assert young_deaths > 0, "Should have deaths in young age group (0-5)"
         assert middle_deaths > 0, "Should have deaths in middle age group (30-50)"
-        assert old_deaths > 0, "Should have deaths in old age group (65-85)"
+        assert older_deaths > 0, "Should have deaths in old age group (65-85)"
 
         # Older populations should have higher death rates
         # Calculate death rates for different age groups
@@ -273,7 +279,7 @@ class TestMortalityByEstimator(unittest.TestCase):
         old_pop = np.sum((initial_ages >= 65) & (initial_ages < 85))
 
         young_death_rate = young_deaths / young_pop if young_pop > 0 else 0
-        old_death_rate = old_deaths / old_pop if old_pop > 0 else 0
+        old_death_rate = older_deaths / old_pop if old_pop > 0 else 0
 
         assert old_death_rate > young_death_rate, (
             f"Older age group should have higher death rate than young. "
@@ -284,19 +290,16 @@ class TestMortalityByEstimator(unittest.TestCase):
 
     def test_dod_assignment(self):
         """Test that DOD (date of death) is properly assigned to all agents."""
-        model, _ = create_seir_scenario_with_age_specific_mortality()
+        model, _ = create_seir_scenario_with_age_specific_mortality(CBR=20.0)
 
-        # All agents should have a DOD assigned at initialization
-        assert hasattr(model.people, "dod"), "Model should have DOD property"
-        assert len(model.people.dod) == model.people.count, "All agents should have DOD assigned"
+        # All agents born before the start should have DOD >= 0
+        initial_pop = model.people.dob < 0
+        assert np.all(model.people.dod[initial_pop] >= 0), "All initially born agents should have DOD >= 0"
 
-        # DOD should be in the future for most agents (since we're running 10 years)
-        initial_dods = model.people.dod.copy()
-        future_dods = np.sum(initial_dods > NTICKS)
-
-        # Most people should survive beyond the 10-year simulation period
-        assert future_dods > model.people.count * 0.5, (
-            f"Most agents should have DOD beyond simulation period. Got {future_dods}/{model.people.count} with future DODs"
+        # All agents born during the simulation should have DOD >= their dob
+        born_during_sim = model.people.dob >= 0
+        assert np.all(model.people.dod[born_during_sim] >= model.people.dob[born_during_sim]), (
+            "Agents born during simulation should have DOD >= DOB"
         )
 
         return
@@ -305,19 +308,16 @@ class TestMortalityByEstimator(unittest.TestCase):
         """Test that agents die exactly when their DOD is reached."""
         model, _ = create_seir_scenario_with_age_specific_mortality()
 
-        # Get initial DODs
-        initial_dods = model.people.dod.copy()
-        initial_count = model.people.count
-
         model.run()
 
         # Check that all agents with DOD <= NTICKS are now deceased
         for tick in range(NTICKS):
-            should_be_dead_by_tick = initial_dods[:initial_count] <= tick
-            actual_dead_by_tick = model.people.state[:initial_count] == State.DECEASED.value
+            should_be_dead_by_tick = (model.people.dod <= tick).sum()
+            tracked_deaths_by_tick = model.nodes.deaths[: tick + 1].sum()
 
-            # Everyone whose DOD has passed should be deceased
-            assert np.all(actual_dead_by_tick[should_be_dead_by_tick]), f"At tick {tick}, some agents with DOD <= {tick} are not deceased"
+            assert tracked_deaths_by_tick == should_be_dead_by_tick, (
+                f"At tick {tick}, expected {should_be_dead_by_tick} deaths, but got {tracked_deaths_by_tick}"
+            )
 
         return
 
